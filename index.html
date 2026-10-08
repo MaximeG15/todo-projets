@@ -265,7 +265,7 @@ textarea{width:100%;resize:vertical;min-height:64px}
     </form>
     <form id="gsignup" hidden autocomplete="on">
       <p class="sub">Créer mon compte</p>
-      <label>E-mail professionnel<input type="email" id="semail" autocomplete="username" required></label>
+      <label>E-mail<input type="email" id="semail" autocomplete="username" required></label>
       <label>Mot de passe (8 caractères minimum)<input type="password" id="spass" autocomplete="new-password" minlength="8" required></label>
       <label>Confirmer le mot de passe<input type="password" id="spass2" autocomplete="new-password" minlength="8" required></label>
       <p class="gerr" id="serr" role="alert"></p>
@@ -354,8 +354,9 @@ textarea{width:100%;resize:vertical;min-height:64px}
   const CONFIG={
     supabaseUrl:"https://kdwberesnaixlczrjehq.supabase.co",
     supabaseKey:"sb_publishable_wOMKou85oXbNvnsZ0esKvg_vMjj0HyB",
-    // Domaines d'e-mail autorisés à créer un compte (contrôle aussi fait côté serveur)
-    allowedDomains:["mecalux.com"]
+    // Domaines d'e-mail autorisés à créer un compte (vide = toutes les adresses).
+    // Exemple pour restreindre : ["mecalux.com"] (à reporter aussi dans la base, fonction check_signup_domain)
+    allowedDomains:[]
   };
   // ============================================
   const COLORS=["#3E7CB1","#C2410C","#2F7D5B","#8E5BB5","#B8860B","#C0396B","#4A6272","#1F8A8A"];
@@ -714,7 +715,7 @@ textarea{width:100%;resize:vertical;min-height:64px}
         const m=error.message||"";
         $("#serr").textContent=/already|registered|exists/i.test(m)?"Un compte existe déjà avec cette adresse : utilisez « J'ai déjà un compte ».":
           /signups? not allowed|disabled/i.test(m)?"La création de compte est désactivée : contactez la personne qui gère l'application.":
-          /database error|domain/i.test(m)?"Adresse non autorisée : utilisez votre e-mail professionnel.":
+          /database error|domain/i.test(m)?"Adresse e-mail refusée par le serveur.":
           /password/i.test(m)?"Mot de passe refusé : "+m:
           (transient(error)&&!error.status?"Serveur injoignable : vérifiez votre connexion Internet.":"Création refusée : "+m);
         return;

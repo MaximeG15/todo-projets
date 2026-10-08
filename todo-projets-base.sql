@@ -120,13 +120,14 @@ begin
   end loop;
 end $$;
 
--- ---------- Création de compte réservée à certains domaines d'e-mail ----------
--- Modifier la liste ci-dessous pour autoriser d'autres domaines, puis relancer le script.
+-- ---------- Contrôle du domaine des adresses e-mail à l'inscription ----------
+-- Liste vide = toutes les adresses sont acceptées. Pour restreindre : array['mecalux.com'].
 create or replace function public.check_signup_domain() returns trigger
 language plpgsql security definer set search_path = public as $$
-declare allowed text[] := array['mecalux.com'];
+declare allowed text[] := array[]::text[];
 begin
-  if lower(split_part(coalesce(new.email, ''), '@', 2)) <> all (allowed) then
+  if coalesce(array_length(allowed, 1), 0) > 0
+     and lower(split_part(coalesce(new.email, ''), '@', 2)) <> all (allowed) then
     raise exception 'Adresse e-mail non autorisée (domaine)';
   end if;
   return new;
