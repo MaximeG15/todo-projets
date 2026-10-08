@@ -214,6 +214,41 @@ textarea{width:100%;resize:vertical;min-height:64px}
 .signup-cta{display:block;width:100%;margin-top:14px;border-color:var(--steel);color:var(--steel);font-weight:600}
 .gbox .btn.primary{background:var(--signal);border-color:var(--signal);color:#16232B}
 
+/* Recherche */
+.search{display:flex;align-items:center;gap:8px;margin:0 4px;padding:0 10px;border:1px solid var(--navline);border-radius:8px;background:#24394A;color:var(--navmuted)}
+.search input{flex:1;min-width:0;border:0;background:none;padding:9px 0;color:#fff}
+.search input::placeholder{color:#B6C6D0}
+.search input:focus-visible{outline:none}
+.search:focus-within{border-color:#8FB0C4}
+mark{background:var(--signalsoft);color:inherit;padding:0 1px;border-radius:2px}
+/* Étapes */
+.steps{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:3px}
+.steps li{display:flex;align-items:flex-start;gap:8px;font-size:14px}
+.steps input{width:16px;height:16px;margin:2px 0 0;accent-color:var(--nav);cursor:pointer;flex:none}
+.steps li.ok span{color:var(--muted);text-decoration:line-through}
+.stepedit{grid-column:1/-1;display:flex;flex-direction:column;gap:6px}
+.stepedit .lbl,.cbox .lbl{font-size:13px;color:var(--muted);font-weight:600}
+.steprow{display:flex;gap:6px;align-items:center}
+.steprow input[type=text]{flex:1;min-width:0}
+.xbtn{border:0;background:none;color:var(--muted);cursor:pointer;width:32px;height:32px;border-radius:6px;font-size:18px;line-height:1}
+.xbtn:hover{background:var(--chip);color:var(--late)}
+/* Commentaires */
+.cbox{grid-column:1/-1;display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:1px dashed var(--line)}
+.clist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.clist li{background:var(--soft);border:1px solid var(--line2);border-radius:8px;padding:8px 10px}
+.clist .ch{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+.clist .ch b{color:var(--ink);font-weight:600}
+.clist .cb{white-space:pre-wrap;margin-top:2px;font-size:14px;word-wrap:break-word}
+.cform{display:flex;gap:6px;align-items:flex-end}
+.cform textarea{min-height:44px;flex:1}
+/* Récap */
+dialog#recap{border:0;border-radius:12px;padding:0;width:min(720px,calc(100vw - 24px));max-height:calc(100vh - 24px);background:var(--panel);color:var(--ink);box-shadow:0 20px 50px rgba(22,35,43,.3)}
+dialog#recap::backdrop{background:rgba(17,24,29,.45)}
+.rbox{display:flex;flex-direction:column;gap:12px;padding:20px}
+.rhead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.rhead h2{margin:0;font:700 26px/1.1 "Barlow Condensed","Arial Narrow",sans-serif}
+#recaptext{min-height:360px;font:14px/1.5 ui-monospace,"Cascadia Mono",Consolas,monospace;white-space:pre;background:var(--soft)}
+.ractions{display:flex;flex-wrap:wrap;gap:8px}
 /* Bouton d'ajout flottant (téléphone) */
 .fab{display:none;position:fixed;right:18px;bottom:calc(22px + env(safe-area-inset-bottom,0px));width:60px;height:60px;border:0;border-radius:16px;background:var(--signal);box-shadow:0 6px 16px rgba(22,35,43,.25);cursor:pointer;place-items:center;z-index:4}
 
@@ -228,6 +263,7 @@ textarea{width:100%;resize:vertical;min-height:64px}
   .plabel,.pbar{display:none}
   .plist{flex-direction:row;overflow-x:auto;gap:6px;padding-bottom:2px}
   .pbtn{flex:none;width:auto;flex-wrap:nowrap;border:1px solid var(--navline);border-radius:999px;padding:7px 12px;font-size:14px}
+  .search{margin:0}
   .side:not(.open) .addp,.side:not(.open) .toolsbox,.side:not(.open) .foot,.side:not(.open) .install{display:none}
   main{padding:18px 14px 110px;gap:16px}
   .head h1{font-size:30px}
@@ -281,6 +317,7 @@ textarea{width:100%;resize:vertical;min-height:64px}
     <div class="brand"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#F2B705" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l3 3 5-6"></path><path d="M14 8h7M4 15h3M10 15h11M4 20h3M10 20h11" stroke="#E8EEF2"></path></svg><b>To do projets</b>
       <button class="menubtn" type="button" id="menubtn" aria-expanded="false" aria-controls="side" aria-label="Menu, compte et sauvegarde"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
     </div>
+    <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg><input type="search" id="search" placeholder="Rechercher une tâche" aria-label="Rechercher une tâche"></label>
     <nav class="views" id="views" aria-label="Vues"></nav>
     <div class="psec">
       <div class="plabel">Projets</div>
@@ -344,6 +381,21 @@ textarea{width:100%;resize:vertical;min-height:64px}
     </div>
   </main>
 </div>
+<dialog id="recap" aria-labelledby="recaptitle">
+  <form method="dialog" class="rbox">
+    <div class="rhead"><h2 id="recaptitle">Récap de la semaine</h2>
+      <select id="recapweek" aria-label="Semaine"><option value="0">Cette semaine</option><option value="-1">Semaine dernière</option></select>
+    </div>
+    <p class="hint" id="recapscope"></p>
+    <textarea id="recaptext" readonly aria-label="Texte du récapitulatif"></textarea>
+    <div class="ractions">
+      <button class="btn primary" type="button" id="recapcopy">Copier</button>
+      <button class="btn" type="button" id="recapmail">Envoyer par e-mail</button>
+      <button class="btn" type="button" id="recapdl">Télécharger (.txt)</button>
+      <button class="btn ghost" value="close">Fermer</button>
+    </div>
+  </form>
+</dialog>
 <button class="fab" type="button" id="fab" aria-label="Ajouter une tâche"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#16232B" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.90.0/dist/umd/supabase.js"></script>
 <script>
@@ -561,13 +613,13 @@ textarea{width:100%;resize:vertical;min-height:64px}
   }
 
   // ---------- Mode en ligne (Supabase) ----------
-  const cloud={client:null,user:null,email:"",meta:{},dirty:new Map(),seq:0,flushing:false,again:false,retry:null,channel:null,fetchT:null,lastOk:0};
+  const cloud={client:null,user:null,email:"",meta:{},comments:{},dirty:new Map(),seq:0,flushing:false,again:false,retry:null,channel:null,fetchT:null,lastOk:0};
   const cloudReady=()=>!!(CONFIG.supabaseUrl&&CONFIG.supabaseKey&&window.supabase&&window.supabase.createClient);
   function cloudClient(){if(!cloud.client)cloud.client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true,storageKey:"todo-projets-auth"}});return cloud.client}
   const isOwner=pid=>{const m=cloud.meta[pid];return !m||m.owner===cloud.user.id};
-  const rowT=t=>({id:t.id,project_id:t.projectId,title:t.title,priority:t.priority||"normale",due:t.due||null,status:t.status||"todo",note:t.note||"",who:t.who||"",created_at:t.createdAt||Date.now(),done_at:t.doneAt||null,updated_at:t.updatedAt||Date.now(),updated_by:cloud.email});
+  const rowT=t=>({id:t.id,project_id:t.projectId,title:t.title,priority:t.priority||"normale",due:t.due||null,status:t.status||"todo",note:t.note||"",who:t.who||"",created_at:t.createdAt||Date.now(),done_at:t.doneAt||null,updated_at:t.updatedAt||Date.now(),updated_by:cloud.email,checklist:Array.isArray(t.checklist)?t.checklist:[],repeat:t.repeat||null});
   const rowP=p=>({id:p.id,name:p.name,color:p.color||null,updated_at:p.updatedAt||Date.now()});
-  const fromT=r=>({id:r.id,projectId:r.project_id,title:r.title,priority:r.priority,due:r.due||"",status:r.status,note:r.note||"",who:r.who||"",createdAt:Number(r.created_at),doneAt:r.done_at?Number(r.done_at):null,updatedAt:Number(r.updated_at),updatedBy:r.updated_by||""});
+  const fromT=r=>({id:r.id,projectId:r.project_id,title:r.title,priority:r.priority,due:r.due||"",status:r.status,note:r.note||"",who:r.who||"",createdAt:Number(r.created_at),doneAt:r.done_at?Number(r.done_at):null,updatedAt:Number(r.updated_at),updatedBy:r.updated_by||"",checklist:Array.isArray(r.checklist)?r.checklist:[],repeat:r.repeat||null});
   const fromP=r=>({id:r.id,name:r.name,color:r.color||COLORS[0]});
   const transient=e=>!e||!e.code; // pas de code PostgreSQL = problème réseau
   function cloudStatus(){
@@ -627,8 +679,12 @@ textarea{width:100%;resize:vertical;min-height:64px}
     if(!this.user)return;
     if(editing){clearTimeout(this.fetchT);this.fetchT=setTimeout(()=>this.fetch(),3000);return}
     const c=cloudClient();
-    const [P,M,T]=await Promise.all([c.from("projects").select("*"),c.from("project_members").select("*"),c.from("tasks").select("*")]);
+    const [P,M,T,C]=await Promise.all([c.from("projects").select("*"),c.from("project_members").select("*"),c.from("tasks").select("*"),c.from("task_comments").select("*")]);
     const err=P.error||M.error||T.error;
+    if(!C.error){
+      const cm={};C.data.slice().sort((a,b)=>Number(a.created_at)-Number(b.created_at)).forEach(r=>{(cm[r.task_id]=cm[r.task_id]||[]).push({id:r.id,author:r.author_email,text:r.body,at:Number(r.created_at)})});
+      const js=JSON.stringify(cm);if(js!==this._lastCm){this._lastCm=js;this.comments=cm;this._cmChanged=true}
+    }
     if(err){if(transient(err))setSync("Connexion au serveur impossible : affichage de la dernière version connue.");else setSync("Erreur serveur : "+err.message);return}
     const meta={};
     P.data.forEach(r=>meta[r.id]={owner:r.owner,ownerEmail:r.owner_email,members:[]});
@@ -647,7 +703,8 @@ textarea{width:100%;resize:vertical;min-height:64px}
     tasks=tasks.filter(t=>projects.some(p=>p.id===t.projectId));
     this.meta=meta;
     const next={projects,tasks,deleted:[]};
-    if(canon(next)!==canon(state)||JSON.stringify(meta)!==this._lastMeta){this._lastMeta=JSON.stringify(meta);applyState(next)}
+    if(canon(next)!==canon(state)||JSON.stringify(meta)!==this._lastMeta){this._lastMeta=JSON.stringify(meta);this._cmChanged=false;applyState(next)}
+    else if(this._cmChanged){this._cmChanged=false;render()}
     if(!this.dirty.size){this.lastOk=Date.now()}
     cloudStatus();
   };
@@ -660,6 +717,7 @@ textarea{width:100%;resize:vertical;min-height:64px}
       .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},h)
       .on("postgres_changes",{event:"*",schema:"public",table:"projects"},h)
       .on("postgres_changes",{event:"*",schema:"public",table:"project_members"},h)
+      .on("postgres_changes",{event:"*",schema:"public",table:"task_comments"},h)
       .subscribe();
   };
   async function startCloud(){
@@ -764,7 +822,7 @@ textarea{width:100%;resize:vertical;min-height:64px}
       if(!confirm(`Importer ${d.projects.length} projet(s) et ${d.tasks.length} tâche(s) dans votre compte ? Ils s'ajoutent à vos projets en ligne existants (rien n'est remplacé).`))return;
       const ids={}, nid=()=>(crypto.randomUUID?crypto.randomUUID():uid()+uid());
       d.projects.forEach((p,i)=>{ids[p.id]=nid();state.projects.push({id:ids[p.id],name:String(p.name||"Projet"),color:p.color||COLORS[(state.projects.length+i)%COLORS.length]})});
-      d.tasks.forEach(t=>{if(!ids[t.projectId])return;state.tasks.push({id:nid(),projectId:ids[t.projectId],title:String(t.title||""),priority:["haute","normale","basse"].includes(t.priority)?t.priority:"normale",due:/^\d{4}-\d{2}-\d{2}$/.test(t.due||"")?t.due:"",status:["todo","doing","done"].includes(t.status)?t.status:"todo",note:String(t.note||""),who:String(t.who||""),createdAt:Number(t.createdAt)||Date.now(),doneAt:t.doneAt||null})});
+      d.tasks.forEach(t=>{if(!ids[t.projectId])return;state.tasks.push({id:nid(),projectId:ids[t.projectId],title:String(t.title||""),priority:["haute","normale","basse"].includes(t.priority)?t.priority:"normale",due:/^\d{4}-\d{2}-\d{2}$/.test(t.due||"")?t.due:"",status:["todo","doing","done"].includes(t.status)?t.status:"todo",note:String(t.note||""),who:String(t.who||""),createdAt:Number(t.createdAt)||Date.now(),doneAt:t.doneAt||null,checklist:Array.isArray(t.checklist)?t.checklist.filter(c=>c&&c.text).map(c=>({id:String(c.id||uid()),text:String(c.text),done:!!c.done})):[],repeat:t.repeat&&t.repeat.unit?{n:+t.repeat.n||1,unit:String(t.repeat.unit)}:null})});
       view="all";save();render();
     };
     r.readAsText(file);
@@ -849,11 +907,37 @@ textarea{width:100%;resize:vertical;min-height:64px}
     const title=$("#qt").value.trim(); const pid=$("#qp").value;
     if(!title)return;
     if(!pid){alert("Créez d'abord un projet.");return}
-    state.tasks.push({id:uid(),projectId:pid,title,priority:$("#qprio").value,due:$("#qd").value||"",status:"todo",note:"",who:$("#qw").value.trim(),createdAt:Date.now()});
+    state.tasks.push({id:uid(),projectId:pid,title,priority:$("#qprio").value,due:$("#qd").value||"",status:"todo",note:"",who:$("#qw").value.trim(),createdAt:Date.now(),checklist:[],repeat:null});
     $("#qt").value="";$("#qd").value="";$("#qprio").value="normale";
     save(); render(); $("#qt").focus();
   }
-  function toggle(t){t.status=t.status==="done"?"todo":"done";t.doneAt=t.status==="done"?Date.now():null;save();render()}
+  // ---------- Tâches récurrentes ----------
+  const REPEATS=[["","Ne se répète pas"],["1-day","Tous les jours"],["1-week","Toutes les semaines"],["2-week","Toutes les 2 semaines"],["1-month","Tous les mois"]];
+  const repKey=r=>r&&r.n&&r.unit?`${r.n}-${r.unit}`:"";
+  const repLabel=r=>(REPEATS.find(x=>x[0]===repKey(r))||[0,""])[1];
+  const repFrom=k=>{if(!k)return null;const [n,unit]=k.split("-");return {n:+n,unit}};
+  function nextDue(t){
+    const r=t.repeat, step=d=>{const x=new Date(d);if(r.unit==="day")x.setDate(x.getDate()+r.n);else if(r.unit==="week")x.setDate(x.getDate()+7*r.n);else{const day=x.getDate();x.setDate(1);x.setMonth(x.getMonth()+r.n);x.setDate(Math.min(day,new Date(x.getFullYear(),x.getMonth()+1,0).getDate()))}return x};
+    let d=step(t.due?parseD(t.due):today());
+    while(d<today())d=step(d);
+    return iso(d);
+  }
+  function spawnNext(t){
+    if(!t.repeat||!t.repeat.unit)return null;
+    if(t.repeat.nextId&&state.tasks.some(x=>x.id===t.repeat.nextId))return null; // déjà créée
+    const id=MODE==="cloud"&&crypto.randomUUID?crypto.randomUUID():uid();
+    const n={id,projectId:t.projectId,title:t.title,priority:t.priority,due:nextDue(t),status:"todo",note:t.note||"",who:t.who||"",createdAt:Date.now(),
+      checklist:(t.checklist||[]).map(c=>({id:uid(),text:c.text,done:false})),repeat:{n:t.repeat.n,unit:t.repeat.unit}};
+    t.repeat={...t.repeat,nextId:id};
+    state.tasks.push(n);
+    return n;
+  }
+  function toggle(t){
+    t.status=t.status==="done"?"todo":"done";t.doneAt=t.status==="done"?Date.now():null;
+    const n=t.status==="done"?spawnNext(t):null;
+    save();render();
+    if(n)setSync(`Tâche récurrente : prochaine occurrence créée pour le ${shortDay(n.due)}`);
+  }
   function cycleDoing(t){t.status=t.status==="doing"?"todo":"doing";save();render()}
   function removeTask(t){if(confirm(`Supprimer « ${t.title} » ?`)){state.tasks=state.tasks.filter(x=>x.id!==t.id);save();render()}}
 
@@ -903,7 +987,7 @@ textarea{width:100%;resize:vertical;min-height:64px}
     // vues
     const V=$("#views"); V.innerHTML="";
     const vb=(id,label,n,act,fn)=>{const x=document.createElement("button");x.type="button";x.className="vbtn";x.setAttribute("aria-current",act);x.innerHTML=`<span>${label}</span><span class="n">${n}</span>`;x.onclick=fn;V.appendChild(x)};
-    const go=(mode,scope)=>()=>{ui.mode=mode;ui.scope=scope;saveUi();view="all";editing=null;shareOpen=false;weekStart=null;closeMenu();render()};
+    const go=(mode,scope)=>()=>{query="";$("#search").value="";ui.mode=mode;ui.scope=scope;saveUi();view="all";editing=null;shareOpen=false;weekStart=null;closeMenu();render()};
     vb("today","Aujourd'hui",nToday,view==="all"&&ui.mode==="list"&&ui.scope==="today",go("list","today"));
     vb("agenda","Agenda de la semaine",nWeek,view==="all"&&ui.mode==="agenda",go("agenda","all"));
     vb("all","Toutes les tâches",open.length,view==="all"&&ui.mode==="list"&&ui.scope==="all",go("list","all"));
@@ -946,6 +1030,7 @@ textarea{width:100%;resize:vertical;min-height:64px}
       if(MODE==="cloud")b(shareOpen?"Fermer le partage":"Partager",()=>{shareOpen=!shareOpen;render()},"");
       b("Renommer",()=>renameProject(p));b("Supprimer le projet",()=>deleteProject(p));
     } else if(p&&MODE==="cloud")b("Quitter le projet",()=>shareRemove(p.id,cloud.email,true));
+    b("Récap de la semaine",openRecap,"");
     if(!agenda&&state.tasks.some(t=>t.status==="done"&&(!p||t.projectId===p.id)))b("Vider les terminées",clearDone);
     const people=[...new Set(state.tasks.map(t=>(t.who||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"fr"));
     const sugg=new Set(people);
@@ -980,6 +1065,16 @@ textarea{width:100%;resize:vertical;min-height:64px}
       L.innerHTML=`<div class="empty">Commencez par créer un projet (« + Nouveau projet » dans la colonne de gauche), puis ajoutez vos tâches ici.</div>`;return;
     }
     const pool=state.tasks.filter(t=>(!p||t.projectId===p.id)&&(!ui.who||(ui.who==="__none"?!(t.who||"").trim():(t.who||"").trim()===ui.who)));
+    if(query.trim()){
+      const found=pool.filter(matches);
+      const fo=found.filter(t=>t.status!=="done").sort(sortOpen), fd=found.filter(t=>t.status==="done").sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
+      $("#ptitle").innerHTML="Recherche";
+      $("#psub").textContent=`${found.length} résultat${found.length>1?"s":""} pour « ${query.trim()} »`+(p?` dans ${p.name}`:"");
+      if(fo.length)L.appendChild(group("res","À faire et en cours","",fo,!p));
+      if(fd.length)L.appendChild(group("done","Terminées","",fd,!p));
+      if(!found.length)L.insertAdjacentHTML("beforeend",`<div class="empty">Aucune tâche ne correspond. La recherche porte sur l'intitulé, la note, les étapes, les commentaires, le responsable et le projet.</div>`);
+      return;
+    }
     if(agenda){renderAgenda(L,p,pool);return}
     const openPool=pool.filter(t=>t.status!=="done").sort(sortOpen);
     const done=pool.filter(t=>t.status==="done").sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
@@ -1086,11 +1181,82 @@ textarea{width:100%;resize:vertical;min-height:64px}
     g.appendChild(ul);
     return g;
   }
+  // ---------- Recherche ----------
+  let query="";
+  const norm=x=>String(x||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+  function hl(text){
+    const t=esc(text); if(!query.trim())return t;
+    const q=norm(query.trim()), n=norm(text);
+    const out=[];let i=0,j;
+    while((j=n.indexOf(q,i))>=0){out.push(esc(text.slice(i,j)),"<mark>",esc(text.slice(j,j+q.length)),"</mark>");i=j+q.length}
+    out.push(esc(text.slice(i)));
+    return i?out.join(""):t;
+  }
+  function matches(t){
+    const q=norm(query.trim()); if(!q)return true;
+    const p=proj(t.projectId);
+    const hay=[t.title,t.note,t.who,p&&p.name,...(t.checklist||[]).map(c=>c.text),...getComments(t).map(c=>c.text)].map(norm).join("\n");
+    return q.split(/\s+/).every(w=>hay.includes(w));
+  }
+  // ---------- Commentaires ----------
+  function getComments(t){return MODE==="cloud"?(cloud.comments[t.id]||[]):(Array.isArray(t.comments)?t.comments:[])}
+  const fmtWhen=ms=>{const d=new Date(ms);return d.toLocaleDateString("fr-FR",{day:"numeric",month:"short"})+" à "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})};
+  async function addComment(t,text){
+    text=text.trim(); if(!text)return false;
+    if(text.length>4000){alert("Commentaire trop long (4000 caractères maximum).");return false}
+    if(MODE==="cloud"){
+      const id=crypto.randomUUID?crypto.randomUUID():uid()+uid();
+      const {error}=await cloudClient().from("task_comments").insert({id,task_id:t.id,body:text});
+      if(error){alert(transient(error)?"Commentaire non envoyé : connexion au serveur impossible. Réessayez dans un instant.":"Commentaire refusé : "+error.message);return false}
+      (cloud.comments[t.id]=cloud.comments[t.id]||[]).push({id,author:cloud.email,text,at:Date.now()});
+      cloud._lastCm=JSON.stringify(cloud.comments);
+      return true;
+    }
+    const cur=state.tasks.find(x=>x.id===t.id); if(!cur)return false;
+    cur.comments=[...(cur.comments||[]),{id:uid(),author:"Moi",text,at:Date.now()}];
+    save(); return true;
+  }
+  async function delComment(t,c){
+    if(!confirm("Supprimer ce commentaire ?"))return false;
+    if(MODE==="cloud"){
+      const {error}=await cloudClient().from("task_comments").delete().eq("id",c.id);
+      if(error){alert("Suppression impossible : "+error.message);return false}
+      cloud.comments[t.id]=(cloud.comments[t.id]||[]).filter(x=>x.id!==c.id);
+      cloud._lastCm=JSON.stringify(cloud.comments);
+      return true;
+    }
+    const cur=state.tasks.find(x=>x.id===t.id); if(!cur)return false;
+    cur.comments=(cur.comments||[]).filter(x=>x.id!==c.id); save(); return true;
+  }
+  function commentsBox(t){
+    const box=document.createElement("div");box.className="cbox";
+    const draw=()=>{
+      const list=getComments(t);
+      box.innerHTML=`<span class="lbl">Commentaires${list.length?` (${list.length})`:""}</span>
+        ${list.length?`<ul class="clist">${list.map(c=>`<li><div class="ch"><span><b>${esc(c.author)}</b> · ${fmtWhen(c.at)}</span>${(MODE!=="cloud"||c.author===cloud.email)?`<button type="button" class="xbtn" data-c="${esc(c.id)}" aria-label="Supprimer ce commentaire">×</button>`:""}</div><div class="cb">${esc(c.text)}</div></li>`).join("")}</ul>`:""}
+        <div class="cform"><textarea placeholder="Ajouter un commentaire…" aria-label="Nouveau commentaire"></textarea><button class="btn" type="button">Publier</button></div>`;
+      const ta=box.querySelector("textarea"), go=box.querySelector(".cform .btn");
+      const send=async()=>{go.disabled=true;if(await addComment(t,ta.value)){draw();box.querySelector("textarea").focus()}else go.disabled=false};
+      go.onclick=send;
+      ta.addEventListener("keydown",e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();send()}});
+      box.querySelectorAll("[data-c]").forEach(b=>b.onclick=async()=>{const c=getComments(t).find(x=>x.id===b.dataset.c);if(c&&await delComment(t,c))draw()});
+    };
+    draw();
+    return box;
+  }
+  // ---------- Étapes ----------
+  function toggleStep(t,sid){
+    const cur=state.tasks.find(x=>x.id===t.id); if(!cur)return;
+    cur.checklist=(cur.checklist||[]).map(c=>c.id===sid?{...c,done:!c.done}:c);
+    save();render();
+  }
   function row(t,showProj,bucket){
     const li=document.createElement("li");
     li.className=`task${t.status==="done"?" done":""}`;
     li.dataset.id=t.id;
     const p=proj(t.projectId);
+    const steps=Array.isArray(t.checklist)?t.checklist:[];
+    const nCom=getComments(t).length;
     const tags=[];
     if(showProj&&p)tags.push(`<span class="tag"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>`);
     if(t.status==="doing")tags.push(`<span class="tag doing">En cours</span>`);
@@ -1099,11 +1265,16 @@ textarea{width:100%;resize:vertical;min-height:64px}
       else if(isToday(t))tags.push(`<span class="tag today">Aujourd'hui</span>`);
       else if(bucket!=="tomorrow")tags.push(`<span class="tag">${shortDay(t.due)}</span>`);
     } else if(t.due)tags.push(`<span class="tag">${shortDay(t.due)}</span>`);
+    if(steps.length)tags.push(`<span class="tag" title="Étapes terminées">${steps.filter(c=>c.done).length}/${steps.length} étapes</span>`);
+    if(t.repeat&&t.repeat.unit)tags.push(`<span class="tag" title="Tâche récurrente"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l3 3-3 3"></path><path d="M4 11V9a4 4 0 0 1 4-4h12"></path><path d="M7 22l-3-3 3-3"></path><path d="M20 13v2a4 4 0 0 1-4 4H4"></path></svg>${repLabel(t.repeat)}</span>`);
     if(t.priority==="haute")tags.push(`<span class="tag hi">Priorité haute</span>`);
     if(t.priority==="basse")tags.push(`<span class="tag">Priorité basse</span>`);
-    if(t.who)tags.push(`<span class="tag who">${esc(t.who)}</span>`);
+    if(t.who)tags.push(`<span class="tag who">${hl(t.who)}</span>`);
+    if(nCom)tags.push(`<button type="button" class="tag" data-a="edit" title="Voir les commentaires" style="border:0;cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg>${nCom} commentaire${nCom>1?"s":""}</button>`);
     li.innerHTML=`<input type="checkbox" class="chk" ${t.status==="done"?"checked":""} aria-label="Marquer comme terminée">
-      <div><div class="ttl">${esc(t.title)}</div>${tags.length?`<div class="meta">${tags.join("")}</div>`:""}${t.note&&editing!==t.id?`<div class="note">${esc(t.note)}</div>`:""}</div>
+      <div><div class="ttl">${hl(t.title)}</div>${tags.length?`<div class="meta">${tags.join("")}</div>`:""}
+      ${steps.length&&editing!==t.id?`<ul class="steps">${steps.map(c=>`<li class="${c.done?"ok":""}"><input type="checkbox" ${c.done?"checked":""} data-s="${esc(c.id)}" aria-label="Étape terminée : ${esc(c.text)}"><span>${hl(c.text)}</span></li>`).join("")}</ul>`:""}
+      ${t.note&&editing!==t.id?`<div class="note">${hl(t.note)}</div>`:""}</div>
       <div class="acts">
         ${t.status!=="done"?`<button class="sbtn" data-a="doing" type="button">${t.status==="doing"?"Mettre en pause":"Démarrer"}</button>`:""}
         <details class="more"><summary aria-label="Plus d'actions">${ICON_MORE}</summary>
@@ -1112,6 +1283,7 @@ textarea{width:100%;resize:vertical;min-height:64px}
       </div>`;
     li.querySelector(".chk").onchange=()=>toggle(t);
     li.querySelector(".ttl").onclick=()=>{editing=editing===t.id?null:t.id;render()};
+    li.querySelectorAll("[data-s]").forEach(cb=>cb.onchange=()=>toggleStep(t,cb.dataset.s));
     li.querySelectorAll("[data-a]").forEach(btn=>btn.onclick=()=>{
       const a=btn.dataset.a;
       if(a==="doing")cycleDoing(t);
@@ -1125,19 +1297,79 @@ textarea{width:100%;resize:vertical;min-height:64px}
         <select aria-label="Priorité">${["haute","normale","basse"].map(v=>`<option value="${v}" ${v===t.priority?"selected":""}>Priorité ${v}</option>`).join("")}</select>
         <input type="date" value="${esc(t.due)}" aria-label="Échéance">
         <input type="text" value="${esc(t.who||"")}" placeholder="Responsable" aria-label="Responsable" list="people">
+        <select aria-label="Répétition">${REPEATS.map(([k,l])=>`<option value="${k}" ${k===repKey(t.repeat)?"selected":""}>${l}</option>`).join("")}</select>
         <textarea class="full" placeholder="Note (contexte, contact, référence Jira…)" aria-label="Note">${esc(t.note)}</textarea>
-        <div class="full"><button class="btn primary" type="button">Enregistrer</button> <button class="btn ghost" type="button">Annuler</button></div>`;
-      const [ti,sp,spr,dd,wh]=f.querySelectorAll("input,select");const ta=f.querySelector("textarea");
-      const [ok,ko]=f.querySelectorAll(".full button");
-      ok.onclick=()=>{
+        <div class="stepedit"><span class="lbl">Étapes</span><div class="steplist"></div>
+          <div class="steprow"><input type="text" placeholder="Ajouter une étape puis Entrée" aria-label="Nouvelle étape"><button class="btn" type="button">Ajouter</button></div></div>
+        <div class="full"><button class="btn primary" type="button" data-k="ok">Enregistrer</button> <button class="btn ghost" type="button" data-k="ko">Annuler</button></div>`;
+      const [ti,sp,spr,dd,wh,rp]=f.querySelectorAll(":scope > input, :scope > select");const ta=f.querySelector(":scope > textarea");
+      // étapes en cours d'édition (appliquées à l'enregistrement)
+      let draft=steps.map(c=>({...c}));
+      const sl=f.querySelector(".steplist"), sIn=f.querySelector(".steprow input");
+      const drawSteps=()=>{
+        sl.innerHTML=draft.map((c,i)=>`<div class="steprow"><input type="checkbox" ${c.done?"checked":""} data-i="${i}" aria-label="Étape terminée" style="width:18px;height:18px;accent-color:var(--nav)"><input type="text" value="${esc(c.text)}" data-t="${i}" aria-label="Étape ${i+1}"><button type="button" class="xbtn" data-x="${i}" aria-label="Retirer l'étape">×</button></div>`).join("");
+        sl.querySelectorAll("[data-i]").forEach(x=>x.onchange=()=>{draft[+x.dataset.i].done=x.checked});
+        sl.querySelectorAll("[data-t]").forEach(x=>x.oninput=()=>{draft[+x.dataset.t].text=x.value});
+        sl.querySelectorAll("[data-x]").forEach(x=>x.onclick=()=>{draft.splice(+x.dataset.x,1);drawSteps()});
+      };
+      const addStep=()=>{const v=sIn.value.trim();if(!v)return;draft.push({id:uid(),text:v,done:false});sIn.value="";drawSteps();sIn.focus()};
+      f.querySelector(".steprow .btn").onclick=addStep;
+      sIn.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addStep()}});
+      drawSteps();
+      f.querySelector("[data-k=ok]").onclick=()=>{
         const cur=state.tasks.find(x=>x.id===t.id);
         if(!cur){editing=null;render();alert("Cette tâche a été supprimée entre-temps (peut-être par un collègue).");return}
-        if(ti.value.trim())cur.title=ti.value.trim();cur.projectId=sp.value;cur.priority=spr.value;cur.due=dd.value;cur.who=wh.value.trim();cur.note=ta.value.trim();editing=null;save();render()};
-      ko.onclick=()=>{editing=null;render()};
+        if(ti.value.trim())cur.title=ti.value.trim();cur.projectId=sp.value;cur.priority=spr.value;cur.due=dd.value;cur.who=wh.value.trim();cur.note=ta.value.trim();
+        if(sIn.value.trim())draft.push({id:uid(),text:sIn.value.trim(),done:false});
+        cur.checklist=draft.filter(c=>c.text.trim()).map(c=>({id:c.id,text:c.text.trim(),done:!!c.done}));
+        const r=repFrom(rp.value);
+        cur.repeat=r?{...r,...(repKey(cur.repeat)===rp.value&&cur.repeat.nextId?{nextId:cur.repeat.nextId}:{})}:null;
+        editing=null;save();render()};
+      f.querySelector("[data-k=ko]").onclick=()=>{editing=null;render()};
+      f.appendChild(commentsBox(t));
       li.appendChild(f);
       setTimeout(()=>ti.focus(),0);
     }
     return li;
+  }
+  // ---------- Récap de la semaine ----------
+  function buildRecap(offset){
+    const ws=addDays(mondayOf(new Date()),7*offset), we=addDays(ws,6), wsI=iso(ws), weI=iso(we);
+    const nS=iso(addDays(ws,7)), nE=iso(addDays(ws,13)), t0=iso(today());
+    const p=view==="all"?null:proj(view);
+    const projs=p?[p]:state.projects;
+    const line=(t,extra)=>`- ${t.title}${extra?` (${extra})`:""}${t.who?` [${t.who}]`:""}`;
+    const range=`${ws.toLocaleDateString("fr-FR",{day:"numeric",month:"long"})} au ${we.toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}`;
+    const out=[`Récapitulatif – semaine ${isoWeek(ws)} (du ${range})`,""];
+    let any=false;
+    projs.forEach(pr=>{
+      const ts=state.tasks.filter(t=>t.projectId===pr.id);
+      const dl=ms=>{const d=new Date(ms);return iso(d)};
+      const sec=[
+        ["Terminé",ts.filter(t=>t.status==="done"&&t.doneAt&&dl(t.doneAt)>=wsI&&dl(t.doneAt)<=weI).map(t=>line(t,""))],
+        ["En cours",ts.filter(t=>t.status==="doing").sort(sortOpen).map(t=>line(t,t.due?"échéance "+shortDay(t.due).toLowerCase():""))],
+        ["En retard",ts.filter(t=>t.status==="todo"&&t.due&&t.due<t0&&(offset===0||t.due<=weI)).sort(sortOpen).map(t=>line(t,"prévu le "+shortDay(t.due).toLowerCase()))],
+        [offset===0?"Reste à faire cette semaine":"Prévu cette semaine, non terminé",ts.filter(t=>t.status==="todo"&&t.due&&t.due>=(offset===0?t0:wsI)&&t.due<=weI).sort(sortOpen).map(t=>line(t,shortDay(t.due).toLowerCase()))],
+        ["Semaine suivante",ts.filter(t=>t.status!=="done"&&t.due&&t.due>=nS&&t.due<=nE&&t.status!=="doing").sort(sortOpen).map(t=>line(t,shortDay(t.due).toLowerCase()))]
+      ].filter(([,l])=>l.length);
+      if(!sec.length)return;
+      any=true;
+      out.push(pr.name.toUpperCase());
+      sec.forEach(([h,l])=>{out.push(h+" :",...l)});
+      out.push("");
+    });
+    if(!any)out.push("Aucune activité ni échéance sur cette période.");
+    return {text:out.join("\n").trim()+"\n",title:`Récap semaine ${isoWeek(ws)}`,scope:p?`Projet : ${p.name}`:`Tous les projets (${projs.length})`};
+  }
+  function openRecap(){
+    const dlg=$("#recap");
+    const fill=()=>{const r=buildRecap(+$("#recapweek").value);$("#recaptext").value=r.text;$("#recaptitle").textContent=r.title;$("#recapscope").textContent=r.scope+" · le texte est modifiable après copie, dans votre mail ou votre document.";dlg.dataset.title=r.title};
+    $("#recapweek").value="0";fill();
+    $("#recapweek").onchange=fill;
+    $("#recapcopy").onclick=async()=>{const t=$("#recaptext").value;try{await navigator.clipboard.writeText(t);$("#recapcopy").textContent="Copié";setTimeout(()=>$("#recapcopy").textContent="Copier",1500)}catch(e){$("#recaptext").select();document.execCommand&&document.execCommand("copy")}};
+    $("#recapmail").onclick=()=>{location.href=`mailto:?subject=${encodeURIComponent(dlg.dataset.title)}&body=${encodeURIComponent($("#recaptext").value)}`};
+    $("#recapdl").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([$("#recaptext").value],{type:"text/plain;charset=utf-8"}));a.download=dlg.dataset.title.replace(/\s+/g,"-").toLowerCase()+".txt";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+    if(dlg.showModal)dlg.showModal();else dlg.setAttribute("open","");
   }
   function closeMenu(){const s=$("#side");if(s){s.classList.remove("open");$("#menubtn").setAttribute("aria-expanded","false")}}
 
@@ -1150,6 +1382,9 @@ textarea{width:100%;resize:vertical;min-height:64px}
   $("#lback").onclick=()=>showGate("choice");
   $("#glogin").onsubmit=login;
   document.addEventListener("click",e=>{document.querySelectorAll("details.more[open]").forEach(d=>{if(!d.contains(e.target))d.open=false})});
+  let searchT=null;
+  $("#search").addEventListener("input",e=>{clearTimeout(searchT);searchT=setTimeout(()=>{query=e.target.value;editing=null;render()},150)});
+  $("#search").addEventListener("keydown",e=>{if(e.key==="Escape"){e.target.value="";query="";render()}});
   $("#menubtn").onclick=()=>{const o=$("#side").classList.toggle("open");$("#menubtn").setAttribute("aria-expanded",o)};
   $("#fab").onclick=()=>{window.scrollTo({top:0,behavior:"smooth"});setTimeout(()=>$("#qt").focus(),250)};
   $("#gsignup").onsubmit=signup;

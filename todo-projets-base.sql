@@ -144,3 +144,45 @@ revoke execute on function public.can_access(text) from public, anon;
 revoke execute on function public.is_owner(text) from public, anon;
 grant execute on function public.can_access(text) to authenticated;
 grant execute on function public.is_owner(text) to authenticated;
+
+-- ---------- Étapes, répétition et commentaires ----------
+-- Étapes (check-list) et répétition sur les tâches
+alter table public.tasks add column if not exists checklist jsonb not null default '[]'::jsonb;
+alter table public.tasks add column if not exists repeat jsonb;
+
+-- Accès à une tâche (via son projet)
+create or replace function public.can_access_task(tid text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.tasks t where t.id = tid and public.can_access(t.project_id))
+$$;
+revoke execute on function public.can_access_task(text) from public, anon;
+grant execute on function public.can_access_task(text) to authenticated;
+
+-- Commentaires
+create table if not exists public.task_comments (
+  id           text primary key default gen_random_uuid()::text,
+  task_id      text not null references public.tasks(id) on delete cascade,
+  author_email text not null default public.my_email(),
+  body         text not null check (length(body) between 1 and 4000),
+  created_at   bigint not null default (extract(epoch from now()) * 1000)::bigint
+);
+create index if not exists task_comments_task_idx on public.task_comments(task_id);
+alter table public.task_comments enable row level security;
+drop policy if exists comments_select on public.task_comments;
+create policy comments_select on public.task_comments for select to authenticated
+  using (public.can_access_task(task_id));
+drop policy if exists comments_insert on public.task_comments;
+create policy comments_insert on public.task_comments for insert to authenticated
+  with check (author_email = public.my_email() and public.can_access_task(task_id));
+drop policy if exists comments_delete on public.task_comments;
+create policy comments_delete on public.task_comments for delete to authenticated
+  using (author_email = public.my_email());
+grant select, insert, delete on public.task_comments to authenticated;
+revoke all on public.task_comments from anon;
+
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='task_comments') then
+    alter publication supabase_realtime add table public.task_comments;
+  end if;
+end $$;
