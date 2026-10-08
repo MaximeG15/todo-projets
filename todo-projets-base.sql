@@ -251,3 +251,30 @@ begin
     alter publication supabase_realtime add table public.profiles;
   end if;
 end $$;
+
+-- ---------- Familles de tâches (par projet) ----------
+alter table public.tasks add column if not exists family text;
+create table if not exists public.project_families (
+  id         text primary key default gen_random_uuid()::text,
+  project_id text not null references public.projects(id) on delete cascade,
+  name       text not null check (length(trim(name)) between 1 and 60),
+  created_at bigint not null default (extract(epoch from now()) * 1000)::bigint
+);
+create index if not exists project_families_project_idx on public.project_families(project_id);
+alter table public.project_families enable row level security;
+drop policy if exists families_select on public.project_families;
+create policy families_select on public.project_families for select to authenticated using (public.can_access(project_id));
+drop policy if exists families_insert on public.project_families;
+create policy families_insert on public.project_families for insert to authenticated with check (public.can_access(project_id));
+drop policy if exists families_update on public.project_families;
+create policy families_update on public.project_families for update to authenticated using (public.can_access(project_id)) with check (public.can_access(project_id));
+drop policy if exists families_delete on public.project_families;
+create policy families_delete on public.project_families for delete to authenticated using (public.can_access(project_id));
+grant select, insert, update, delete on public.project_families to authenticated;
+revoke all on public.project_families from anon;
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='project_families') then
+    alter publication supabase_realtime add table public.project_families;
+  end if;
+end $$;

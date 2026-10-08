@@ -249,6 +249,15 @@ dialog#recap::backdrop{background:rgba(17,24,29,.45)}
 .rhead h2{margin:0;font:700 26px/1.1 "Barlow Condensed","Arial Narrow",sans-serif}
 #recaptext{min-height:360px;font:14px/1.5 ui-monospace,"Cascadia Mono",Consolas,monospace;white-space:pre;background:var(--soft)}
 .ractions{display:flex;flex-wrap:wrap;gap:8px}
+/* Familles */
+.famsel{display:flex;gap:4px;align-items:center;min-width:0}
+.famsel select{flex:1;min-width:0}
+.famsel .btn{padding:6px 8px;font-size:13px}
+.tag.fam{background:#EAE6F5;color:#46337A;font-weight:500}
+.seglbl{align-self:center;padding:0 6px 0 10px;font-size:13px;color:var(--muted)}
+.group.g-family h2{display:flex;align-items:center;gap:10px}
+.group.g-family h2::before{content:"";width:10px;height:10px;border-radius:3px;background:#7A62C2;flex:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tag.fam{background:#2E2745;color:#CFC3F3}}
 /* Filtre des projets de l'agenda */
 .pfilter{position:relative}
 .pfilter summary{list-style:none;display:inline-flex;align-items:center;gap:6px}
@@ -677,7 +686,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
   }
 
   // ---------- Mode en ligne (Supabase) ----------
-  const cloud={client:null,user:null,email:"",meta:{},comments:{},profiles:{},dirty:new Map(),seq:0,flushing:false,again:false,retry:null,channel:null,fetchT:null,lastOk:0};
+  const cloud={client:null,user:null,email:"",meta:{},comments:{},profiles:{},families:{},dirty:new Map(),seq:0,flushing:false,again:false,retry:null,channel:null,fetchT:null,lastOk:0};
   const cloudReady=()=>!!(CONFIG.supabaseUrl&&CONFIG.supabaseKey&&window.supabase&&window.supabase.createClient);
   // La session est aussi gardée en mémoire : si le navigateur ne la restitue pas à la librairie
   // (stockage bloqué, verrou entre onglets…), on joint nous-mêmes le jeton aux requêtes.
@@ -708,9 +717,9 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     return cloud.client;
   }
   const isOwner=pid=>{const m=cloud.meta[pid];return !m||m.owner===cloud.user.id};
-  const rowT=t=>({id:t.id,project_id:t.projectId,title:t.title,priority:t.priority||"normale",due:t.due||null,status:t.status||"todo",note:t.note||"",who:t.who||"",created_at:t.createdAt||Date.now(),done_at:t.doneAt||null,updated_at:t.updatedAt||Date.now(),updated_by:cloud.email,checklist:Array.isArray(t.checklist)?t.checklist:[],repeat:t.repeat||null});
+  const rowT=t=>({id:t.id,project_id:t.projectId,title:t.title,priority:t.priority||"normale",due:t.due||null,status:t.status||"todo",note:t.note||"",who:t.who||"",created_at:t.createdAt||Date.now(),done_at:t.doneAt||null,updated_at:t.updatedAt||Date.now(),updated_by:cloud.email,checklist:Array.isArray(t.checklist)?t.checklist:[],repeat:t.repeat||null,family:t.family||null});
   const rowP=p=>({id:p.id,name:p.name,color:p.color||null,updated_at:p.updatedAt||Date.now()});
-  const fromT=r=>({id:r.id,projectId:r.project_id,title:r.title,priority:r.priority,due:r.due||"",status:r.status,note:r.note||"",who:r.who||"",createdAt:Number(r.created_at),doneAt:r.done_at?Number(r.done_at):null,updatedAt:Number(r.updated_at),updatedBy:r.updated_by||"",checklist:Array.isArray(r.checklist)?r.checklist:[],repeat:r.repeat||null});
+  const fromT=r=>({id:r.id,projectId:r.project_id,title:r.title,priority:r.priority,due:r.due||"",status:r.status,note:r.note||"",who:r.who||"",createdAt:Number(r.created_at),doneAt:r.done_at?Number(r.done_at):null,updatedAt:Number(r.updated_at),updatedBy:r.updated_by||"",checklist:Array.isArray(r.checklist)?r.checklist:[],repeat:r.repeat||null,family:r.family||""});
   const fromP=r=>({id:r.id,name:r.name,color:r.color||COLORS[0]});
   const transient=e=>!e||!e.code; // pas de code PostgreSQL = problème réseau
   function cloudStatus(){
@@ -770,7 +779,11 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     if(!this.user)return;
     if(editing){clearTimeout(this.fetchT);this.fetchT=setTimeout(()=>this.fetch(),3000);return}
     const c=cloudClient();
-    const [P,M,T,C,PR]=await Promise.all([c.from("projects").select("*"),c.from("project_members").select("*"),c.from("tasks").select("*"),c.from("task_comments").select("*"),c.from("profiles").select("*")]);
+    const [P,M,T,C,PR,F]=await Promise.all([c.from("projects").select("*"),c.from("project_members").select("*"),c.from("tasks").select("*"),c.from("task_comments").select("*"),c.from("profiles").select("*"),c.from("project_families").select("*")]);
+    if(!F.error){
+      const fm={};F.data.slice().sort((a,b)=>Number(a.created_at)-Number(b.created_at)).forEach(r=>{(fm[r.project_id]=fm[r.project_id]||[]).push({id:r.id,name:r.name})});
+      const js=JSON.stringify(fm);if(js!==this._lastFm){this._lastFm=js;this.families=fm;this._cmChanged=true}
+    }
     if(!PR.error){
       const pm={};PR.data.forEach(r=>pm[String(r.email).toLowerCase()]={first:r.first_name,last:r.last_name});
       const js=JSON.stringify(pm);if(js!==this._lastPr){this._lastPr=js;this.profiles=pm;this._cmChanged=true;$("#whoami").textContent=nameOf(this.email)}
@@ -825,6 +838,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
       .on("postgres_changes",{event:"*",schema:"public",table:"project_members"},h)
       .on("postgres_changes",{event:"*",schema:"public",table:"task_comments"},h)
       .on("postgres_changes",{event:"*",schema:"public",table:"profiles"},h)
+      .on("postgres_changes",{event:"*",schema:"public",table:"project_families"},h)
       .subscribe();
   };
   async function startCloud(){
@@ -1142,6 +1156,49 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     };
     ICS.parse=parse;
   })();
+  // ---------- Familles de tâches (par projet) ----------
+  function getFamilies(pid){
+    const l=MODE==="cloud"?(cloud.families[pid]||[]):((proj(pid)||{}).families||[]);
+    return l.slice().sort((a,b)=>a.name.localeCompare(b.name,"fr",{sensitivity:"base"}));
+  }
+  const famOf=t=>t.family?getFamilies(t.projectId).find(f=>f.id===t.family)||null:null;
+  const famName=t=>{const f=famOf(t);return f?f.name:""};
+  async function addFamily(pid,name){
+    name=String(name||"").trim().slice(0,60); if(!name)return null;
+    const ex=getFamilies(pid).find(f=>f.name.toLowerCase()===name.toLowerCase()); if(ex)return ex.id;
+    const id=crypto.randomUUID?crypto.randomUUID():uid()+uid();
+    if(MODE==="cloud"){
+      const {error}=await cloudClient().from("project_families").insert({id,project_id:pid,name});
+      if(error){alert(transient(error)?"Famille non créée : connexion au serveur impossible.":"Famille refusée : "+error.message);return null}
+      (cloud.families[pid]=cloud.families[pid]||[]).push({id,name});cloud._lastFm=JSON.stringify(cloud.families);
+      return id;
+    }
+    const pr=proj(pid); if(!pr)return null;
+    pr.families=[...(pr.families||[]),{id,name}]; save(); return id;
+  }
+  async function renameFamily(pid,fid,name){
+    name=String(name||"").trim().slice(0,60); if(!name)return false;
+    if(MODE==="cloud"){
+      const {error}=await cloudClient().from("project_families").update({name}).eq("id",fid);
+      if(error){alert("Renommage impossible : "+error.message);return false}
+      (cloud.families[pid]||[]).forEach(f=>{if(f.id===fid)f.name=name});cloud._lastFm=JSON.stringify(cloud.families);return true;
+    }
+    const pr=proj(pid); if(!pr)return false;
+    pr.families=(pr.families||[]).map(f=>f.id===fid?{...f,name}:f); save(); return true;
+  }
+  async function deleteFamily(pid,fid){
+    const f=getFamilies(pid).find(x=>x.id===fid); if(!f)return false;
+    const n=state.tasks.filter(t=>t.projectId===pid&&t.family===fid).length;
+    if(!confirm(`Supprimer la famille « ${f.name} » ?${n?` Les ${n} tâche(s) qui l'utilisent passeront en « Sans famille ».`:""}`))return false;
+    if(MODE==="cloud"){
+      const {error}=await cloudClient().from("project_families").delete().eq("id",fid);
+      if(error){alert("Suppression impossible : "+error.message);return false}
+      cloud.families[pid]=(cloud.families[pid]||[]).filter(x=>x.id!==fid);cloud._lastFm=JSON.stringify(cloud.families);
+    } else {const pr=proj(pid);pr.families=(pr.families||[]).filter(x=>x.id!==fid)}
+    state.tasks.forEach(t=>{if(t.projectId===pid&&t.family===fid)t.family=""});
+    save(); return true;
+  }
+
   // ---------- Profils (prénom et nom) ----------
   function nameOf(v){
     if(!v)return "";
@@ -1434,6 +1491,12 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     const seg=document.createElement("div");seg.className="seg";seg.setAttribute("role","group");seg.setAttribute("aria-label","Affichage");
     [["list","Liste"],["agenda","Agenda"]].forEach(([m,l])=>{const x=document.createElement("button");x.type="button";x.textContent=l;x.setAttribute("aria-pressed",ui.mode===m);x.onclick=()=>{ui.mode=m;if(m==="agenda")ui.scope="all";saveUi();editing=null;render()};seg.appendChild(x)});
     tools.appendChild(seg);
+    if(!agenda&&!query.trim()){
+      const gb=document.createElement("div");gb.className="seg";gb.setAttribute("role","group");gb.setAttribute("aria-label","Grouper par");
+      gb.innerHTML=`<span class="seglbl">Grouper par</span>`;
+      [["due","Échéance"],["family","Famille"]].forEach(([k,l])=>{const x=document.createElement("button");x.type="button";x.textContent=l;x.setAttribute("aria-pressed",(ui.groupBy||"due")===k);x.onclick=()=>{ui.groupBy=k;saveUi();render()};gb.appendChild(x)});
+      tools.insertBefore(gb,seg);
+    }
     renderShare(p);
 
     // sélecteur projet
@@ -1462,6 +1525,14 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     const done=pool.filter(t=>t.status==="done").sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
     const wanted=ui.scope==="today"?["late","today"]:null;
     let shown=0;
+    if(ui.groupBy==="family"){
+      const items=openPool.filter(t=>!wanted||wanted.includes(bucketOf(t)));
+      const byPrio=(a,b)=>(prioRank[a.priority]??1)-(prioRank[b.priority]??1)||((a.due||"9999")<(b.due||"9999")?-1:(a.due||"9999")>(b.due||"9999")?1:0)||(a.createdAt||0)-(b.createdAt||0);
+      const groups=new Map();
+      items.forEach(t=>{const f=famOf(t);const k=f?t.projectId+"|"+f.id:"__none";if(!groups.has(k))groups.set(k,{f,proj:proj(t.projectId),items:[]});groups.get(k).items.push(t)});
+      const keys=[...groups.keys()].sort((a,b)=>{if(a==="__none")return 1;if(b==="__none")return -1;const A=groups.get(a),B=groups.get(b);return A.f.name.localeCompare(B.f.name,"fr",{sensitivity:"base"})||(A.proj&&B.proj?A.proj.name.localeCompare(B.proj.name,"fr"):0)});
+      keys.forEach(k=>{const g=groups.get(k);shown+=g.items.length;L.appendChild(group("fam",g.f?g.f.name:"Sans famille",g.f&&!p&&g.proj?g.proj.name:"",g.items.sort(byPrio),!p))});
+    } else
     bucketDefs().forEach(([key,label,detail])=>{
       if(wanted&&!wanted.includes(key))return;
       const items=openPool.filter(t=>bucketOf(t)===key);
@@ -1585,6 +1656,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
   }
   function group(key,label,detail,items,showProj){
     const g=document.createElement("section");g.className="group g-"+key;
+    if(key==="fam")g.classList.add("g-family");
     g.innerHTML=`<h2>${label} <span>${detail?esc(detail)+" · ":""}${items.length}</span></h2>`;
     const ul=document.createElement("ul");ul.className="tasks";
     items.forEach(t=>ul.appendChild(row(t,showProj,key)));
@@ -1605,7 +1677,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
   function matches(t){
     const q=norm(query.trim()); if(!q)return true;
     const p=proj(t.projectId);
-    const hay=[t.title,t.note,t.who,whoName(t),p&&p.name,...(t.checklist||[]).map(c=>c.text),...getComments(t).map(c=>c.text)].map(norm).join("\n");
+    const hay=[t.title,t.note,t.who,whoName(t),famName(t),p&&p.name,...(t.checklist||[]).map(c=>c.text),...getComments(t).map(c=>c.text)].map(norm).join("\n");
     return q.split(/\s+/).every(w=>hay.includes(w));
   }
   // ---------- Commentaires ----------
@@ -1669,6 +1741,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     const nCom=getComments(t).length;
     const tags=[];
     if(showProj&&p)tags.push(`<span class="tag"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>`);
+    const fam=famName(t); if(fam&&bucket!=="fam")tags.push(`<span class="tag fam">${hl(fam)}</span>`);
     if(t.status==="doing")tags.push(`<span class="tag doing">En cours</span>`);
     if(t.due&&t.status!=="done"){
       if(isLate(t))tags.push(`<span class="tag late">En retard · ${shortDay(t.due)}</span>`);
@@ -1708,11 +1781,32 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
         <input type="date" value="${esc(t.due)}" aria-label="Échéance">
         <input type="text" value="${esc(t.who||"")}" placeholder="Responsable" aria-label="Responsable" list="people">
         <select aria-label="Répétition">${REPEATS.map(([k,l])=>`<option value="${k}" ${k===repKey(t.repeat)?"selected":""}>${l}</option>`).join("")}</select>
+        <div class="famsel"><select aria-label="Famille"></select><button type="button" class="btn ghost" data-f="ren">Renommer</button><button type="button" class="btn ghost" data-f="del">Supprimer</button></div>
         <textarea class="full" placeholder="Note (contexte, contact, référence Jira…)" aria-label="Note">${esc(t.note)}</textarea>
         <div class="stepedit"><span class="lbl">Étapes</span><div class="steplist"></div>
           <div class="steprow"><input type="text" placeholder="Ajouter une étape puis Entrée" aria-label="Nouvelle étape"><button class="btn" type="button">Ajouter</button></div></div>
         <div class="full"><button class="btn primary" type="button" data-k="ok">Enregistrer</button> <button class="btn ghost" type="button" data-k="ko">Annuler</button></div>`;
       const [ti,sp,spr,dd,wh,rp]=f.querySelectorAll(":scope > input, :scope > select");const ta=f.querySelector(":scope > textarea");
+      // famille : liste déroulante propre au projet choisi
+      const fs=f.querySelector(".famsel select"), fRen=f.querySelector("[data-f=ren]"), fDel=f.querySelector("[data-f=del]");
+      const fillFam=sel=>{
+        const fams=getFamilies(sp.value);
+        if(sel&&!fams.some(x=>x.id===sel))sel="";
+        fs.innerHTML=`<option value="">Sans famille</option>${fams.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("")}<option value="__new">+ Nouvelle famille…</option>`;
+        fs.value=sel||"";fs.dataset.prev=fs.value;
+        fRen.hidden=fDel.hidden=!fs.value;
+      };
+      fillFam(t.family||"");
+      sp.addEventListener("change",()=>fillFam(fs.value));
+      fs.onchange=async()=>{
+        if(fs.value==="__new"){
+          const name=prompt("Nom de la nouvelle famille (propre au projet « "+((proj(sp.value)||{}).name||"")+" »)");
+          const id=name?await addFamily(sp.value,name):null;
+          fillFam(id||fs.dataset.prev||"");
+        } else {fs.dataset.prev=fs.value;fRen.hidden=fDel.hidden=!fs.value}
+      };
+      fRen.onclick=async()=>{const cur=getFamilies(sp.value).find(x=>x.id===fs.value);if(!cur)return;const n=prompt("Nouveau nom de la famille",cur.name);if(n&&await renameFamily(sp.value,cur.id,n))fillFam(cur.id)};
+      fDel.onclick=async()=>{const id=fs.value;if(id&&await deleteFamily(sp.value,id))fillFam("")};
       // étapes en cours d'édition (appliquées à l'enregistrement)
       let draft=steps.map(c=>({...c}));
       const sl=f.querySelector(".steplist"), sIn=f.querySelector(".steprow input");
@@ -1730,6 +1824,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
         const cur=state.tasks.find(x=>x.id===t.id);
         if(!cur){editing=null;render();alert("Cette tâche a été supprimée entre-temps (peut-être par un collègue).");return}
         if(ti.value.trim())cur.title=ti.value.trim();cur.projectId=sp.value;cur.priority=spr.value;cur.due=dd.value;cur.who=wh.value.trim();cur.note=ta.value.trim();
+        cur.family=fs.value&&fs.value!=="__new"?fs.value:"";
         if(sIn.value.trim())draft.push({id:uid(),text:sIn.value.trim(),done:false});
         cur.checklist=draft.filter(c=>c.text.trim()).map(c=>({id:c.id,text:c.text.trim(),done:!!c.done}));
         const r=repFrom(rp.value);
