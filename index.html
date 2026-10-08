@@ -102,6 +102,11 @@ details summary::-webkit-details-marker{display:none}
 #glogin input{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:9px 10px;font-size:15px;color:var(--ink)}
 .gerr{color:var(--late);font-size:13.5px;min-height:1em;margin:0 0 10px}
 .gnote{font-size:12.5px;color:var(--muted);margin:14px 0 0}
+.gnote a{color:var(--steel);font-weight:600}
+.gok{color:var(--ok);font-size:13.5px;margin:0 0 10px}
+.gok:empty{display:none}
+#gsignup label{display:grid;gap:4px;font-size:13px;color:var(--muted);margin-bottom:12px}
+#gsignup input{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:9px 10px;font-size:15px;color:var(--ink)}
 .account .who-me{width:100%;font-size:13px;margin:0 0 4px;word-break:break-all;color:var(--ok);font-weight:600}
 /* Partage */
 .share{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:-6px 0 18px}
@@ -182,7 +187,19 @@ details summary::-webkit-details-marker{display:none}
       <p class="gerr" id="lerr" role="alert"></p>
       <button class="btn primary" type="submit" id="lgo">Se connecter</button>
       <button class="btn ghost" type="button" id="lback">Retour</button>
-      <p class="gnote">Pas de compte ou mot de passe oublié ? Contactez la personne qui gère l'application : elle crée les comptes et peut réinitialiser votre mot de passe.</p>
+      <p class="gnote">Pas encore de compte ? <a href="#" id="tosignup">Créer mon compte</a></p>
+      <p class="gnote">Mot de passe oublié ? Contactez la personne qui gère l'application : elle peut le réinitialiser.</p>
+    </form>
+    <form id="gsignup" hidden autocomplete="on">
+      <p class="sub">Créer mon compte</p>
+      <label>E-mail professionnel<input type="email" id="semail" autocomplete="username" required></label>
+      <label>Mot de passe (8 caractères minimum)<input type="password" id="spass" autocomplete="new-password" minlength="8" required></label>
+      <label>Confirmer le mot de passe<input type="password" id="spass2" autocomplete="new-password" minlength="8" required></label>
+      <p class="gerr" id="serr" role="alert"></p>
+      <p class="gok" id="sok" role="status"></p>
+      <button class="btn primary" type="submit" id="sgo">Créer mon compte</button>
+      <button class="btn ghost" type="button" id="sback">J'ai déjà un compte</button>
+      <p class="gnote" id="sdomains"></p>
     </form>
   </div>
 </div>
@@ -243,7 +260,9 @@ details summary::-webkit-details-marker{display:none}
   // (Supabase > Project Settings > API). Laisser vide = mode local uniquement.
   const CONFIG={
     supabaseUrl:"https://kdwberesnaixlczrjehq.supabase.co",
-    supabaseKey:"sb_publishable_wOMKou85oXbNvnsZ0esKvg_vMjj0HyB"
+    supabaseKey:"sb_publishable_wOMKou85oXbNvnsZ0esKvg_vMjj0HyB",
+    // Domaines d'e-mail autorisés à créer un compte (contrôle aussi fait côté serveur)
+    allowedDomains:["mecalux.com"]
   };
   // ============================================
   const COLORS=["#3E7CB1","#C2410C","#2F7D5B","#8E5BB5","#B8860B","#C0396B","#4A6272","#1F8A8A"];
@@ -586,6 +605,34 @@ details summary::-webkit-details-marker{display:none}
     }catch(err){$("#lerr").textContent="Serveur injoignable : vérifiez votre connexion Internet."}
     finally{$("#lgo").disabled=false}
   }
+  const domainOk=email=>!CONFIG.allowedDomains||!CONFIG.allowedDomains.length||CONFIG.allowedDomains.includes(email.split("@").pop().toLowerCase());
+  async function signup(e){
+    e.preventDefault();
+    const email=$("#semail").value.trim().toLowerCase(), password=$("#spass").value, p2=$("#spass2").value;
+    $("#serr").textContent="";$("#sok").textContent="";
+    if(!domainOk(email)){$("#serr").textContent="Adresse non autorisée : utilisez votre e-mail "+CONFIG.allowedDomains.map(d=>"@"+d).join(" ou ")+".";return}
+    if(password.length<8){$("#serr").textContent="Le mot de passe doit contenir au moins 8 caractères.";return}
+    if(password!==p2){$("#serr").textContent="Les deux mots de passe sont différents.";return}
+    $("#sgo").disabled=true;
+    try{
+      const {data,error}=await cloudClient().auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}});
+      if(error){
+        const m=error.message||"";
+        $("#serr").textContent=/already|registered|exists/i.test(m)?"Un compte existe déjà avec cette adresse : utilisez « J'ai déjà un compte ».":
+          /signups? not allowed|disabled/i.test(m)?"La création de compte est désactivée : contactez la personne qui gère l'application.":
+          /database error|domain/i.test(m)?"Adresse non autorisée : utilisez votre e-mail professionnel.":
+          /password/i.test(m)?"Mot de passe refusé : "+m:
+          (transient(error)&&!error.status?"Serveur injoignable : vérifiez votre connexion Internet.":"Création refusée : "+m);
+        return;
+      }
+      $("#spass").value="";$("#spass2").value="";
+      if(data.session){await enterCloud(data.user);return}
+      if(data.user&&Array.isArray(data.user.identities)&&!data.user.identities.length){$("#serr").textContent="Un compte existe déjà avec cette adresse : utilisez « J'ai déjà un compte ».";return}
+      try{localStorage.setItem("todo-mode","cloud")}catch(e){}
+      $("#sok").textContent="Compte créé. Un e-mail de confirmation vient de vous être envoyé : cliquez sur le lien qu'il contient, puis connectez-vous.";
+    }catch(err){$("#serr").textContent="Serveur injoignable : vérifiez votre connexion Internet."}
+    finally{$("#sgo").disabled=false}
+  }
   async function logout(){
     if(cloud.dirty.size&&!confirm(`${cloud.dirty.size} modification(s) ne sont pas encore envoyées. Se déconnecter quand même ? Elles seront envoyées à votre prochaine connexion sur ce navigateur.`))return;
     const c=cloudClient();
@@ -663,9 +710,10 @@ details summary::-webkit-details-marker{display:none}
   }
   function showGate(step){
     $("#gate").hidden=false;
-    $("#gchoice").hidden=step!=="choice";$("#glogin").hidden=step!=="login";
+    $("#gchoice").hidden=step!=="choice";$("#glogin").hidden=step!=="login";$("#gsignup").hidden=step!=="signup";
     const ok=cloudReady();$("#gcloud").disabled=!ok;$("#gnocloud").hidden=ok;
     if(step==="login")setTimeout(()=>$("#lemail").focus(),0);
+    if(step==="signup"){$("#sdomains").textContent=CONFIG.allowedDomains&&CONFIG.allowedDomains.length?"Réservé aux adresses "+CONFIG.allowedDomains.map(d=>"@"+d).join(", ")+".":"";setTimeout(()=>$("#semail").focus(),0)}
   }
   function toLocal(){
     if(MODE==="cloud"&&cloud.dirty.size&&!confirm(`${cloud.dirty.size} modification(s) en ligne ne sont pas encore envoyées. Elles le seront à votre prochain passage en mode en ligne. Continuer ?`))return;
@@ -954,10 +1002,13 @@ details summary::-webkit-details-marker{display:none}
   $("#addp").onsubmit=e=>{e.preventDefault();addProject($("#newp").value);$("#newp").value=""};
   $("#quick").onsubmit=e=>{e.preventDefault();addTask()};
   $("#qt").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addTask()}});
-  $("#gcloud").onclick=()=>{if(cloudReady())showGate("login")};
+  $("#gcloud").onclick=()=>{if(cloudReady())startCloud()};
   $("#glocal").onclick=()=>{try{localStorage.setItem("todo-mode","local")}catch(e){}$("#gate").hidden=true;startLocal()};
   $("#lback").onclick=()=>showGate("choice");
   $("#glogin").onsubmit=login;
+  $("#gsignup").onsubmit=signup;
+  $("#tosignup").onclick=e=>{e.preventDefault();showGate("signup")};
+  $("#sback").onclick=()=>showGate("login");
   $("#tocloud").onclick=toCloud;
   window.addEventListener("online",()=>{if(MODE==="cloud"){cloud.flush();cloud.fetch()}});
   window.addEventListener("focus",()=>{if(MODE==="cloud")cloud.schedule()});

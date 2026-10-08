@@ -119,3 +119,18 @@ begin
     end if;
   end loop;
 end $$;
+
+-- ---------- Création de compte réservée à certains domaines d'e-mail ----------
+-- Modifier la liste ci-dessous pour autoriser d'autres domaines, puis relancer le script.
+create or replace function public.check_signup_domain() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare allowed text[] := array['mecalux.com'];
+begin
+  if lower(split_part(coalesce(new.email, ''), '@', 2)) <> all (allowed) then
+    raise exception 'Adresse e-mail non autorisée (domaine)';
+  end if;
+  return new;
+end $$;
+drop trigger if exists check_signup_domain on auth.users;
+create trigger check_signup_domain before insert on auth.users
+  for each row execute function public.check_signup_domain();
