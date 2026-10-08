@@ -134,3 +134,12 @@ end $$;
 drop trigger if exists check_signup_domain on auth.users;
 create trigger check_signup_domain before insert on auth.users
   for each row execute function public.check_signup_domain();
+
+-- ---------- Durcissement (recommandations de l'analyse de sécurité Supabase) ----------
+alter function public.my_email() set search_path = public;
+alter function public.keep_owner() set search_path = public;
+revoke execute on function public.check_signup_domain() from public, anon, authenticated;
+revoke execute on function public.can_access(text) from public, anon;
+revoke execute on function public.is_owner(text) from public, anon;
+grant execute on function public.can_access(text) to authenticated;
+grant execute on function public.is_owner(text) to authenticated;
