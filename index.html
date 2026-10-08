@@ -103,6 +103,7 @@ details summary::-webkit-details-marker{display:none}
 .gerr{color:var(--late);font-size:13.5px;min-height:1em;margin:0 0 10px}
 .gnote{font-size:12.5px;color:var(--muted);margin:14px 0 0}
 .gnote a{color:var(--steel);font-weight:600}
+.signup-cta{display:block;width:100%;margin-top:14px;border-color:var(--steel);color:var(--steel);font-weight:600}
 .gok{color:var(--ok);font-size:13.5px;margin:0 0 10px}
 .gok:empty{display:none}
 #gsignup label{display:grid;gap:4px;font-size:13px;color:var(--muted);margin-bottom:12px}
@@ -178,6 +179,7 @@ details summary::-webkit-details-marker{display:none}
       <p class="sub">Comment voulez-vous travailler ?</p>
       <button class="choice" type="button" id="gcloud"><b>En ligne, avec mon compte</b><span>Mes tâches sont synchronisées en temps réel sur tous mes appareils, et je peux partager un projet avec un collègue.</span></button>
       <button class="choice" type="button" id="glocal"><b>En local, sans compte</b><span>Mes tâches restent sur cet ordinateur (navigateur ou fichier .json). Rien n'est envoyé en ligne.</span></button>
+      <button class="btn signup-cta" type="button" id="gsignupbtn">Nouveau ? Créer mon compte en ligne</button>
       <p class="gnote" id="gnocloud" hidden>Le mode en ligne n'est pas encore configuré dans ce fichier, ou la connexion Internet est indisponible.</p>
     </div>
     <form id="glogin" hidden autocomplete="on">
@@ -187,7 +189,7 @@ details summary::-webkit-details-marker{display:none}
       <p class="gerr" id="lerr" role="alert"></p>
       <button class="btn primary" type="submit" id="lgo">Se connecter</button>
       <button class="btn ghost" type="button" id="lback">Retour</button>
-      <p class="gnote">Pas encore de compte ? <a href="#" id="tosignup">Créer mon compte</a></p>
+      <button class="btn signup-cta" type="button" id="tosignup">Pas encore de compte ? Créer mon compte</button>
       <p class="gnote">Mot de passe oublié ? Contactez la personne qui gère l'application : elle peut le réinitialiser.</p>
     </form>
     <form id="gsignup" hidden autocomplete="on">
@@ -711,7 +713,7 @@ details summary::-webkit-details-marker{display:none}
   function showGate(step){
     $("#gate").hidden=false;
     $("#gchoice").hidden=step!=="choice";$("#glogin").hidden=step!=="login";$("#gsignup").hidden=step!=="signup";
-    const ok=cloudReady();$("#gcloud").disabled=!ok;$("#gnocloud").hidden=ok;
+    const ok=cloudReady();$("#gcloud").disabled=!ok;$("#gsignupbtn").hidden=!ok;$("#gnocloud").hidden=ok;
     if(step==="login")setTimeout(()=>$("#lemail").focus(),0);
     if(step==="signup"){$("#sdomains").textContent=CONFIG.allowedDomains&&CONFIG.allowedDomains.length?"Réservé aux adresses "+CONFIG.allowedDomains.map(d=>"@"+d).join(", ")+".":"";setTimeout(()=>$("#semail").focus(),0)}
   }
@@ -1008,6 +1010,7 @@ details summary::-webkit-details-marker{display:none}
   $("#glogin").onsubmit=login;
   $("#gsignup").onsubmit=signup;
   $("#tosignup").onclick=e=>{e.preventDefault();showGate("signup")};
+  $("#gsignupbtn").onclick=()=>{if(cloudReady())showGate("signup")};
   $("#sback").onclick=()=>showGate("login");
   $("#tocloud").onclick=toCloud;
   window.addEventListener("online",()=>{if(MODE==="cloud"){cloud.flush();cloud.fetch()}});
