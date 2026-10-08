@@ -738,7 +738,16 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
       const cm={};C.data.slice().sort((a,b)=>Number(a.created_at)-Number(b.created_at)).forEach(r=>{(cm[r.task_id]=cm[r.task_id]||[]).push({id:r.id,author:r.author_email,text:r.body,at:Number(r.created_at)})});
       const js=JSON.stringify(cm);if(js!==this._lastCm){this._lastCm=js;this.comments=cm;this._cmChanged=true}
     }
-    if(err){if(transient(err))setSync("Connexion au serveur impossible : affichage de la dernière version connue.");else setSync("Erreur serveur : "+err.message);return}
+    if(err){
+      if(err.code==="42501"&&!this._retried){
+        // droits refusés : la session n'est pas (encore) prise en compte, on la renouvelle puis on réessaie
+        this._retried=true;
+        try{await c.auth.refreshSession()}catch(e){}
+        setTimeout(()=>this.fetch(),800);return;
+      }
+      if(err.code==="42501"){setSync("Session expirée : reconnectez-vous.");return}
+      if(transient(err))setSync("Connexion au serveur impossible : affichage de la dernière version connue.");else setSync("Erreur serveur : "+err.message);return}
+    this._retried=false;
     const meta={};
     P.data.forEach(r=>meta[r.id]={owner:r.owner,ownerEmail:r.owner_email,members:[]});
     M.data.forEach(r=>{if(meta[r.project_id])meta[r.project_id].members.push(r.email)});
@@ -836,7 +845,10 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
         return;
       }
       $("#spass").value="";$("#spass2").value="";
-      if(data.session){await enterCloud(data.user);await saveProfile(first,last);return}
+      if(data.session){
+        // s'assurer que la session est bien active avant les premières requêtes
+        try{await cloudClient().auth.setSession({access_token:data.session.access_token,refresh_token:data.session.refresh_token})}catch(e){}
+        await enterCloud(data.user);await saveProfile(first,last);return}
       if(data.user&&Array.isArray(data.user.identities)&&!data.user.identities.length){$("#serr").textContent="Un compte existe déjà avec cette adresse : utilisez « J'ai déjà un compte ».";return}
       try{localStorage.setItem("todo-mode","cloud")}catch(e){}
       $("#sok").textContent="Compte créé. Un e-mail de confirmation vient de vous être envoyé : cliquez sur le lien qu'il contient, puis connectez-vous.";
