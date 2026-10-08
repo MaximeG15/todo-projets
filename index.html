@@ -259,6 +259,8 @@ dialog#recap::backdrop{background:rgba(17,24,29,.45)}
 .mstatus{font-size:12.5px;color:var(--muted)}
 .mstatus.err{color:var(--late)}
 .calsteps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+dialog#profdlg{border:0;border-radius:12px;padding:0;width:min(520px,calc(100vw - 24px));background:var(--panel);color:var(--ink);box-shadow:0 20px 50px rgba(22,35,43,.3)}
+dialog#profdlg::backdrop{background:rgba(17,24,29,.45)}
 dialog#calcfg{border:0;border-radius:12px;padding:0;width:min(640px,calc(100vw - 24px));background:var(--panel);color:var(--ink);box-shadow:0 20px 50px rgba(22,35,43,.3)}
 dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .meet{background:#1C3140;border-color:#33536A;color:#D6E6F1}:root:not([data-theme="light"]) .meet .ml{color:#9DB7C9}}
@@ -314,6 +316,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     </form>
     <form id="gsignup" hidden autocomplete="on">
       <p class="sub">Créer mon compte</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label>Prénom<input type="text" id="sfirst" autocomplete="given-name" maxlength="80" required></label><label>Nom<input type="text" id="slast" autocomplete="family-name" maxlength="80" required></label></div>
       <label>E-mail<input type="email" id="semail" autocomplete="username" required></label>
       <label>Mot de passe (8 caractères minimum)<input type="password" id="spass" autocomplete="new-password" minlength="8" required></label>
       <label>Confirmer le mot de passe<input type="password" id="spass2" autocomplete="new-password" minlength="8" required></label>
@@ -407,6 +410,18 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
       <button class="btn" type="button" id="recapdl">Télécharger (.txt)</button>
       <button class="btn ghost" value="close">Fermer</button>
     </div>
+  </form>
+</dialog>
+<dialog id="profdlg" aria-labelledby="proftitle">
+  <form class="rbox" id="profform" autocomplete="on">
+    <h2 id="proftitle" style="margin:0;font:700 26px/1.1 'Barlow Condensed','Arial Narrow',sans-serif">Complétez votre profil</h2>
+    <p class="hint" id="profintro"></p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+      <label class="whobox" style="display:grid;gap:6px">Prénom<input type="text" id="pfirst" autocomplete="given-name" maxlength="80" required></label>
+      <label class="whobox" style="display:grid;gap:6px">Nom<input type="text" id="plast" autocomplete="family-name" maxlength="80" required></label>
+    </div>
+    <p class="gerr" id="perr" role="alert"></p>
+    <div class="ractions"><button class="btn primary" type="submit" id="psave">Enregistrer</button><button class="btn ghost" type="button" id="pclose">Plus tard</button></div>
   </form>
 </dialog>
 <dialog id="calcfg" aria-labelledby="calcfgtitle">
@@ -646,7 +661,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
   }
 
   // ---------- Mode en ligne (Supabase) ----------
-  const cloud={client:null,user:null,email:"",meta:{},comments:{},dirty:new Map(),seq:0,flushing:false,again:false,retry:null,channel:null,fetchT:null,lastOk:0};
+  const cloud={client:null,user:null,email:"",meta:{},comments:{},profiles:{},dirty:new Map(),seq:0,flushing:false,again:false,retry:null,channel:null,fetchT:null,lastOk:0};
   const cloudReady=()=>!!(CONFIG.supabaseUrl&&CONFIG.supabaseKey&&window.supabase&&window.supabase.createClient);
   function cloudClient(){if(!cloud.client)cloud.client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true,storageKey:"todo-projets-auth"}});return cloud.client}
   const isOwner=pid=>{const m=cloud.meta[pid];return !m||m.owner===cloud.user.id};
@@ -712,7 +727,12 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     if(!this.user)return;
     if(editing){clearTimeout(this.fetchT);this.fetchT=setTimeout(()=>this.fetch(),3000);return}
     const c=cloudClient();
-    const [P,M,T,C]=await Promise.all([c.from("projects").select("*"),c.from("project_members").select("*"),c.from("tasks").select("*"),c.from("task_comments").select("*")]);
+    const [P,M,T,C,PR]=await Promise.all([c.from("projects").select("*"),c.from("project_members").select("*"),c.from("tasks").select("*"),c.from("task_comments").select("*"),c.from("profiles").select("*")]);
+    if(!PR.error){
+      const pm={};PR.data.forEach(r=>pm[String(r.email).toLowerCase()]={first:r.first_name,last:r.last_name});
+      const js=JSON.stringify(pm);if(js!==this._lastPr){this._lastPr=js;this.profiles=pm;this._cmChanged=true;$("#whoami").textContent=nameOf(this.email)}
+      if(!pm[this.email]&&!this._askedProfile){this._askedProfile=true;ensureProfile()}
+    }
     const err=P.error||M.error||T.error;
     if(!C.error){
       const cm={};C.data.slice().sort((a,b)=>Number(a.created_at)-Number(b.created_at)).forEach(r=>{(cm[r.task_id]=cm[r.task_id]||[]).push({id:r.id,author:r.author_email,text:r.body,at:Number(r.created_at)})});
@@ -751,6 +771,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
       .on("postgres_changes",{event:"*",schema:"public",table:"projects"},h)
       .on("postgres_changes",{event:"*",schema:"public",table:"project_members"},h)
       .on("postgres_changes",{event:"*",schema:"public",table:"task_comments"},h)
+      .on("postgres_changes",{event:"*",schema:"public",table:"profiles"},h)
       .subscribe();
   };
   async function startCloud(){
@@ -766,6 +787,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
   async function enterCloud(user){
     MODE="cloud";$("#localbox").hidden=true;$("#acc").hidden=false;
     cloud.user=user;cloud.email=(user.email||"").toLowerCase();
+    cloud.profiles={};cloud._lastPr="";cloud._askedProfile=false;
     $("#whoami").textContent=cloud.email;$("#toolstitle").textContent="Compte et sauvegarde";
     $("#gate").hidden=true;
     try{localStorage.setItem("todo-mode","cloud")}catch(e){}
@@ -795,13 +817,15 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
   async function signup(e){
     e.preventDefault();
     const email=$("#semail").value.trim().toLowerCase(), password=$("#spass").value, p2=$("#spass2").value;
+    const first=$("#sfirst").value.trim(), last=$("#slast").value.trim();
     $("#serr").textContent="";$("#sok").textContent="";
+    if(!first||!last){$("#serr").textContent="Indiquez votre prénom et votre nom.";return}
     if(!domainOk(email)){$("#serr").textContent="Adresse non autorisée : utilisez votre e-mail "+CONFIG.allowedDomains.map(d=>"@"+d).join(" ou ")+".";return}
     if(password.length<8){$("#serr").textContent="Le mot de passe doit contenir au moins 8 caractères.";return}
     if(password!==p2){$("#serr").textContent="Les deux mots de passe sont différents.";return}
     $("#sgo").disabled=true;
     try{
-      const {data,error}=await cloudClient().auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}});
+      const {data,error}=await cloudClient().auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname,data:{first_name:first,last_name:last}}});
       if(error){
         const m=error.message||"";
         $("#serr").textContent=/already|registered|exists/i.test(m)?"Un compte existe déjà avec cette adresse : utilisez « J'ai déjà un compte ».":
@@ -812,7 +836,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
         return;
       }
       $("#spass").value="";$("#spass2").value="";
-      if(data.session){await enterCloud(data.user);return}
+      if(data.session){await enterCloud(data.user);await saveProfile(first,last);return}
       if(data.user&&Array.isArray(data.user.identities)&&!data.user.identities.length){$("#serr").textContent="Un compte existe déjà avec cette adresse : utilisez « J'ai déjà un compte ».";return}
       try{localStorage.setItem("todo-mode","cloud")}catch(e){}
       $("#sok").textContent="Compte créé. Un e-mail de confirmation vient de vous être envoyé : cliquez sur le lien qu'il contient, puis connectez-vous.";
@@ -839,13 +863,14 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     a.innerHTML=`<p class="sub">Compte en ligne</p><p class="who-me">${esc(cloud.email)}</p>
       <button class="btn" type="button" data-a="imp">Importer des tâches (.json)</button>
       <button class="btn" type="button" data-a="exp">Exporter (.json)</button>
+      <button class="btn ghost" type="button" data-a="name">Modifier mon nom</button>
       <button class="btn ghost" type="button" data-a="pwd">Changer le mot de passe</button>
       <button class="btn ghost" type="button" data-a="out">Se déconnecter</button>
       <button class="btn ghost" type="button" data-a="loc">Passer en mode local</button>
       <input type="file" accept=".json,application/json" hidden>`;
     const f=a.querySelector("input[type=file]");
     f.onchange=e=>{if(e.target.files[0])importToCloud(e.target.files[0]);e.target.value=""};
-    a.querySelectorAll("button").forEach(b=>b.onclick=()=>({imp:()=>f.click(),exp:exportData,pwd:changePassword,out:logout,loc:toLocal})[b.dataset.a]());
+    a.querySelectorAll("button").forEach(b=>b.onclick=()=>({imp:()=>f.click(),exp:exportData,name:()=>openProfile(false),pwd:changePassword,out:logout,loc:toLocal})[b.dataset.a]());
   }
   // Import d'un fichier .json (export ou fichier de données local) dans le compte en ligne
   function importToCloud(file){
@@ -883,12 +908,12 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     if(!m){box.hidden=!shareOpen;if(shareOpen)box.innerHTML=`<p class="muted">Projet en cours d'enregistrement : le partage sera possible dans un instant.</p>`;return}
     if(!isOwner(p.id)){
       box.hidden=false;
-      box.innerHTML=`<p class="muted">Projet partagé par <b>${esc(m.ownerEmail)}</b>${m.members.length>1?` avec ${m.members.length-1} autre(s) personne(s)`:""}. Vous pouvez modifier ses tâches.</p>`;
+      box.innerHTML=`<p class="muted">Projet partagé par <b>${esc(nameOf(m.ownerEmail))}</b>${m.members.length>1?` avec ${m.members.length-1} autre(s) personne(s)`:""}. Vous pouvez modifier ses tâches.</p>`;
       return;
     }
     box.hidden=!shareOpen;if(!shareOpen)return;
     box.innerHTML=`<h4>Partager « ${esc(p.name)} »</h4>
-      ${m.members.length?`<ul>${m.members.map(e=>`<li><span>${esc(e)}</span><button class="btn ghost" type="button" data-e="${esc(e)}">Retirer</button></li>`).join("")}</ul>`:`<p class="muted" style="margin-bottom:10px">Ce projet n'est partagé avec personne.</p>`}
+      ${m.members.length?`<ul>${m.members.map(e=>`<li><span>${nameOf(e)!==e?`<b>${esc(nameOf(e))}</b> <span class="muted">${esc(e)}</span>`:`${esc(e)} <span class="muted">(n'a pas encore de compte ou de nom renseigné)</span>`}</span><button class="btn ghost" type="button" data-e="${esc(e)}">Retirer</button></li>`).join("")}</ul>`:`<p class="muted" style="margin-bottom:10px">Ce projet n'est partagé avec personne.</p>`}
       <form autocomplete="off"><input type="email" placeholder="E-mail du collègue" aria-label="E-mail du collègue" required><button class="btn primary" type="submit">Partager</button></form>
       <p class="muted" style="margin-top:8px">La personne voit le projet et ses tâches, et peut les modifier, dès qu'elle se connecte avec cette adresse. Seul vous pouvez renommer, supprimer ou partager le projet.</p>`;
     box.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>shareRemove(p.id,b.dataset.e,false));
@@ -1057,6 +1082,46 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     };
     ICS.parse=parse;
   })();
+  // ---------- Profils (prénom et nom) ----------
+  function nameOf(v){
+    if(!v)return "";
+    if(MODE!=="cloud")return v;
+    const p=cloud.profiles[String(v).trim().toLowerCase()];
+    return p?`${p.first} ${p.last}`:v;
+  }
+  const whoName=t=>nameOf((t.who||"").trim());
+  async function saveProfile(first,last){
+    const {error}=await cloudClient().from("profiles").upsert({user_id:cloud.user.id,first_name:first,last_name:last,updated_at:Date.now()});
+    if(error)return error;
+    cloud.profiles[cloud.email]={first,last};cloud._lastPr=JSON.stringify(cloud.profiles);
+    const d=$("#profdlg");if(d.open&&d.close)d.close();
+    $("#whoami").textContent=nameOf(cloud.email);render();
+    return null;
+  }
+  async function ensureProfile(){
+    const md=(cloud.user&&cloud.user.user_metadata)||{};
+    if(md.first_name&&md.last_name){if(!await saveProfile(String(md.first_name).trim(),String(md.last_name).trim()))return}
+    openProfile(true);
+  }
+  function openProfile(first){
+    const dlg=$("#profdlg"), me=cloud.profiles[cloud.email]||{};
+    $("#pfirst").value=me.first||"";$("#plast").value=me.last||"";$("#perr").textContent="";
+    $("#proftitle").textContent=first?"Complétez votre profil":"Mon nom";
+    $("#profintro").textContent=first?"Indiquez votre prénom et votre nom : c'est ainsi que vos collègues vous verront dans les projets partagés, les commentaires et les responsables.":"Votre prénom et votre nom, tels que vos collègues les voient.";
+    if(dlg.showModal)dlg.showModal();else dlg.setAttribute("open","");
+    setTimeout(()=>$("#pfirst").focus(),0);
+  }
+  async function submitProfile(e){
+    e.preventDefault();
+    const f=$("#pfirst").value.trim(), l=$("#plast").value.trim();
+    if(!f||!l){$("#perr").textContent="Le prénom et le nom sont obligatoires.";return}
+    $("#psave").disabled=true;
+    const err=await saveProfile(f,l);
+    $("#psave").disabled=false;
+    if(err){$("#perr").textContent=transient(err)?"Serveur injoignable : réessayez dans un instant.":"Enregistrement impossible : "+err.message;return}
+    $("#profdlg").close&&$("#profdlg").close();
+  }
+
   // ---------- Réunions Outlook (calendrier publié) ----------
   const OUTLOOK_HOSTS=["outlook.office365.com","outlook.office.com","outlook.live.com"];
   const cal={events:null,fetchedAt:0,loading:false,error:"",hasLink:null,lastTry:0};
@@ -1244,7 +1309,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
       const all=state.tasks.filter(t=>t.projectId===p.id), nOpen=all.filter(t=>t.status!=="done").length;
       const pct=all.length?Math.round(100*(all.length-nOpen)/all.length):0;
       const m=MODE==="cloud"&&cloud.meta[p.id];
-      const badge=m?(m.owner!==cloud.user.id?`<span class="pshared" title="Partagé par ${esc(m.ownerEmail)}">invité</span>`:(m.members.length?`<span class="pshared" title="Partagé avec ${esc(m.members.join(", "))}">partagé</span>`:"")):"";
+      const badge=m?(m.owner!==cloud.user.id?`<span class="pshared" title="Partagé par ${esc(nameOf(m.ownerEmail))}">invité</span>`:(m.members.length?`<span class="pshared" title="Partagé avec ${esc(m.members.map(nameOf).join(", "))}">partagé</span>`:"")):"";
       const li=document.createElement("li");
       li.innerHTML=`<button class="pbtn" type="button" aria-current="${view===p.id}"><span class="dot" style="background:${p.color}"></span><span class="pname">${esc(p.name)}</span>${badge}<span class="count">${nOpen}</span><span class="pbar" title="${pct} % terminé"><i style="width:${pct}%;background:${p.color}"></i></span></button>`;
       li.firstChild.onclick=()=>{if(view!==p.id)shareOpen=false;view=p.id;if(ui.scope==="today")ui.scope="all";editing=null;closeMenu();render()};
@@ -1278,9 +1343,9 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     } else if(p&&MODE==="cloud")b("Quitter le projet",()=>shareRemove(p.id,cloud.email,true));
     b("Récap de la semaine",openRecap,"");
     if(!agenda&&state.tasks.some(t=>t.status==="done"&&(!p||t.projectId===p.id)))b("Vider les terminées",clearDone);
-    const people=[...new Set(state.tasks.map(t=>(t.who||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"fr"));
+    const people=[...new Set(state.tasks.map(whoName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"fr"));
     const sugg=new Set(people);
-    if(MODE==="cloud"){if(cloud.email)sugg.add(cloud.email);Object.values(cloud.meta).forEach(m=>{sugg.add(m.ownerEmail);m.members.forEach(e=>sugg.add(e))})}
+    if(MODE==="cloud"){if(cloud.email)sugg.add(nameOf(cloud.email));Object.values(cloud.meta).forEach(m=>{sugg.add(nameOf(m.ownerEmail));m.members.forEach(e=>sugg.add(nameOf(e)))})}
     $("#people").innerHTML=[...sugg].filter(Boolean).map(n=>`<option value="${esc(n)}">`).join("");
     if(ui.who&&ui.who!=="__none"&&!people.includes(ui.who))ui.who="";
     if(people.length){
@@ -1319,7 +1384,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     if(!state.projects.length){
       L.innerHTML=`<div class="empty">Commencez par créer un projet (« + Nouveau projet » dans la colonne de gauche), puis ajoutez vos tâches ici.</div>`;return;
     }
-    const pool=state.tasks.filter(t=>(!p||t.projectId===p.id)&&(!ui.who||(ui.who==="__none"?!(t.who||"").trim():(t.who||"").trim()===ui.who)));
+    const pool=state.tasks.filter(t=>(!p||t.projectId===p.id)&&(!ui.who||(ui.who==="__none"?!(t.who||"").trim():whoName(t)===ui.who)));
     if(query.trim()){
       const found=pool.filter(matches);
       const fo=found.filter(t=>t.status!=="done").sort(sortOpen), fd=found.filter(t=>t.status==="done").sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
@@ -1379,7 +1444,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     if(withDate&&t.due)bits.push(shortDay(t.due));
     if(t.priority==="haute")bits.push("Priorité haute");
     if(showProj&&pr)bits.push(esc(pr.name));
-    if(t.who)bits.push(`<b>${esc(t.who)}</b>`);
+    if(t.who)bits.push(`<b>${esc(whoName(t))}</b>`);
     c.innerHTML=`<input type="checkbox" class="chk" ${t.status==="done"?"checked":""} aria-label="Marquer comme terminée"><div><div class="ct" title="Ouvrir le détail">${esc(t.title)}</div>${bits.length?`<div class="cm">${bits.join(" · ")}</div>`:""}</div>`;
     c.querySelector(".chk").onchange=()=>toggle(t);
     c.querySelector(".ct").onclick=()=>openInList(t);
@@ -1454,7 +1519,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
   function matches(t){
     const q=norm(query.trim()); if(!q)return true;
     const p=proj(t.projectId);
-    const hay=[t.title,t.note,t.who,p&&p.name,...(t.checklist||[]).map(c=>c.text),...getComments(t).map(c=>c.text)].map(norm).join("\n");
+    const hay=[t.title,t.note,t.who,whoName(t),p&&p.name,...(t.checklist||[]).map(c=>c.text),...getComments(t).map(c=>c.text)].map(norm).join("\n");
     return q.split(/\s+/).every(w=>hay.includes(w));
   }
   // ---------- Commentaires ----------
@@ -1492,7 +1557,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     const draw=()=>{
       const list=getComments(t);
       box.innerHTML=`<span class="lbl">Commentaires${list.length?` (${list.length})`:""}</span>
-        ${list.length?`<ul class="clist">${list.map(c=>`<li><div class="ch"><span><b>${esc(c.author)}</b> · ${fmtWhen(c.at)}</span>${(MODE!=="cloud"||c.author===cloud.email)?`<button type="button" class="xbtn" data-c="${esc(c.id)}" aria-label="Supprimer ce commentaire">×</button>`:""}</div><div class="cb">${esc(c.text)}</div></li>`).join("")}</ul>`:""}
+        ${list.length?`<ul class="clist">${list.map(c=>`<li><div class="ch"><span><b>${esc(nameOf(c.author))}</b> · ${fmtWhen(c.at)}</span>${(MODE!=="cloud"||c.author===cloud.email)?`<button type="button" class="xbtn" data-c="${esc(c.id)}" aria-label="Supprimer ce commentaire">×</button>`:""}</div><div class="cb">${esc(c.text)}</div></li>`).join("")}</ul>`:""}
         <div class="cform"><textarea placeholder="Ajouter un commentaire…" aria-label="Nouveau commentaire"></textarea><button class="btn" type="button">Publier</button></div>`;
       const ta=box.querySelector("textarea"), go=box.querySelector(".cform .btn");
       const send=async()=>{go.disabled=true;if(await addComment(t,ta.value)){draw();box.querySelector("textarea").focus()}else go.disabled=false};
@@ -1528,7 +1593,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     if(t.repeat&&t.repeat.unit)tags.push(`<span class="tag" title="Tâche récurrente"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l3 3-3 3"></path><path d="M4 11V9a4 4 0 0 1 4-4h12"></path><path d="M7 22l-3-3 3-3"></path><path d="M20 13v2a4 4 0 0 1-4 4H4"></path></svg>${repLabel(t.repeat)}</span>`);
     if(t.priority==="haute")tags.push(`<span class="tag hi">Priorité haute</span>`);
     if(t.priority==="basse")tags.push(`<span class="tag">Priorité basse</span>`);
-    if(t.who)tags.push(`<span class="tag who">${hl(t.who)}</span>`);
+    if(t.who)tags.push(`<span class="tag who">${hl(whoName(t))}</span>`);
     if(nCom)tags.push(`<button type="button" class="tag" data-a="edit" title="Voir les commentaires" style="border:0;cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg>${nCom} commentaire${nCom>1?"s":""}</button>`);
     li.innerHTML=`<input type="checkbox" class="chk" ${t.status==="done"?"checked":""} aria-label="Marquer comme terminée">
       <div><div class="ttl">${hl(t.title)}</div>${tags.length?`<div class="meta">${tags.join("")}</div>`:""}
@@ -1597,7 +1662,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     const nS=iso(addDays(ws,7)), nE=iso(addDays(ws,13)), t0=iso(today());
     const p=view==="all"?null:proj(view);
     const projs=p?[p]:state.projects;
-    const line=(t,extra)=>`- ${t.title}${extra?` (${extra})`:""}${t.who?` [${t.who}]`:""}`;
+    const line=(t,extra)=>`- ${t.title}${extra?` (${extra})`:""}${t.who?` [${whoName(t)}]`:""}`;
     const range=`${ws.toLocaleDateString("fr-FR",{day:"numeric",month:"long"})} au ${we.toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}`;
     const out=[`Récapitulatif – semaine ${isoWeek(ws)} (du ${range})`,""];
     let any=false;
@@ -1645,6 +1710,8 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
   $("#search").addEventListener("input",e=>{clearTimeout(searchT);searchT=setTimeout(()=>{query=e.target.value;editing=null;render()},150)});
   $("#search").addEventListener("keydown",e=>{if(e.key==="Escape"){e.target.value="";query="";render()}});
   $("#calsave").onclick=saveCalCfg;
+  $("#profform").onsubmit=submitProfile;
+  $("#pclose").onclick=()=>$("#profdlg").close&&$("#profdlg").close();
   $("#calremove").onclick=removeCal;
   $("#calurl").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();saveCalCfg()}});
   $("#menubtn").onclick=()=>{const o=$("#side").classList.toggle("open");$("#menubtn").setAttribute("aria-expanded",o)};

@@ -199,3 +199,55 @@ create policy user_calendar_own on public.user_calendar for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 grant select, insert, update, delete on public.user_calendar to authenticated;
 revoke all on public.user_calendar from anon;
+
+-- ---------- Profils (prénom et nom) ----------
+create table if not exists public.profiles (
+  user_id    uuid primary key default auth.uid() references auth.users(id) on delete cascade,
+  email      text not null unique default public.my_email(),
+  first_name text not null check (length(trim(first_name)) between 1 and 80),
+  last_name  text not null check (length(trim(last_name)) between 1 and 80),
+  updated_at bigint not null default (extract(epoch from now()) * 1000)::bigint
+);
+-- L'identifiant et l'e-mail viennent toujours de la session, jamais du navigateur
+create or replace function public.profiles_force_identity() returns trigger
+language plpgsql set search_path = public as $$
+begin
+  new.user_id := auth.uid();
+  new.email := public.my_email();
+  new.first_name := trim(new.first_name);
+  new.last_name := trim(new.last_name);
+  return new;
+end $$;
+drop trigger if exists profiles_force_identity on public.profiles;
+create trigger profiles_force_identity before insert or update on public.profiles
+  for each row execute function public.profiles_force_identity();
+-- Peut-on voir le profil d'une adresse ? Oui si l'on partage au moins un projet avec elle
+create or replace function public.shares_project_with(e text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.projects p
+    where public.can_access(p.id)
+      and (p.owner_email = lower(e)
+           or exists (select 1 from public.project_members m where m.project_id = p.id and m.email = lower(e)))
+  )
+$$;
+revoke execute on function public.shares_project_with(text) from public, anon;
+grant execute on function public.shares_project_with(text) to authenticated;
+alter table public.profiles enable row level security;
+drop policy if exists profiles_select on public.profiles;
+create policy profiles_select on public.profiles for select to authenticated
+  using (user_id = auth.uid() or public.shares_project_with(email));
+drop policy if exists profiles_insert on public.profiles;
+create policy profiles_insert on public.profiles for insert to authenticated
+  with check (user_id = auth.uid());
+drop policy if exists profiles_update on public.profiles;
+create policy profiles_update on public.profiles for update to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+grant select, insert, update on public.profiles to authenticated;
+revoke all on public.profiles from anon;
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='profiles') then
+    alter publication supabase_realtime add table public.profiles;
+  end if;
+end $$;
