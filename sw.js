@@ -1,6 +1,6 @@
 // To do projets : fonctionnement hors connexion de l'application installée.
 // Les données en ligne (Supabase) ne passent jamais par ce cache.
-const CACHE = "todo-projets-v13";
+const CACHE = "todo-projets-v14";
 const CORE = ["./", "./index.html", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
 const LIB = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@";
 

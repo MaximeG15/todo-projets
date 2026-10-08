@@ -308,10 +308,16 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 .parch[aria-expanded="true"] svg{transform:rotate(90deg)}
 .pbtn.arch .pname{opacity:.7;font-style:italic}
 .archtag{font:600 13px "Barlow",sans-serif;padding:3px 8px;border-radius:4px;background:var(--chip);color:var(--chipink);align-self:center}
-.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:14px;background:#16232B;color:#fff;padding:10px 10px 10px 16px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.28);max-width:calc(100vw - 32px);font-size:14px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:14px;background:#16232B;color:#fff;padding:10px 10px 10px 16px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.28);max-width:calc(100vw - 150px);font-size:14px}
 .toast span{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .toast button{flex:none;border:0;background:none;color:#F2B705;font-weight:700;cursor:pointer;padding:7px 10px;border-radius:6px;font-size:14px}
 .toast button:hover{background:#2B4557}
+/* Bouton corbeille (bas à droite) */
+.trashbtn{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:5;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--muted);box-shadow:0 3px 10px rgba(22,35,43,.12);cursor:pointer;display:grid;place-items:center;opacity:.8}
+.trashbtn:hover,.trashbtn[aria-pressed="true"]{opacity:1;color:var(--ink);border-color:var(--steel)}
+.trashbtn[aria-pressed="true"]{background:var(--nav);color:#fff;border-color:var(--nav)}
+.trashbtn .tbn{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--late);color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center}
+.trashbtn .tbn:empty{display:none}
 /* Kanban */
 .kanban{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:start}
 .kanban .day{min-height:240px}
@@ -401,7 +407,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   .edit{grid-column:1/-1}
   .day{min-height:0}
   .fab{display:grid}
-  .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px));left:14px;right:14px;transform:none;max-width:none}
+  .toast{bottom:calc(160px + env(safe-area-inset-bottom,0px));left:14px;right:14px;transform:none;max-width:none}
+  .trashbtn{right:26px;bottom:calc(96px + env(safe-area-inset-bottom,0px))}
   .trow{grid-template-columns:1fr;padding:12px}
   .trow .acts{justify-content:flex-start}
 }
@@ -580,6 +587,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     <p class="hint">PDF : dans la fenêtre d'impression, choisissez « Enregistrer au format PDF » comme imprimante.</p>
   </form>
 </dialog>
+<button class="trashbtn" type="button" id="trashbtn" aria-label="Corbeille"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"></path><path d="M10 11v6M14 11v6"></path><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"></path><path d="M9 7V4h6v3"></path></svg><span class="tbn"></span></button>
 <button class="fab" type="button" id="fab" aria-label="Ajouter une tâche"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#16232B" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.90.0/dist/umd/supabase.js"></script>
 <script>
@@ -1546,7 +1554,14 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     vb("agenda","Agenda de la semaine",nWeek,view==="all"&&mode==="agenda",go("agenda","all"));
     vb("all","Toutes les tâches",open.length,view==="all"&&(mode==="list"||mode==="kanban")&&ui.scope==="all",go(mode==="kanban"?"kanban":"list","all"));
     vb("dash","Tableau de bord","",mode==="dash",go("dash","all"));
-    vb("trash","Corbeille",nTrash||"",mode==="trash",go("trash","all"));
+    const tb=$("#trashbtn");
+    if(tb){
+      tb.setAttribute("aria-pressed",mode==="trash");
+      tb.title=mode==="trash"?"Fermer la corbeille":nTrash?`Corbeille : ${nTrash} tâche${nTrash>1?"s":""}`:"Corbeille (vide)";
+      tb.setAttribute("aria-label",tb.title);
+      tb.querySelector(".tbn").textContent=nTrash>99?"99+":nTrash||"";
+      tb.onclick=mode==="trash"?go("list","all"):go("trash","all");
+    }
 
     // projets
     const pl=$("#plist"); pl.innerHTML="";
@@ -1607,7 +1622,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       b(p.archived?"Réactiver le projet":"Archiver",()=>archiveProject(p,!p.archived));
       b("Supprimer le projet",()=>deleteProject(p));
     } else if(p&&MODE==="cloud")b("Quitter le projet",()=>shareRemove(p.id,cloud.email,true));
-    if(mode==="trash"){if(nTrash)b("Vider la corbeille",emptyTrash)}
+    if(mode==="trash"){if(nTrash)b("Vider la corbeille",emptyTrash);b("Fermer la corbeille",go("list","all"),"")}
     else{b("Récap de la semaine",openRecap,"");b("Exporter",()=>openExport(p),"")}
     if(mode==="list"&&alive.some(t=>t.status==="done"&&(!p||t.projectId===p.id)))b("Vider les terminées",clearDone);
     const people=[...new Set(alive.map(whoName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"fr"));
