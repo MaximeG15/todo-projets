@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>To do projets</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#3E5868">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="To do">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
@@ -103,6 +109,7 @@ details summary::-webkit-details-marker{display:none}
 .gerr{color:var(--late);font-size:13.5px;min-height:1em;margin:0 0 10px}
 .gnote{font-size:12.5px;color:var(--muted);margin:14px 0 0}
 .gnote a{color:var(--steel);font-weight:600}
+.install{display:block;width:100%;margin-top:18px}
 .signup-cta{display:block;width:100%;margin-top:14px;border-color:var(--steel);color:var(--steel);font-weight:600}
 .gok{color:var(--ok);font-size:13.5px;margin:0 0 10px}
 .gok:empty{display:none}
@@ -214,6 +221,7 @@ details summary::-webkit-details-marker{display:none}
       <input type="text" id="newp" placeholder="Nouveau projet" aria-label="Nom du nouveau projet">
       <button class="btn" type="submit">Ajouter</button>
     </form>
+    <button class="btn primary install" type="button" id="installbtn" hidden>Installer l'application</button>
     <div class="backup account" id="acc" hidden></div>
     <div class="backup" id="localbox">
       <p class="sub">Fichier de données sur l'ordinateur</p>
@@ -1042,6 +1050,15 @@ details summary::-webkit-details-marker{display:none}
       fileOk=false; showFile();
     })();
   }
+
+  // ---------- Application installable ----------
+  if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol)){
+    window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+  }
+  let installEvt=null;
+  window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installEvt=e;$("#installbtn").hidden=false});
+  window.addEventListener("appinstalled",()=>{installEvt=null;$("#installbtn").hidden=true});
+  $("#installbtn").onclick=async()=>{if(!installEvt)return;installEvt.prompt();try{await installEvt.userChoice}catch(e){}installEvt=null;$("#installbtn").hidden=true};
 
   let startMode=null;try{startMode=localStorage.getItem("todo-mode")}catch(e){}
   if(startMode==="cloud")startCloud();
