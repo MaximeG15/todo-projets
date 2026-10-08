@@ -1,6 +1,6 @@
 // To do projets : fonctionnement hors connexion de l'application installée.
 // Les données en ligne (Supabase) ne passent jamais par ce cache.
-const CACHE = "todo-projets-v8";
+const CACHE = "todo-projets-v9";
 const CORE = ["./", "./index.html", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
 const LIB = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@";
 
@@ -18,7 +18,7 @@ self.addEventListener("fetch", e => {
   if (!sameOrigin && !req.url.startsWith(LIB)) return; // Supabase, polices… : réseau direct
   // Page de l'application : toujours la version la plus récente, la copie locale seulement hors connexion
   if (req.mode === "navigate") {
-    e.respondWith(fetch(req).then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put("./index.html", c)); return r; })
+    e.respondWith(fetch(req.url, { cache: "no-store", credentials: "same-origin" }).then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put("./index.html", c)); return r; })
       .catch(() => caches.match("./index.html")));
     return;
   }
