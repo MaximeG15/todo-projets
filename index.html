@@ -89,7 +89,12 @@ button,input,select,textarea{font:inherit;color:inherit}
 /* ----- Zone principale ----- */
 main{flex:999 1 560px;min-width:0;padding:32px clamp(16px,4vw,56px) 64px;display:flex;flex-direction:column;gap:22px}
 .wrap{width:100%;max-width:1100px;display:flex;flex-direction:column;gap:22px}
-.wrap.wide{max-width:1500px}
+.wrap.wide{max-width:2200px}
+main{container-type:inline-size}
+/* Grand écran : deux colonnes de groupes */
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px 28px;align-items:start}
+.col{display:flex;flex-direction:column;gap:22px;min-width:0}
+.wrap.twocol{max-width:2000px}
 .head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:14px}
 .head h1{margin:0;font:700 40px/1.05 "Barlow Condensed","Arial Narrow",sans-serif;display:flex;align-items:center;gap:12px}
 .head h1 .dot{width:14px;height:14px}
@@ -292,9 +297,28 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 /* Bouton d'ajout flottant (téléphone) */
 .fab{display:none;position:fixed;right:18px;bottom:calc(22px + env(safe-area-inset-bottom,0px));width:60px;height:60px;border:0;border-radius:16px;background:var(--signal);box-shadow:0 6px 16px rgba(22,35,43,.25);cursor:pointer;place-items:center;z-index:4}
 
-@media (max-width:1100px){.week{grid-template-columns:repeat(4,minmax(0,1fr))}}
+/* Agenda : nombre de colonnes selon la largeur réellement disponible */
+@container (max-width:1050px){.week{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@container (max-width:700px){.week{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container (max-width:460px){.week{grid-template-columns:1fr}}
+@container (max-width:640px){.quick .qmain{flex-basis:100%}.quick select,.quick input[type=date],.quick .qw{flex:1 1 130px;width:auto}.quick .qadd{flex:1 1 100%}}
+/* Portable et tablette : colonne de navigation plus étroite */
+@media (min-width:761px) and (max-width:1180px){
+  .side{flex-basis:228px;padding:20px 12px}
+  .brand b{font-size:21px}
+  main{padding:26px clamp(16px,3vw,32px) 56px}
+  .head h1{font-size:34px}
+}
+/* Écrans tactiles : cibles plus grandes */
+@media (pointer:coarse){
+  .more summary{width:42px;height:40px}
+  .sbtn{padding:9px 12px}
+  .chk{width:22px;height:22px}
+  .card .chk{width:20px;height:20px}
+}
 @media (max-width:760px){
-  .side{flex:1 1 100%;position:static;height:auto;gap:14px;padding:16px 14px 14px;overflow:visible}
+  .side{flex:1 1 100%;min-width:0;max-width:100%;position:static;height:auto;gap:14px;padding:16px 14px 14px;overflow:visible}
+  .views,.plist{min-width:0;max-width:100%}
   .menubtn{display:grid}
   .views{flex-direction:row;overflow-x:auto;gap:6px;padding-bottom:2px}
   .vbtn{flex:none;width:auto;border:1px solid var(--navline);border-radius:999px;padding:7px 12px;font-size:14px}
@@ -311,7 +335,6 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
   .task{grid-template-columns:auto minmax(0,1fr);padding:12px}
   .acts{grid-column:2;justify-content:flex-start}
   .edit{grid-column:1/-1}
-  .week{grid-template-columns:1fr}
   .day{min-height:0}
   .fab{display:grid}
 }
@@ -1505,7 +1528,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     qp.value=p?p.id:(proj(cur)?cur:(state.projects[0]?.id||""));
 
     // contenu
-    const L=$("#lists"); L.innerHTML="";
+    const L=$("#lists"); L.innerHTML="";$("#wrap").classList.remove("twocol");
     if(!state.projects.length){
       L.innerHTML=`<div class="empty">Commencez par créer un projet (« + Nouveau projet » dans la colonne de gauche), puis ajoutez vos tâches ici.</div>`;return;
     }
@@ -1548,6 +1571,24 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
       L.appendChild(btn);
       if(ui.showDoneList)L.appendChild(group("done","Terminées","",done,!p));
     }
+    splitCols(L);
+  }
+  // Grand écran : répartit les groupes sur deux colonnes, dans l'ordre de lecture
+  let wideMQ=null;
+  function splitCols(L){
+    const wrap=$("#wrap"); wrap.classList.remove("twocol");
+    if(!wideMQ){wideMQ=window.matchMedia("(min-width:1700px)");wideMQ.addEventListener?.("change",()=>render())}
+    if(!wideMQ.matches)return;
+    const gs=[];for(const el of L.children){if(el.classList.contains("group"))gs.push(el);else break}
+    if(gs.length<2)return;
+    const w=gs.map(g=>2+g.querySelectorAll(".task").length+(g.querySelector(".task .edit")?8:0));
+    const total=w.reduce((a,b)=>a+b,0);
+    let acc=0,cut=1,best=Infinity;
+    for(let i=0;i<gs.length-1;i++){acc+=w[i];const d=Math.abs(total-2*acc);if(d<best){best=d;cut=i+1}}
+    const box=document.createElement("div");box.className="cols";
+    const a=document.createElement("div"),b=document.createElement("div");a.className=b.className="col";
+    gs.forEach((g,i)=>(i<cut?a:b).appendChild(g));
+    box.append(a,b);L.prepend(box);wrap.classList.add("twocol");
   }
   // ---------- Vue agenda ----------
   function openInList(t){
