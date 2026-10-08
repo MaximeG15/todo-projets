@@ -278,3 +278,90 @@ begin
     alter publication supabase_realtime add table public.project_families;
   end if;
 end $$;
+
+-- ---------- Corbeille, statut « En attente », archivage et historique ----------
+alter table public.tasks add column if not exists deleted_at bigint;
+alter table public.tasks add column if not exists waiting boolean not null default false;
+alter table public.tasks add column if not exists waiting_for text not null default '';
+alter table public.projects add column if not exists archived boolean not null default false;
+
+-- Historique des modifications des tâches (écrit uniquement par le serveur)
+create table if not exists public.task_history (
+  id          bigint generated always as identity primary key,
+  task_id     text not null references public.tasks(id) on delete cascade,
+  actor_email text not null default '',
+  at          bigint not null default (extract(epoch from now()) * 1000)::bigint,
+  field       text not null,
+  old_value   text,
+  new_value   text
+);
+create index if not exists task_history_task_idx on public.task_history(task_id);
+alter table public.task_history enable row level security;
+drop policy if exists history_select on public.task_history;
+create policy history_select on public.task_history for select to authenticated
+  using (public.can_access_task(task_id));
+grant select on public.task_history to authenticated;
+revoke all on public.task_history from anon;
+
+create or replace function public.task_checklist_summary(c jsonb) returns text
+language sql immutable set search_path = public as $$
+  select case when c is null or jsonb_typeof(c) <> 'array' or jsonb_array_length(c) = 0 then ''
+    else (select count(*) from jsonb_array_elements(c) e where (e->>'done') = 'true')::text || '/' || jsonb_array_length(c)::text end
+$$;
+
+create or replace function public.log_task_change() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  who text := public.my_email();
+  os text; ns text;
+begin
+  if tg_op = 'INSERT' then
+    insert into public.task_history(task_id, actor_email, field, new_value) values (new.id, who, 'created', new.title);
+    return new;
+  end if;
+  if old.deleted_at is null and new.deleted_at is not null then
+    insert into public.task_history(task_id, actor_email, field) values (new.id, who, 'deleted');
+  elsif old.deleted_at is not null and new.deleted_at is null then
+    insert into public.task_history(task_id, actor_email, field) values (new.id, who, 'restored');
+  end if;
+  if new.title is distinct from old.title then
+    insert into public.task_history(task_id, actor_email, field, old_value, new_value) values (new.id, who, 'title', old.title, new.title);
+  end if;
+  os := case when old.status = 'todo' and old.waiting then 'waiting' else old.status end;
+  ns := case when new.status = 'todo' and new.waiting then 'waiting' else new.status end;
+  if ns is distinct from os then
+    insert into public.task_history(task_id, actor_email, field, old_value, new_value) values (new.id, who, 'status', os, ns);
+  end if;
+  if new.due is distinct from old.due then
+    insert into public.task_history(task_id, actor_email, field, old_value, new_value) values (new.id, who, 'due', old.due::text, new.due::text);
+  end if;
+  if new.priority is distinct from old.priority then
+    insert into public.task_history(task_id, actor_email, field, old_value, new_value) values (new.id, who, 'priority', old.priority, new.priority);
+  end if;
+  if new.who is distinct from old.who then
+    insert into public.task_history(task_id, actor_email, field, old_value, new_value) values (new.id, who, 'who', old.who, new.who);
+  end if;
+  if new.project_id is distinct from old.project_id then
+    insert into public.task_history(task_id, actor_email, field, old_value, new_value)
+    values (new.id, who, 'project', (select name from public.projects where id = old.project_id), (select name from public.projects where id = new.project_id));
+  end if;
+  if new.family is distinct from old.family then
+    insert into public.task_history(task_id, actor_email, field, old_value, new_value)
+    values (new.id, who, 'family', (select name from public.project_families where id = old.family), (select name from public.project_families where id = new.family));
+  end if;
+  if new.waiting_for is distinct from old.waiting_for then
+    insert into public.task_history(task_id, actor_email, field, old_value, new_value) values (new.id, who, 'waitingFor', old.waiting_for, new.waiting_for);
+  end if;
+  if new.note is distinct from old.note then
+    insert into public.task_history(task_id, actor_email, field) values (new.id, who, 'note');
+  end if;
+  if new.checklist is distinct from old.checklist then
+    insert into public.task_history(task_id, actor_email, field, old_value, new_value)
+    values (new.id, who, 'checklist', public.task_checklist_summary(old.checklist), public.task_checklist_summary(new.checklist));
+  end if;
+  return new;
+end $$;
+revoke execute on function public.log_task_change() from public, anon, authenticated;
+drop trigger if exists tasks_history on public.tasks;
+create trigger tasks_history after insert or update on public.tasks
+  for each row execute function public.log_task_change();
