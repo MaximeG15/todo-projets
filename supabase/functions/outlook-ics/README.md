@@ -1,0 +1,1 @@
+Fonction serveur « outlook-ics » (Supabase Edge Function) : relais en lecture seule du calendrier Outlook publié (lien ICS) de l'utilisateur connecté. Le code déployé est visible dans Supabase › Edge Functions › outlook-ics.

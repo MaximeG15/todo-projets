@@ -186,3 +186,16 @@ begin
     alter publication supabase_realtime add table public.task_comments;
   end if;
 end $$;
+
+-- ---------- Lien du calendrier Outlook publié (un par utilisateur, privé) ----------
+create table if not exists public.user_calendar (
+  user_id    uuid primary key default auth.uid() references auth.users(id) on delete cascade,
+  ics_url    text not null check (ics_url ~ '^https://' and length(ics_url) < 2000),
+  updated_at bigint not null default (extract(epoch from now()) * 1000)::bigint
+);
+alter table public.user_calendar enable row level security;
+drop policy if exists user_calendar_own on public.user_calendar;
+create policy user_calendar_own on public.user_calendar for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+grant select, insert, update, delete on public.user_calendar to authenticated;
+revoke all on public.user_calendar from anon;

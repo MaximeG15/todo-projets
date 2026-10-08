@@ -249,6 +249,19 @@ dialog#recap::backdrop{background:rgba(17,24,29,.45)}
 .rhead h2{margin:0;font:700 26px/1.1 "Barlow Condensed","Arial Narrow",sans-serif}
 #recaptext{min-height:360px;font:14px/1.5 ui-monospace,"Cascadia Mono",Consolas,monospace;white-space:pre;background:var(--soft)}
 .ractions{display:flex;flex-wrap:wrap;gap:8px}
+/* Réunions Outlook */
+.meet{display:flex;flex-direction:column;gap:1px;padding:6px 8px;border-radius:6px;border:1px solid #BFD3E0;background:#EEF5FA;font-size:12.5px;line-height:1.3;color:#1F3A4D}
+.meet .mt{font-weight:600;font-variant-numeric:tabular-nums}
+.meet .mn{font-weight:500;word-wrap:break-word}
+.meet .ml{color:#4C6577;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meet.free{opacity:.6;border-style:dashed}
+.mtoggle[aria-pressed="true"]{background:#EEF5FA;border-color:#7FA3BC;color:#1F3A4D;font-weight:600}
+.mstatus{font-size:12.5px;color:var(--muted)}
+.mstatus.err{color:var(--late)}
+.calsteps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+dialog#calcfg{border:0;border-radius:12px;padding:0;width:min(640px,calc(100vw - 24px));background:var(--panel);color:var(--ink);box-shadow:0 20px 50px rgba(22,35,43,.3)}
+dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .meet{background:#1C3140;border-color:#33536A;color:#D6E6F1}:root:not([data-theme="light"]) .meet .ml{color:#9DB7C9}}
 /* Bouton d'ajout flottant (téléphone) */
 .fab{display:none;position:fixed;right:18px;bottom:calc(22px + env(safe-area-inset-bottom,0px));width:60px;height:60px;border:0;border-radius:16px;background:var(--signal);box-shadow:0 6px 16px rgba(22,35,43,.25);cursor:pointer;place-items:center;z-index:4}
 
@@ -392,6 +405,26 @@ dialog#recap::backdrop{background:rgba(17,24,29,.45)}
       <button class="btn primary" type="button" id="recapcopy">Copier</button>
       <button class="btn" type="button" id="recapmail">Envoyer par e-mail</button>
       <button class="btn" type="button" id="recapdl">Télécharger (.txt)</button>
+      <button class="btn ghost" value="close">Fermer</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="calcfg" aria-labelledby="calcfgtitle">
+  <form method="dialog" class="rbox">
+    <h2 id="calcfgtitle" style="margin:0;font:700 26px/1.1 'Barlow Condensed','Arial Narrow',sans-serif">Afficher mes réunions Outlook</h2>
+    <ol class="calsteps">
+      <li>Ouvrez <b>Outlook sur le web</b> (outlook.office.com), puis <b>Paramètres</b> (roue dentée) › <b>Calendrier</b> › <b>Calendriers partagés</b>.</li>
+      <li>Dans <b>Publier un calendrier</b>, choisissez votre calendrier et le niveau de détail (<b>Peut afficher tous les détails</b> pour voir les titres, ou <b>Peut afficher quand je suis occupé</b>), puis <b>Publier</b>.</li>
+      <li>Copiez le lien <b>ICS</b> (pas le lien HTML) et collez-le ci-dessous.</li>
+    </ol>
+    <label class="whobox" style="display:grid;gap:6px">Lien ICS de votre calendrier
+      <input type="url" id="calurl" placeholder="https://outlook.office365.com/owa/calendar/…/calendar.ics" style="width:100%">
+    </label>
+    <p class="gerr" id="calerr" role="alert"></p>
+    <p class="hint">Ce lien est enregistré dans votre compte et n'est visible que par vous. Les réunions ne sont affichées que pour vous, jamais aux collègues avec qui vous partagez des projets. Gardez ce lien confidentiel : toute personne qui le possède peut lire votre calendrier.</p>
+    <div class="ractions">
+      <button class="btn primary" type="button" id="calsave">Enregistrer et afficher</button>
+      <button class="btn" type="button" id="calremove" hidden>Retirer le lien</button>
       <button class="btn ghost" value="close">Fermer</button>
     </div>
   </form>
@@ -791,7 +824,7 @@ dialog#recap::backdrop{background:rgba(17,24,29,.45)}
     const c=cloudClient();
     if(cloud.channel){c.removeChannel(cloud.channel);cloud.channel=null}
     try{await c.auth.signOut()}catch(e){}
-    cloud.user=null;state={projects:[],tasks:[],deleted:[]};render();
+    cloud.user=null;cal.events=null;cal.hasLink=null;state={projects:[],tasks:[],deleted:[]};render();
     showGate("login");
   }
   async function changePassword(){
@@ -879,6 +912,219 @@ dialog#recap::backdrop{background:rgba(17,24,29,.45)}
     if(!cloudReady()){alert("Le mode en ligne n'est pas configuré dans ce fichier, ou la connexion Internet est indisponible.");return}
     try{localStorage.setItem("todo-mode","cloud")}catch(e){}
     location.reload();
+  }
+
+  // ---------- Lecture d'un calendrier ICS (Outlook) ----------
+  const ICS={};
+  (function(){
+    const WINTZ={"Romance Standard Time":"Europe/Paris","W. Europe Standard Time":"Europe/Berlin","Central Europe Standard Time":"Europe/Budapest","Central European Standard Time":"Europe/Warsaw","GMT Standard Time":"Europe/London","Greenwich Standard Time":"Atlantic/Reykjavik","E. Europe Standard Time":"Europe/Chisinau","FLE Standard Time":"Europe/Kiev","GTB Standard Time":"Europe/Bucharest","Turkey Standard Time":"Europe/Istanbul","Russian Standard Time":"Europe/Moscow","Morocco Standard Time":"Africa/Casablanca","W. Central Africa Standard Time":"Africa/Lagos","South Africa Standard Time":"Africa/Johannesburg","Arabian Standard Time":"Asia/Dubai","India Standard Time":"Asia/Kolkata","China Standard Time":"Asia/Shanghai","Singapore Standard Time":"Asia/Singapore","Tokyo Standard Time":"Asia/Tokyo","AUS Eastern Standard Time":"Australia/Sydney","Eastern Standard Time":"America/New_York","Central Standard Time":"America/Chicago","Mountain Standard Time":"America/Denver","Pacific Standard Time":"America/Los_Angeles","SA Pacific Standard Time":"America/Bogota","E. South America Standard Time":"America/Sao_Paulo","Argentina Standard Time":"America/Argentina/Buenos_Aires","Central America Standard Time":"America/Guatemala","Pacific SA Standard Time":"America/Santiago","UTC":"UTC","Coordinated Universal Time":"UTC"};
+    const LOCAL=(()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC"}catch(e){return "UTC"}})();
+    const okTz=tz=>{try{new Intl.DateTimeFormat("en-US",{timeZone:tz});return true}catch(e){return false}};
+    const resolveTz=tz=>{if(!tz)return LOCAL;tz=tz.replace(/^"|"$/g,"");if(WINTZ[tz])return WINTZ[tz];if(okTz(tz))return tz;const m=Object.keys(WINTZ).find(k=>tz.toLowerCase().includes(k.toLowerCase()));return m?WINTZ[m]:LOCAL};
+    const fmtCache={};
+    function offset(ts,tz){ // ms à ajouter à l'heure UTC pour obtenir l'heure locale du fuseau
+      if(tz==="UTC")return 0;
+      const f=fmtCache[tz]||(fmtCache[tz]=new Intl.DateTimeFormat("en-US",{timeZone:tz,hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}));
+      const p={};f.formatToParts(new Date(ts)).forEach(x=>p[x.type]=x.value);
+      return Date.UTC(+p.year,+p.month-1,+p.day,+p.hour%24,+p.minute,+p.second)-Math.floor(ts/1000)*1000;
+    }
+    function toUtc(w,tz){ // heure murale -> instant
+      const g=Date.UTC(w.y,w.m-1,w.d,w.h,w.mi,w.s);
+      if(tz==="UTC")return g;
+      let t=g-offset(g,tz); t=g-offset(t,tz); return t;
+    }
+    function parseDate(v,params,vtz){
+      const isDate=params.VALUE==="DATE"||/^\d{8}$/.test(v);
+      const m=/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?/.exec(v); if(!m)return null;
+      const w={y:+m[1],m:+m[2],d:+m[3],h:+(m[4]||0),mi:+(m[5]||0),s:+(m[6]||0)};
+      const tz=m[7]?"UTC":(isDate?"FLOAT":resolveTz(params.TZID));
+      return {w,tz:isDate?LOCAL:tz,allDay:isDate};
+    }
+    const unesc=s=>s.replace(/\\n/gi,"\n").replace(/\\([,;\\])/g,"$1");
+    function parse(text){
+      const lines=String(text||"").replace(/\r\n?/g,"\n").replace(/\n[ \t]/g,"").split("\n");
+      const evs=[];let cur=null,depth=[];
+      for(const ln of lines){
+        if(!ln)continue;
+        if(ln==="BEGIN:VEVENT"){cur={exdates:[]};depth.push("VEVENT");continue}
+        if(ln.startsWith("BEGIN:")){depth.push(ln.slice(6));continue}
+        if(ln==="END:VEVENT"){if(cur)evs.push(cur);cur=null;depth.pop();continue}
+        if(ln.startsWith("END:")){depth.pop();continue}
+        if(!cur||depth[depth.length-1]!=="VEVENT")continue; // ignore VALARM etc.
+        const c=ln.indexOf(":"); if(c<0)continue;
+        const head=ln.slice(0,c), val=ln.slice(c+1);
+        const [name,...ps]=head.split(";"); const params={};
+        ps.forEach(p=>{const i=p.indexOf("=");if(i>0)params[p.slice(0,i).toUpperCase()]=p.slice(i+1)});
+        switch(name.toUpperCase()){
+          case "UID":cur.uid=val;break;
+          case "SUMMARY":cur.title=unesc(val);break;
+          case "LOCATION":cur.location=unesc(val);break;
+          case "STATUS":cur.status=val.toUpperCase();break;
+          case "DTSTART":cur.start=parseDate(val,params);break;
+          case "DTEND":cur.end=parseDate(val,params);break;
+          case "DURATION":cur.duration=val;break;
+          case "RRULE":cur.rrule=val;break;
+          case "EXDATE":val.split(",").forEach(v=>{const d=parseDate(v,params);if(d)cur.exdates.push(d)});break;
+          case "RECURRENCE-ID":cur.recurId=parseDate(val,params);break;
+          case "X-MICROSOFT-CDO-BUSYSTATUS":cur.busy=val.toUpperCase();break;
+        }
+      }
+      return evs.filter(e=>e.start);
+    }
+    function durMs(s){const m=/^([+-])?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(s||"");if(!m)return 0;return (m[1]==="-"?-1:1)*((+m[2]||0)*6048e5+(+m[3]||0)*864e5+(+m[4]||0)*36e5+(+m[5]||0)*6e4+(+m[6]||0)*1e3)}
+    const DAYS=["SU","MO","TU","WE","TH","FR","SA"];
+    const dOf=(y,m,d)=>new Date(Date.UTC(y,m-1,d));
+    const wOf=(dt,base)=>({y:dt.getUTCFullYear(),m:dt.getUTCMonth()+1,d:dt.getUTCDate(),h:base.h,mi:base.mi,s:base.s});
+    const dim=(y,m)=>new Date(Date.UTC(y,m,0)).getUTCDate();
+    function nthWeekday(y,m,wd,n){ // n>0 : n-ième ; n<0 : en partant de la fin
+      if(n>0){const first=dOf(y,m,1).getUTCDay();const d=1+((wd-first+7)%7)+7*(n-1);return d<=dim(y,m)?d:null}
+      const last=dim(y,m),ld=dOf(y,m,last).getUTCDay();const d=last-((ld-wd+7)%7)+7*(n+1);return d>=1?d:null;
+    }
+    // Liste des occurrences (heure murale) d'une règle, jusqu'à 'until' (instant)
+    function expandRule(ev,rangeEnd){
+      const r={};ev.rrule.split(";").forEach(p=>{const [k,v]=p.split("=");r[k.toUpperCase()]=v});
+      const freq=r.FREQ, iv=Math.max(1,+r.INTERVAL||1), count=r.COUNT?+r.COUNT:Infinity;
+      const until=r.UNTIL?(()=>{const u=parseDate(r.UNTIL,{});return u.allDay?toUtc({...u.w,h:23,mi:59,s:59},ev.start.tz):toUtc(u.w,u.tz)})():Infinity;
+      const byday=(r.BYDAY||"").split(",").filter(Boolean).map(x=>{const m=/^([+-]?\d+)?([A-Z]{2})$/.exec(x);return m?{n:m[1]?+m[1]:0,wd:DAYS.indexOf(m[2])}:null}).filter(Boolean);
+      const bymd=(r.BYMONTHDAY||"").split(",").filter(Boolean).map(Number);
+      const bym=(r.BYMONTH||"").split(",").filter(Boolean).map(Number);
+      const setpos=(r.BYSETPOS||"").split(",").filter(Boolean).map(Number);
+      const wkst=DAYS.indexOf(r.WKST||"MO");
+      const s=ev.start.w, sDate=dOf(s.y,s.m,s.d), tz=ev.start.tz;
+      const out=[];let n=0;
+      const push=list=>{
+        list.sort((a,b)=>a-b);
+        let l=list.map(x=>new Date(x));
+        if(setpos.length)l=setpos.map(p=>p>0?l[p-1]:l[l.length+p]).filter(Boolean);
+        for(const dt of l){
+          if(dt<sDate)continue;
+          const w=wOf(dt,s), t=toUtc(w,tz);
+          if(t>until||n>=count)return false;
+          n++; if(t>rangeEnd)return false;
+          out.push({w,t});
+        }
+        return true;
+      };
+      for(let i=0;i<20000;i++){
+        let cands=[];
+        if(freq==="DAILY"){const d=new Date(sDate);d.setUTCDate(d.getUTCDate()+i*iv);
+          if((bym.length&&!bym.includes(d.getUTCMonth()+1))||(byday.length&&!byday.some(b=>b.wd===d.getUTCDay()))){if(toUtc(wOf(d,s),tz)>Math.min(until,rangeEnd))break;continue}
+          cands=[d.getTime()];}
+        else if(freq==="WEEKLY"){const ws=new Date(sDate);ws.setUTCDate(ws.getUTCDate()-((ws.getUTCDay()-wkst+7)%7)+7*i*iv);
+          const wds=byday.length?byday.map(b=>b.wd):[sDate.getUTCDay()];
+          cands=wds.map(wd=>{const d=new Date(ws);d.setUTCDate(d.getUTCDate()+((wd-wkst+7)%7));return d.getTime()});}
+        else if(freq==="MONTHLY"||freq==="YEARLY"){
+          const months=[];
+          if(freq==="MONTHLY"){const k=(s.m-1)+i*iv;months.push([s.y+Math.floor(k/12),k%12+1])}
+          else (bym.length?bym:[s.m]).forEach(mm=>months.push([s.y+i*iv,mm]));
+          for(const [y,mm] of months){
+            if(freq==="MONTHLY"&&bym.length&&!bym.includes(mm))continue;
+            if(bymd.length)bymd.forEach(md=>{const d=md>0?md:dim(y,mm)+md+1;if(d>=1&&d<=dim(y,mm))cands.push(dOf(y,mm,d).getTime())});
+            else if(byday.length)byday.forEach(b=>{if(b.n){const d=nthWeekday(y,mm,b.wd,b.n);if(d)cands.push(dOf(y,mm,d).getTime())}else{for(let d=1;d<=dim(y,mm);d++)if(dOf(y,mm,d).getUTCDay()===b.wd)cands.push(dOf(y,mm,d).getTime())}});
+            else if(s.d<=dim(y,mm))cands.push(dOf(y,mm,s.d).getTime());
+          }
+        } else {cands=[sDate.getTime()];push(cands);break}
+        if(!push(cands))break;
+        const lastC=Math.max(...cands.concat([0]));
+        if(cands.length&&toUtc(wOf(new Date(lastC),s),tz)>Math.min(until,rangeEnd)+864e5*400)break;
+      }
+      return out;
+    }
+    // Occurrences entre deux instants
+    ICS.instances=function(evs,from,to){
+      const res=[];
+      const overrides=new Map(); // uid|instant d'origine
+      evs.filter(e=>e.recurId).forEach(e=>overrides.set(e.uid+"|"+toUtc(e.recurId.w,e.recurId.tz),e));
+      const mk=(e,t)=>{
+        let len;
+        if(e.end)len=toUtc(e.end.w,e.end.tz)-toUtc(e.start.w,e.start.tz);
+        else if(e.duration)len=durMs(e.duration);
+        else len=e.start.allDay?864e5:0;
+        return {title:e.title||"(sans titre)",location:e.location||"",allDay:!!e.start.allDay,start:t,end:t+Math.max(0,len),busy:e.busy||""};
+      };
+      for(const e of evs){
+        if(e.status==="CANCELLED")continue;
+        const t0=toUtc(e.start.w,e.start.tz);
+        if(e.recurId||!e.rrule){const x=mk(e,t0);if(x.end>=from&&x.start<to||(x.start>=from&&x.start<to))res.push(x);continue}
+        const ex=new Set(e.exdates.map(d=>toUtc(d.w,d.tz)));
+        for(const o of expandRule(e,to)){
+          if(ex.has(o.t)||overrides.has(e.uid+"|"+o.t))continue;
+          const x=mk(e,o.t);
+          if(x.end>from&&x.start<to||(x.start>=from&&x.start<to))res.push(x);
+        }
+      }
+      return res.sort((a,b)=>a.start-b.start);
+    };
+    ICS.parse=parse;
+  })();
+  // ---------- Réunions Outlook (calendrier publié) ----------
+  const OUTLOOK_HOSTS=["outlook.office365.com","outlook.office.com","outlook.live.com"];
+  const cal={events:null,fetchedAt:0,loading:false,error:"",hasLink:null,lastTry:0};
+  async function fnError(error){try{const j=await error.context.json();return j}catch(e){return {code:"",message:error&&error.message||"Erreur inconnue"}}}
+  async function loadMeetings(force){
+    if(MODE!=="cloud"||!cloud.user||!ui.showMeetings||cal.loading)return;
+    if(!force&&cal.events&&Date.now()-cal.fetchedAt<10*60e3)return;
+    if(!force&&!cal.events&&Date.now()-cal.lastTry<60e3)return; // pas de nouvel essai immédiat après un échec
+    cal.loading=true;cal.lastTry=Date.now();cal.error="";if(ui.mode==="agenda")renderMeetStatus();
+    try{
+      const {data,error}=await cloudClient().functions.invoke("outlook-ics",{method:"POST",body:{}});
+      if(error){
+        const j=await fnError(error);
+        if(j.code==="no_link"){cal.hasLink=false;cal.events=null;cal.error="";cal.loading=false;ui.showMeetings=false;saveUi();render();openCalCfg();return}
+        cal.error=j.message||"Calendrier indisponible pour le moment.";
+      } else {
+        const text=typeof data==="string"?data:(data instanceof Blob?await data.text():String(data||""));
+        cal.events=ICS.parse(text);cal.fetchedAt=Date.now();cal.hasLink=true;
+      }
+    }catch(e){cal.error="Calendrier indisponible : vérifiez votre connexion."}
+    cal.loading=false;
+    if(ui.mode==="agenda")render();
+  }
+  function renderMeetStatus(){
+    const el=document.getElementById("meetstatus"); if(!el)return;
+    el.className="mstatus"+(cal.error?" err":"");
+    el.textContent=cal.loading?"Réunions Outlook : chargement…":cal.error?("Réunions Outlook : "+cal.error):(cal.events?`Réunions Outlook mises à jour à ${new Date(cal.fetchedAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}`:"");
+  }
+  const hm=ms=>new Date(ms).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+  function meetingsByDay(ws){
+    const out={}; if(!ui.showMeetings||!cal.events)return out;
+    const from=ws.getTime(), to=addDays(ws,7).getTime();
+    let list=[];try{list=ICS.instances(cal.events,from,to)}catch(e){cal.error="lecture du calendrier impossible.";return out}
+    for(let i=0;i<7;i++){
+      const d0=addDays(ws,i).getTime(), d1=addDays(ws,i+1).getTime(), key=iso(addDays(ws,i));
+      out[key]=list.filter(m=>m.allDay?(m.start<d1&&m.end>d0):(m.start>=d0&&m.start<d1)||(m.start<d0&&m.end>d0));
+    }
+    return out;
+  }
+  function meetEl(m,dayStart){
+    const el=document.createElement("div");el.className="meet"+(m.busy==="FREE"?" free":"");
+    const time=m.allDay?"Journée":(m.start<dayStart?"Suite":`${hm(m.start)} – ${hm(m.end)}`);
+    el.innerHTML=`<span class="mt">${time}</span><span class="mn">${esc(m.title)}</span>${m.location?`<span class="ml">${esc(m.location)}</span>`:""}`;
+    el.title=`${m.title}${m.location?" · "+m.location:""}`;
+    return el;
+  }
+  async function openCalCfg(){
+    const dlg=$("#calcfg"); $("#calerr").textContent=""; $("#calurl").value="";
+    $("#calremove").hidden=true;
+    if(dlg.showModal)dlg.showModal();else dlg.setAttribute("open","");
+    try{const {data}=await cloudClient().from("user_calendar").select("ics_url").eq("user_id",cloud.user.id);if(data&&data[0]){$("#calurl").value=data[0].ics_url;$("#calremove").hidden=false;cal.hasLink=true}}catch(e){}
+  }
+  async function saveCalCfg(){
+    let v=$("#calurl").value.trim().replace(/^webcal:\/\//i,"https://");
+    let u;try{u=new URL(v)}catch(e){$("#calerr").textContent="Collez le lien ICS complet, qui commence par https://";return}
+    if(u.protocol!=="https:"||!OUTLOOK_HOSTS.includes(u.hostname.toLowerCase())){$("#calerr").textContent="Ce lien ne vient pas d'Outlook / Microsoft 365. Copiez le lien « ICS » proposé par Outlook.";return}
+    $("#calsave").disabled=true;
+    const {error}=await cloudClient().from("user_calendar").upsert({user_id:cloud.user.id,ics_url:u.toString(),updated_at:Date.now()});
+    $("#calsave").disabled=false;
+    if(error){$("#calerr").textContent="Enregistrement impossible : "+(error.message||"erreur");return}
+    $("#calcfg").close&&$("#calcfg").close();
+    cal.hasLink=true;ui.showMeetings=true;saveUi();cal.events=null;loadMeetings(true);render();
+  }
+  async function removeCal(){
+    if(!confirm("Retirer le lien de votre calendrier Outlook ? Les réunions ne s'afficheront plus."))return;
+    await cloudClient().from("user_calendar").delete().eq("user_id",cloud.user.id);
+    cal.events=null;cal.hasLink=false;ui.showMeetings=false;saveUi();
+    $("#calcfg").close&&$("#calcfg").close();render();
   }
 
   // ---------- Actions ----------
@@ -1044,6 +1290,15 @@ dialog#recap::backdrop{background:rgba(17,24,29,.45)}
       tools.appendChild(w);
     }
     if(agenda){
+      const mb=b("Réunions Outlook",()=>{
+        if(MODE!=="cloud"){alert("L'affichage des réunions Outlook est disponible en mode en ligne (avec un compte).");return}
+        ui.showMeetings=!ui.showMeetings;saveUi();
+        if(ui.showMeetings){if(cal.hasLink===false){openCalCfg();ui.showMeetings=false;saveUi();return}loadMeetings(false)}
+        render();
+      },"mtoggle");
+      mb.setAttribute("aria-pressed",!!ui.showMeetings&&MODE==="cloud");
+      mb.title=MODE==="cloud"?"Afficher ou masquer vos réunions Outlook dans l'agenda":"Disponible en mode en ligne";
+      if(MODE==="cloud"&&ui.showMeetings)b("Réglages du calendrier",openCalCfg);
       const wn=document.createElement("div");wn.className="wnav";
       wn.innerHTML=`<button class="btn" type="button" data-w="-1" aria-label="Semaine précédente">${ICON_CHEV.replace('M9 6l6 6-6 6','M15 6l-6 6 6 6')}</button><button class="btn" type="button" data-w="0">Cette semaine</button><button class="btn" type="button" data-w="1" aria-label="Semaine suivante">${ICON_CHEV}</button>`;
       wn.querySelectorAll("[data-w]").forEach(x=>x.onclick=()=>{const n=+x.dataset.w;weekStart=n?addDays(weekStart,7*n):mondayOf(new Date());render()});
@@ -1139,17 +1394,21 @@ dialog#recap::backdrop{background:rgba(17,24,29,.45)}
     top.innerHTML=`<p class="hint">Glissez une tâche sur un autre jour pour changer son échéance. Cliquez sur son intitulé pour l'ouvrir.</p><label class="whobox"><input type="checkbox" ${ui.showDone?"checked":""}> Afficher les terminées</label>`;
     top.querySelector("input").onchange=e=>{ui.showDone=e.target.checked;saveUi();render()};
     L.appendChild(top);
+    if(MODE==="cloud"&&ui.showMeetings){loadMeetings(false);const ms=document.createElement("p");ms.id="meetstatus";ms.style.margin="0";top.insertBefore(ms,top.lastElementChild);setTimeout(renderMeetStatus,0)}
+    const meets=MODE==="cloud"?meetingsByDay(weekStart):{};
     const wk=document.createElement("div");wk.className="week";
     for(let i=0;i<7;i++){
       const d=addDays(weekStart,i), di=iso(d);
+      const dayMeets=meets[di]||[];
       const items=pool.filter(t=>t.due===di&&visible(t)).sort((a,b)=>(a.status==="done")-(b.status==="done")||sortOpen(a,b));
       const nOpen=items.filter(t=>t.status!=="done").length;
       const col=document.createElement("section");
       col.className=`day${i>=5?" we":""}${di===todayIso?" today":""}`;
       col.innerHTML=`<h2 class="dhead"><span>${cap(d.toLocaleDateString("fr-FR",{weekday:"short",day:"numeric"}))}</span>${di===todayIso?`<span class="badge">Aujourd'hui</span>`:(nOpen?`<span class="n">${nOpen}</span>`:"")}</h2><div class="dbody"></div>`;
       const body=col.querySelector(".dbody");
+      dayMeets.forEach(m=>body.appendChild(meetEl(m,d.getTime())));
       if(items.length)items.forEach(t=>body.appendChild(card(t,showProj,false)));
-      else if(i<5)body.innerHTML=`<div class="dempty">Rien de prévu</div>`;
+      else if(i<5&&!dayMeets.length)body.innerHTML=`<div class="dempty">Rien de prévu</div>`;
       dropZone(col,di);
       wk.appendChild(col);
     }
@@ -1385,6 +1644,9 @@ dialog#recap::backdrop{background:rgba(17,24,29,.45)}
   let searchT=null;
   $("#search").addEventListener("input",e=>{clearTimeout(searchT);searchT=setTimeout(()=>{query=e.target.value;editing=null;render()},150)});
   $("#search").addEventListener("keydown",e=>{if(e.key==="Escape"){e.target.value="";query="";render()}});
+  $("#calsave").onclick=saveCalCfg;
+  $("#calremove").onclick=removeCal;
+  $("#calurl").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();saveCalCfg()}});
   $("#menubtn").onclick=()=>{const o=$("#side").classList.toggle("open");$("#menubtn").setAttribute("aria-expanded",o)};
   $("#fab").onclick=()=>{window.scrollTo({top:0,behavior:"smooth"});setTimeout(()=>$("#qt").focus(),250)};
   $("#gsignup").onsubmit=signup;
