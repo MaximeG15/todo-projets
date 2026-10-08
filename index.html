@@ -249,6 +249,22 @@ dialog#recap::backdrop{background:rgba(17,24,29,.45)}
 .rhead h2{margin:0;font:700 26px/1.1 "Barlow Condensed","Arial Narrow",sans-serif}
 #recaptext{min-height:360px;font:14px/1.5 ui-monospace,"Cascadia Mono",Consolas,monospace;white-space:pre;background:var(--soft)}
 .ractions{display:flex;flex-wrap:wrap;gap:8px}
+/* Filtre des projets de l'agenda */
+.pfilter{position:relative}
+.pfilter summary{list-style:none;display:inline-flex;align-items:center;gap:6px}
+.pfilter summary::after{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg) translateY(-2px);margin-left:4px}
+.pfilter summary.pfactive{background:var(--signalsoft);border-color:var(--signal);color:var(--signalink);font-weight:600}
+.pfmenu{position:absolute;left:0;top:44px;z-index:6;min-width:280px;max-height:60vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px rgba(22,35,43,.18);padding:10px;display:flex;flex-direction:column;gap:10px}
+.pfsec{display:flex;flex-direction:column;gap:2px}
+.pfhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:2px 4px 4px;font-size:13px;color:var(--muted)}
+.pfhead b{color:var(--ink);font-size:14px}
+.pflink{border:0;background:none;padding:0;color:var(--steel);cursor:pointer;font-size:13px;text-decoration:underline}
+.pfrow{display:flex;align-items:center;gap:8px;padding:7px 6px;border-radius:6px;cursor:pointer;font-size:14px}
+.pfrow:hover{background:var(--chip)}
+.pfrow input{width:17px;height:17px;margin:0;accent-color:var(--nav)}
+.pfname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pfrow small{color:var(--muted);font-size:12px;white-space:nowrap}
+@media (max-width:760px){.pfmenu{left:0;right:auto;min-width:min(320px,calc(100vw - 28px))}}
 /* Réunions Outlook */
 .meet{display:flex;flex-direction:column;gap:1px;padding:6px 8px;border-radius:6px;border:1px solid #BFD3E0;background:#EEF5FA;font-size:12.5px;line-height:1.3;color:#1F3A4D}
 .meet .mt{font-weight:600;font-variant-numeric:tabular-nums}
@@ -1336,7 +1352,8 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     const open=state.tasks.filter(t=>t.status!=="done");
     const nToday=open.filter(t=>isLate(t)||isToday(t)).length;
     const wkS=iso(mondayOf(new Date())), wkE=iso(addDays(mondayOf(new Date()),6));
-    const nWeek=open.filter(t=>t.due&&t.due>=wkS&&t.due<=wkE).length;
+    const hidA=hiddenSet();
+    const nWeek=open.filter(t=>t.due&&t.due>=wkS&&t.due<=wkE&&!hidA.has(t.projectId)).length;
     if(ui.scope!=="today")ui.scope="all";
 
     // vues
@@ -1399,6 +1416,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
       tools.appendChild(w);
     }
     if(agenda){
+      if(!p&&state.projects.length)tools.appendChild(projectFilter());
       const mb=b("Réunions Outlook",()=>{
         if(MODE!=="cloud"){alert("L'affichage des réunions Outlook est disponible en mode en ligne (avec un compte).");return}
         ui.showMeetings=!ui.showMeetings;saveUi();
@@ -1495,7 +1513,31 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     c.addEventListener("dragstart",e=>{e.dataTransfer.setData("text/plain",t.id);e.dataTransfer.effectAllowed="move"});
     return c;
   }
+  // ---------- Projets affichés dans l'agenda ----------
+  let pfOpen=false;
+  const hiddenSet=()=>new Set(Array.isArray(ui.hiddenProjects)?ui.hiddenProjects:[]);
+  const isMine=pid=>MODE!=="cloud"||!cloud.meta[pid]||cloud.meta[pid].owner===(cloud.user&&cloud.user.id);
+  function setHidden(ids,hide){
+    const h=hiddenSet();ids.forEach(id=>hide?h.add(id):h.delete(id));
+    ui.hiddenProjects=[...h].filter(id=>state.projects.some(x=>x.id===id));saveUi();render();
+  }
+  function projectFilter(){
+    const h=hiddenSet(), all=state.projects;
+    const mine=all.filter(x=>isMine(x.id)), shared=all.filter(x=>!isMine(x.id));
+    const shown=all.filter(x=>!h.has(x.id)).length;
+    const d=document.createElement("details");d.className="pfilter";d.open=pfOpen;
+    d.addEventListener("toggle",()=>{pfOpen=d.open});
+    const sec=(title,list)=>!list.length?"":`<div class="pfsec"><div class="pfhead"><b>${title}</b><span><button type="button" class="pflink" data-all="${list.map(x=>x.id).join(",")}">Tout</button> · <button type="button" class="pflink" data-none="${list.map(x=>x.id).join(",")}">Aucun</button></span></div>
+      ${list.map(x=>{const m=MODE==="cloud"&&cloud.meta[x.id];const sub=m&&!isMine(x.id)?`<small>par ${esc(nameOf(m.ownerEmail))}</small>`:(m&&m.members.length?`<small>partagé</small>`:"");return `<label class="pfrow"><input type="checkbox" data-p="${x.id}" ${h.has(x.id)?"":"checked"}><span class="dot" style="background:${x.color}"></span><span class="pfname">${esc(x.name)}</span>${sub}</label>`}).join("")}</div>`;
+    d.innerHTML=`<summary class="btn${shown<all.length?" pfactive":""}">Projets affichés : ${shown}/${all.length}</summary>
+      <div class="pfmenu">${sec("Mes projets",mine)}${sec("Projets partagés avec moi",shared)}${!all.length?`<p class="hint">Aucun projet.</p>`:""}</div>`;
+    d.querySelectorAll("[data-p]").forEach(cb=>cb.onchange=()=>setHidden([cb.dataset.p],!cb.checked));
+    d.querySelectorAll("[data-all]").forEach(b=>b.onclick=()=>setHidden(b.dataset.all.split(","),false));
+    d.querySelectorAll("[data-none]").forEach(b=>b.onclick=()=>setHidden(b.dataset.none.split(","),true));
+    return d;
+  }
   function renderAgenda(L,p,pool){
+    if(!p){const h=hiddenSet();if(h.size)pool=pool.filter(t=>!h.has(t.projectId))}
     const startIso=iso(weekStart), endIso=iso(addDays(weekStart,6)), todayIso=iso(today());
     const showProj=!p;
     const visible=t=>ui.showDone||t.status!=="done";
@@ -1749,7 +1791,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
   $("#glocal").onclick=()=>{try{localStorage.setItem("todo-mode","local")}catch(e){}$("#gate").hidden=true;startLocal()};
   $("#lback").onclick=()=>showGate("choice");
   $("#glogin").onsubmit=login;
-  document.addEventListener("click",e=>{document.querySelectorAll("details.more[open]").forEach(d=>{if(!d.contains(e.target))d.open=false})});
+  document.addEventListener("click",e=>{if(!document.contains(e.target))return;document.querySelectorAll("details.more[open],details.pfilter[open]").forEach(d=>{if(!d.contains(e.target)){d.open=false;if(d.classList.contains("pfilter"))pfOpen=false}})});
   let searchT=null;
   $("#search").addEventListener("input",e=>{clearTimeout(searchT);searchT=setTimeout(()=>{query=e.target.value;editing=null;render()},150)});
   $("#search").addEventListener("keydown",e=>{if(e.key==="Escape"){e.target.value="";query="";render()}});
