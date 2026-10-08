@@ -663,7 +663,34 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
   // ---------- Mode en ligne (Supabase) ----------
   const cloud={client:null,user:null,email:"",meta:{},comments:{},profiles:{},dirty:new Map(),seq:0,flushing:false,again:false,retry:null,channel:null,fetchT:null,lastOk:0};
   const cloudReady=()=>!!(CONFIG.supabaseUrl&&CONFIG.supabaseKey&&window.supabase&&window.supabase.createClient);
-  function cloudClient(){if(!cloud.client)cloud.client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true,storageKey:"todo-projets-auth"}});return cloud.client}
+  // La session est aussi gardée en mémoire : si le navigateur ne la restitue pas à la librairie
+  // (stockage bloqué, verrou entre onglets…), on joint nous-mêmes le jeton aux requêtes.
+  function useSession(sess){
+    cloud.session=sess||null;
+    try{if(cloud.client&&sess&&sess.access_token)cloud.client.realtime.setAuth(sess.access_token)}catch(e){}
+  }
+  function authFetch(input,init){
+    try{
+      const url=typeof input==="string"?input:(input&&input.url)||"";
+      const tok=cloud.session&&cloud.session.access_token;
+      if(tok&&/\/(rest|functions)\/v1\//.test(url)){
+        const h=new Headers((init&&init.headers)||(input&&input.headers)||{});
+        const a=h.get("Authorization")||"";
+        if(!a||a==="Bearer "+CONFIG.supabaseKey||!a.startsWith("Bearer ey")){h.set("Authorization","Bearer "+tok);init={...(init||{}),headers:h}}
+      }
+    }catch(e){}
+    return fetch(input,init);
+  }
+  function cloudClient(){
+    if(!cloud.client){
+      cloud.client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey,{
+        auth:{persistSession:true,autoRefreshToken:true,storageKey:"todo-projets-auth",lock:async(name,timeout,fn)=>await fn()},
+        global:{fetch:authFetch}
+      });
+      try{cloud.client.auth.onAuthStateChange((ev,sess)=>{if(sess)useSession(sess);else if(ev==="SIGNED_OUT")useSession(null)})}catch(e){}
+    }
+    return cloud.client;
+  }
   const isOwner=pid=>{const m=cloud.meta[pid];return !m||m.owner===cloud.user.id};
   const rowT=t=>({id:t.id,project_id:t.projectId,title:t.title,priority:t.priority||"normale",due:t.due||null,status:t.status||"todo",note:t.note||"",who:t.who||"",created_at:t.createdAt||Date.now(),done_at:t.doneAt||null,updated_at:t.updatedAt||Date.now(),updated_by:cloud.email,checklist:Array.isArray(t.checklist)?t.checklist:[],repeat:t.repeat||null});
   const rowP=p=>({id:p.id,name:p.name,color:p.color||null,updated_at:p.updatedAt||Date.now()});
@@ -739,13 +766,14 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
       const js=JSON.stringify(cm);if(js!==this._lastCm){this._lastCm=js;this.comments=cm;this._cmChanged=true}
     }
     if(err){
-      if(err.code==="42501"&&!this._retried){
+      const authErr=err.code==="42501"||err.code==="PGRST301"||err.code==="PGRST303"||/jwt/i.test(err.message||"");
+      if(authErr&&!this._retried){
         // droits refusés : la session n'est pas (encore) prise en compte, on la renouvelle puis on réessaie
         this._retried=true;
-        try{await c.auth.refreshSession()}catch(e){}
+        try{const r=await c.auth.refreshSession();if(r&&r.data&&r.data.session)useSession(r.data.session)}catch(e){}
         setTimeout(()=>this.fetch(),800);return;
       }
-      if(err.code==="42501"){setSync("Session expirée : reconnectez-vous.");return}
+      if(authErr){setSync("Session expirée : reconnectez-vous.");return}
       if(transient(err))setSync("Connexion au serveur impossible : affichage de la dernière version connue.");else setSync("Erreur serveur : "+err.message);return}
     this._retried=false;
     const meta={};
@@ -791,6 +819,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     let session=null;
     try{session=(await c.auth.getSession()).data.session}catch(e){}
     if(!session){showGate("login");return}
+    useSession(session);
     await enterCloud(session.user);
   }
   async function enterCloud(user){
@@ -818,6 +847,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
       const {data,error}=await cloudClient().auth.signInWithPassword({email,password});
       if(error){$("#lerr").textContent=/invalid/i.test(error.message)?"E-mail ou mot de passe incorrect.":(transient(error)&&!error.status?"Serveur injoignable : vérifiez votre connexion Internet.":"Connexion refusée : "+error.message);return}
       $("#lpass").value="";
+      useSession(data.session);
       await enterCloud(data.user);
     }catch(err){$("#lerr").textContent="Serveur injoignable : vérifiez votre connexion Internet."}
     finally{$("#lgo").disabled=false}
@@ -847,6 +877,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
       $("#spass").value="";$("#spass2").value="";
       if(data.session){
         // s'assurer que la session est bien active avant les premières requêtes
+        useSession(data.session);
         try{await cloudClient().auth.setSession({access_token:data.session.access_token,refresh_token:data.session.refresh_token})}catch(e){}
         await enterCloud(data.user);await saveProfile(first,last);return}
       if(data.user&&Array.isArray(data.user.identities)&&!data.user.identities.length){$("#serr").textContent="Un compte existe déjà avec cette adresse : utilisez « J'ai déjà un compte ».";return}
@@ -860,6 +891,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
     const c=cloudClient();
     if(cloud.channel){c.removeChannel(cloud.channel);cloud.channel=null}
     try{await c.auth.signOut()}catch(e){}
+    useSession(null);
     cloud.user=null;cal.events=null;cal.hasLink=null;state={projects:[],tasks:[],deleted:[]};render();
     showGate("login");
   }
