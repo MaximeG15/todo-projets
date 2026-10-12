@@ -312,6 +312,31 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 .toast span{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .toast button{flex:none;border:0;background:none;color:#F2B705;font-weight:700;cursor:pointer;padding:7px 10px;border-radius:6px;font-size:14px}
 .toast button:hover{background:#2B4557}
+/* Onglets du projet */
+.ptabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-top:-6px;overflow-x:auto}
+.ptabs button{border:0;background:none;padding:10px 14px;font:600 15px "Barlow",sans-serif;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap;display:inline-flex;align-items:center;gap:8px}
+.ptabs button span{font-weight:600;font-size:12px;background:var(--chip);color:var(--chipink);border-radius:9px;padding:1px 7px}
+.ptabs button:hover{color:var(--ink)}
+.ptabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--signal)}
+/* Demandes client */
+.task.req{grid-template-columns:auto minmax(0,1fr) auto}
+.rdot{width:11px;height:11px;border-radius:50%;margin-top:5px;flex:none;display:inline-block;background:#9AA8B1}
+.group h2 .rdot{margin:0}
+.rs-new{background:#3E7CB1}.rs-analysis{background:#B8860B}.rs-doing{background:#1F8A8A}.rs-waiting{background:#7A62C2}.rs-done{background:#2F7D5B}.rs-refused{background:#9AA8B1}
+.g-req h2{display:flex;align-items:center;gap:10px}
+.rsel{font-size:13px;padding:6px 8px;max-width:150px}
+.tag.scope-out{background:var(--latesoft);color:var(--late);font-weight:600}
+.tag.quote-todo{background:var(--signalsoft);color:var(--signalink);font-weight:600}
+.tag.quote-sent{background:#E3EEF5;color:#1F4A66}
+.tag.quote-accepted{background:#E3F2EA;color:#2F7D5B;font-weight:600}
+.tag.quote-refused{background:var(--chip);color:var(--muted);text-decoration:line-through}
+.tag.reqtag{background:#E6F0F7;color:#1F4A66;border:0;cursor:pointer;font:inherit;font-size:13px}
+.tag.reqtag:hover{text-decoration:underline}
+.rtasks a{color:inherit}
+.rtasks .mut{color:var(--muted);font-size:12.5px}
+.flbl{display:grid;gap:4px;font-size:12.5px;color:var(--muted);min-width:0}
+.flbl input,.flbl select,.flbl textarea{font-size:15px;color:var(--ink);width:100%;min-width:0}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tag.reqtag,:root:not([data-theme="light"]) .tag.quote-sent{background:#1C3140;color:#9CC3DD}:root:not([data-theme="light"]) .tag.quote-accepted{background:#18342A;color:#8FD1B0}}
 /* Bouton corbeille (bas à droite) */
 .trashbtn{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:5;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--muted);box-shadow:0 3px 10px rgba(22,35,43,.12);cursor:pointer;display:grid;place-items:center;opacity:.8}
 .trashbtn:hover,.trashbtn[aria-pressed="true"]{opacity:1;color:var(--ink);border-color:var(--steel)}
@@ -411,6 +436,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   .trashbtn{right:26px;bottom:calc(96px + env(safe-area-inset-bottom,0px))}
   .trow{grid-template-columns:1fr;padding:12px}
   .trow .acts{justify-content:flex-start}
+  .task.req{grid-template-columns:auto minmax(0,1fr)}
+  .task.req .acts{grid-column:2;justify-content:flex-start}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -500,6 +527,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         </div>
         <div class="tools" id="ptools"></div>
       </div>
+      <div class="ptabs" id="ptabs" role="tablist" aria-label="Contenu du projet" hidden></div>
       <div class="share" id="share" hidden></div>
       <form class="quick" id="quick" autocomplete="off">
         <label class="qmain"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--muted)"><path d="M12 5v14M5 12h14"></path></svg>
@@ -604,7 +632,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   };
   // ============================================
   const COLORS=["#3E7CB1","#C2410C","#2F7D5B","#8E5BB5","#B8860B","#C0396B","#4A6272","#1F8A8A"];
-  let state={projects:[],tasks:[],deleted:[]};
+  let state={projects:[],tasks:[],requests:[],deleted:[]};
   let view="all"; // "all" ou id projet
   let editing=null;
   // Préférences d'affichage : stockées à part, jamais dans le fichier de données
@@ -643,12 +671,14 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   // ---------- Suivi des changements (pour fusionner à plusieurs) ----------
   let snap=new Map();
   const bare=o=>{const c={...o};delete c.updatedAt;return JSON.stringify(c)};
-  function resetSnap(){snap=new Map();state.projects.forEach(p=>snap.set("p:"+p.id,bare(p)));state.tasks.forEach(t=>snap.set("t:"+t.id,bare(t)))}
+  function resetSnap(){snap=new Map();state.projects.forEach(p=>snap.set("p:"+p.id,bare(p)));state.tasks.forEach(t=>snap.set("t:"+t.id,bare(t)));(state.requests||[]).forEach(r=>snap.set("r:"+r.id,bare(r)))}
   function stamp(){
     const t0=Date.now(), seen=new Set(), changed=[], removed=[];
     const chk=(k,o)=>{seen.add(k);const prev=snap.get(k);if(prev!==bare(o)){if(MODE!=="cloud"&&k[0]==="t")logLocal(o,prev);o.updatedAt=t0;snap.set(k,bare(o));changed.push(k)}};
     state.projects.forEach(p=>chk("p:"+p.id,p));
     state.tasks.forEach(t=>chk("t:"+t.id,t));
+    if(!Array.isArray(state.requests))state.requests=[];
+    state.requests.forEach(r=>chk("r:"+r.id,r));
     for(const k of [...snap.keys()])if(!seen.has(k)){snap.delete(k);removed.push(k);if(MODE!=="cloud")state.deleted.push({id:k.slice(2),at:t0})}
     return {changed,removed};
   }
@@ -667,11 +697,12 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     return {
       projects:pick(local.projects,remote.projects),
       tasks:pick(local.tasks,remote.tasks),
+      requests:pick(local.requests||[],remote.requests||[]),
       deleted:[...tomb].filter(([,at])=>at>limit).map(([id,at])=>({id,at}))
     };
   }
-  const canon=d=>JSON.stringify([d.projects,[...d.tasks].sort((a,b)=>a.id<b.id?-1:1),[...d.deleted].sort((a,b)=>a.id<b.id?-1:1)]);
-  function applyState(d){state=d;resetSnap();lsSave();if(editing&&!state.tasks.some(t=>t.id===editing))editing=null;render()}
+  const canon=d=>JSON.stringify([d.projects,[...d.tasks].sort((a,b)=>a.id<b.id?-1:1),[...(d.requests||[])].sort((a,b)=>a.id<b.id?-1:1),[...d.deleted].sort((a,b)=>a.id<b.id?-1:1)]);
+  function applyState(d){state=d;resetSnap();lsSave();if(editing&&!state.tasks.some(t=>t.id===editing))editing=null;if(editingReq&&!(state.requests||[]).some(r=>r.id===editingReq))editingReq=null;render()}
 
   let fileHandle=null, fileTimer=null, fileOk=false, fileBusy=false, lastMod=0;
   const FSA="showSaveFilePicker" in window;
@@ -685,7 +716,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     } else setSync("Enregistré dans ce navigateur · "+now());
   }
   const now=()=>new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
-  const payload=d=>JSON.stringify({app:"todo-projets",version:2,savedAt:new Date().toISOString(),projects:d.projects,tasks:d.tasks,deleted:d.deleted},null,2);
+  const payload=d=>JSON.stringify({app:"todo-projets",version:2,savedAt:new Date().toISOString(),projects:d.projects,tasks:d.tasks,requests:d.requests||[],deleted:d.deleted},null,2);
   // Écriture : on relit d'abord le fichier pour intégrer les changements du collègue
   async function writeFile(){
     if(fileBusy){clearTimeout(fileTimer);fileTimer=setTimeout(()=>{fileTimer=null;writeFile()},300);return}
@@ -767,7 +798,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     else{info.className="fileinfo";info.textContent="Aucun fichier lié : les données sont seulement dans ce navigateur.";rl.hidden=true;ul.hidden=true}
   }
   function setSync(t){const e=$("#sync");e.textContent=t;e.className="status "+(/Hors connexion|Échec|impossible|Impossible|Erreur|injoignable|interrompue/.test(t)?"off":(/Synchronisé|Enregistré|chargées|Mis à jour/.test(t)?"ok":""))}
-  function normalize(d){return {projects:Array.isArray(d&&d.projects)?d.projects.slice():[],tasks:Array.isArray(d&&d.tasks)?d.tasks.slice():[],deleted:Array.isArray(d&&d.deleted)?d.deleted.slice():[]}}
+  function normalize(d){return {projects:Array.isArray(d&&d.projects)?d.projects.slice():[],tasks:Array.isArray(d&&d.tasks)?d.tasks.slice():[],requests:Array.isArray(d&&d.requests)?d.requests.slice():[],deleted:Array.isArray(d&&d.deleted)?d.deleted.slice():[]}}
 
   // ---------- Sauvegarde fichier ----------
   function exportData(){
@@ -840,10 +871,12 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     return cloud.client;
   }
   const isOwner=pid=>{const m=cloud.meta[pid];return !m||m.owner===cloud.user.id};
-  const rowT=t=>({id:t.id,project_id:t.projectId,title:t.title,priority:t.priority||"normale",due:t.due||null,status:t.status==="waiting"?"todo":(t.status||"todo"),waiting:t.status==="waiting",waiting_for:t.waitingFor||"",deleted_at:t.deletedAt||null,note:t.note||"",who:t.who||"",created_at:t.createdAt||Date.now(),done_at:t.doneAt||null,updated_at:t.updatedAt||Date.now(),updated_by:cloud.email,checklist:Array.isArray(t.checklist)?t.checklist:[],repeat:t.repeat||null,family:t.family||null});
+  const rowT=t=>({id:t.id,project_id:t.projectId,title:t.title,priority:t.priority||"normale",due:t.due||null,status:t.status==="waiting"?"todo":(t.status||"todo"),waiting:t.status==="waiting",waiting_for:t.waitingFor||"",deleted_at:t.deletedAt||null,note:t.note||"",who:t.who||"",created_at:t.createdAt||Date.now(),done_at:t.doneAt||null,updated_at:t.updatedAt||Date.now(),updated_by:cloud.email,checklist:Array.isArray(t.checklist)?t.checklist:[],repeat:t.repeat||null,family:t.family||null,request_id:t.requestId||null});
   const rowP=p=>({id:p.id,name:p.name,color:p.color||null,archived:!!p.archived,updated_at:p.updatedAt||Date.now()});
-  const fromT=r=>({id:r.id,projectId:r.project_id,title:r.title,priority:r.priority,due:r.due||"",status:r.waiting&&r.status==="todo"?"waiting":r.status,waitingFor:r.waiting_for||"",deletedAt:r.deleted_at?Number(r.deleted_at):null,note:r.note||"",who:r.who||"",createdAt:Number(r.created_at),doneAt:r.done_at?Number(r.done_at):null,updatedAt:Number(r.updated_at),updatedBy:r.updated_by||"",checklist:Array.isArray(r.checklist)?r.checklist:[],repeat:r.repeat||null,family:r.family||""});
+  const fromT=r=>({id:r.id,projectId:r.project_id,title:r.title,priority:r.priority,due:r.due||"",status:r.waiting&&r.status==="todo"?"waiting":r.status,waitingFor:r.waiting_for||"",deletedAt:r.deleted_at?Number(r.deleted_at):null,note:r.note||"",who:r.who||"",createdAt:Number(r.created_at),doneAt:r.done_at?Number(r.done_at):null,updatedAt:Number(r.updated_at),updatedBy:r.updated_by||"",checklist:Array.isArray(r.checklist)?r.checklist:[],repeat:r.repeat||null,family:r.family||"",requestId:r.request_id||null});
   const fromP=r=>({id:r.id,name:r.name,color:r.color||COLORS[0],archived:!!r.archived});
+  const rowR=r=>({id:r.id,project_id:r.projectId,title:r.title,description:r.description||"",requester:r.requester||"",received:r.received||null,due:r.due||null,priority:r.priority||"normale",status:r.status||"new",scope:r.scope||"",estimate:r.estimate==null||r.estimate===""?null:Number(r.estimate),quote:r.quote||"",created_at:r.createdAt||Date.now(),updated_at:r.updatedAt||Date.now(),closed_at:r.closedAt||null,deleted_at:r.deletedAt||null,updated_by:cloud.email});
+  const fromR=r=>({id:r.id,projectId:r.project_id,title:r.title,description:r.description||"",requester:r.requester||"",received:r.received||"",due:r.due||"",priority:r.priority,status:r.status,scope:r.scope||"",estimate:r.estimate==null?null:Number(r.estimate),quote:r.quote||"",createdAt:Number(r.created_at),updatedAt:Number(r.updated_at),closedAt:r.closed_at?Number(r.closed_at):null,deletedAt:r.deleted_at?Number(r.deleted_at):null,updatedBy:r.updated_by||""});
   const transient=e=>!e||!e.code; // pas de code PostgreSQL = problème réseau
   function cloudStatus(){
     const n=cloud.dirty.size;
@@ -871,8 +904,10 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         const pUp=byKey("p:","up").filter(b=>{if(isOwner(b.k.slice(2)))return true;done.push(b);return false});
         const steps=[
           [pUp,"projects",b=>{const o=state.projects.find(x=>x.id===b.k.slice(2));return o&&rowP(o)},"up"],
+          [byKey("r:","up"),"client_requests",b=>{const o=(state.requests||[]).find(x=>x.id===b.k.slice(2));return o&&rowR(o)},"up"],
           [byKey("t:","up"),"tasks",b=>{const o=state.tasks.find(x=>x.id===b.k.slice(2));return o&&rowT(o)},"up"],
           [byKey("t:","del"),"tasks",null,"del"],
+          [byKey("r:","del"),"client_requests",null,"del"],
           [byKey("p:","del").filter(b=>{if(isOwner(b.k.slice(2)))return true;done.push(b);return false}),"projects",null,"del"]
         ];
         for(const [items,table,mk,op] of steps){
@@ -900,9 +935,9 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   };
   cloud.fetch=async function(){
     if(!this.user)return;
-    if(editing){clearTimeout(this.fetchT);this.fetchT=setTimeout(()=>this.fetch(),3000);return}
+    if(editing||editingReq){clearTimeout(this.fetchT);this.fetchT=setTimeout(()=>this.fetch(),3000);return}
     const c=cloudClient();
-    const [P,M,T,C,PR,F]=await Promise.all([c.from("projects").select("*"),c.from("project_members").select("*"),c.from("tasks").select("*"),c.from("task_comments").select("*"),c.from("profiles").select("*"),c.from("project_families").select("*")]);
+    const [P,M,T,C,PR,F,R]=await Promise.all([c.from("projects").select("*"),c.from("project_members").select("*"),c.from("tasks").select("*"),c.from("task_comments").select("*"),c.from("profiles").select("*"),c.from("project_families").select("*"),c.from("client_requests").select("*")]);
     if(!F.error){
       const fm={};F.data.slice().sort((a,b)=>Number(a.created_at)-Number(b.created_at)).forEach(r=>{(fm[r.project_id]=fm[r.project_id]||[]).push({id:r.id,name:r.name})});
       const js=JSON.stringify(fm);if(js!==this._lastFm){this._lastFm=js;this.families=fm;this._cmChanged=true}
@@ -934,17 +969,20 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     Object.values(meta).forEach(m=>m.members.sort());
     let projects=P.data.slice().sort((a,b)=>Number(a.created_at)-Number(b.created_at)).map(fromP);
     let tasks=T.data.filter(r=>meta[r.project_id]).map(fromT);
+    let requests=R.error?(state.requests||[]).slice():R.data.filter(r=>meta[r.project_id]).map(fromR);
     // les modifications locales pas encore envoyées restent prioritaires
     for(const [k,v] of this.dirty){
-      const id=k.slice(2), isP=k[0]==="p";
-      const arr=isP?projects:tasks, loc=(isP?state.projects:state.tasks).find(x=>x.id===id);
+      const id=k.slice(2);
+      const [arr,src]=({p:[projects,state.projects],t:[tasks,state.tasks],r:[requests,state.requests||[]]})[k[0]]||[[],[]];
+      const loc=src.find(x=>x.id===id);
       const i=arr.findIndex(x=>x.id===id);
       if(v.op==="del"){if(i>=0)arr.splice(i,1)}
       else if(loc){if(i>=0)arr[i]=loc;else arr.push(loc)}
     }
     tasks=tasks.filter(t=>projects.some(p=>p.id===t.projectId));
     this.meta=meta;
-    const next={projects,tasks,deleted:[]};
+    requests=requests.filter(r=>projects.some(p=>p.id===r.projectId));
+    const next={projects,tasks,requests,deleted:[]};
     if(canon(next)!==canon(state)||JSON.stringify(meta)!==this._lastMeta){this._lastMeta=JSON.stringify(meta);this._cmChanged=false;applyState(next)}
     else if(this._cmChanged){this._cmChanged=false;render()}
     if(!this.dirty.size){this.lastOk=Date.now()}
@@ -962,6 +1000,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       .on("postgres_changes",{event:"*",schema:"public",table:"task_comments"},h)
       .on("postgres_changes",{event:"*",schema:"public",table:"profiles"},h)
       .on("postgres_changes",{event:"*",schema:"public",table:"project_families"},h)
+      .on("postgres_changes",{event:"*",schema:"public",table:"client_requests"},h)
       .subscribe();
   };
   async function startCloud(){
@@ -984,7 +1023,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     try{localStorage.setItem("todo-mode","cloud")}catch(e){}
     // affichage immédiat de la dernière version connue, puis synchronisation
     let cache=null;try{cache=JSON.parse(localStorage.getItem("todo-cloud:"+user.id)||"null")}catch(e){}
-    state=cache?normalize(cache.state):{projects:[],tasks:[],deleted:[]};
+    state=cache?normalize(cache.state):{projects:[],tasks:[],requests:[],deleted:[]};
     cloud.dirty=new Map(cache&&Array.isArray(cache.dirty)?cache.dirty:[]);
     resetSnap();view="all";editing=null;render();renderAccount();
     setSync("Synchronisation…");
@@ -1046,7 +1085,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(cloud.channel){c.removeChannel(cloud.channel);cloud.channel=null}
     try{await c.auth.signOut()}catch(e){}
     useSession(null);
-    cloud.user=null;cal.events=null;cal.hasLink=null;state={projects:[],tasks:[],deleted:[]};render();
+    cloud.user=null;cal.events=null;cal.hasLink=null;state={projects:[],tasks:[],requests:[],deleted:[]};render();
     showGate("login");
   }
   async function changePassword(){
@@ -1078,7 +1117,9 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       if(!confirm(`Importer ${d.projects.length} projet(s) et ${d.tasks.length} tâche(s) dans votre compte ? Ils s'ajoutent à vos projets en ligne existants (rien n'est remplacé).`))return;
       const ids={}, nid=()=>(crypto.randomUUID?crypto.randomUUID():uid()+uid());
       d.projects.forEach((p,i)=>{ids[p.id]=nid();state.projects.push({id:ids[p.id],name:String(p.name||"Projet"),color:p.color||COLORS[(state.projects.length+i)%COLORS.length]})});
-      d.tasks.forEach(t=>{if(!ids[t.projectId]||t.deletedAt)return;state.tasks.push({id:nid(),projectId:ids[t.projectId],title:String(t.title||""),priority:["haute","normale","basse"].includes(t.priority)?t.priority:"normale",due:/^\d{4}-\d{2}-\d{2}$/.test(t.due||"")?t.due:"",status:["todo","doing","waiting","done"].includes(t.status)?t.status:"todo",waitingFor:String(t.waitingFor||""),note:String(t.note||""),who:String(t.who||""),createdAt:Number(t.createdAt)||Date.now(),doneAt:t.doneAt||null,checklist:Array.isArray(t.checklist)?t.checklist.filter(c=>c&&c.text).map(c=>({id:String(c.id||uid()),text:String(c.text),done:!!c.done})):[],repeat:t.repeat&&t.repeat.unit?{n:+t.repeat.n||1,unit:String(t.repeat.unit)}:null})});
+      const rids={};
+      (Array.isArray(d.requests)?d.requests:[]).forEach(r=>{if(!ids[r.projectId]||r.deletedAt||!r.title)return;rids[r.id]=nid();state.requests.push({id:rids[r.id],projectId:ids[r.projectId],title:String(r.title).slice(0,300),description:String(r.description||""),requester:String(r.requester||""),received:/^\d{4}-\d{2}-\d{2}$/.test(r.received||"")?r.received:"",due:/^\d{4}-\d{2}-\d{2}$/.test(r.due||"")?r.due:"",priority:["haute","normale","basse"].includes(r.priority)?r.priority:"normale",status:REQL[r.status]?r.status:"new",scope:["","in","out"].includes(r.scope)?r.scope:"",estimate:r.estimate==null||isNaN(+r.estimate)?null:+r.estimate,quote:QUOTE[r.quote]!==undefined?r.quote:"",createdAt:Number(r.createdAt)||Date.now(),closedAt:r.closedAt||null})});
+      d.tasks.forEach(t=>{if(!ids[t.projectId]||t.deletedAt)return;state.tasks.push({id:nid(),projectId:ids[t.projectId],title:String(t.title||""),priority:["haute","normale","basse"].includes(t.priority)?t.priority:"normale",due:/^\d{4}-\d{2}-\d{2}$/.test(t.due||"")?t.due:"",status:["todo","doing","waiting","done"].includes(t.status)?t.status:"todo",waitingFor:String(t.waitingFor||""),note:String(t.note||""),who:String(t.who||""),createdAt:Number(t.createdAt)||Date.now(),doneAt:t.doneAt||null,checklist:Array.isArray(t.checklist)?t.checklist.filter(c=>c&&c.text).map(c=>({id:String(c.id||uid()),text:String(c.text),done:!!c.done})):[],repeat:t.repeat&&t.repeat.unit?{n:+t.repeat.n||1,unit:String(t.repeat.unit)}:null,requestId:rids[t.requestId]||null})});
       view="all";save();render();
     };
     r.readAsText(file);
@@ -1095,7 +1136,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(!confirm(leaving?"Quitter ce projet ? Il disparaîtra de votre liste ; son propriétaire pourra vous le repartager.":`Retirer l'accès de ${email} à ce projet ?`))return;
     const {error}=await cloudClient().from("project_members").delete().eq("project_id",pid).eq("email",email);
     if(error){alert(transient(error)?"Serveur injoignable : réessayez quand la connexion sera rétablie.":"Action refusée : "+error.message);return}
-    if(leaving){for(const k of [...cloud.dirty.keys()]){const t=state.tasks.find(x=>"t:"+x.id===k);if(k==="p:"+pid||(t&&t.projectId===pid))cloud.dirty.delete(k)}view="all"}
+    if(leaving){for(const k of [...cloud.dirty.keys()]){const t=state.tasks.find(x=>"t:"+x.id===k)||(state.requests||[]).find(x=>"r:"+x.id===k);if(k==="p:"+pid||(t&&t.projectId===pid))cloud.dirty.delete(k)}view="all"}
     await cloud.fetch();
   }
   let shareOpen=false;
@@ -1448,6 +1489,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(!confirm(`Supprimer définitivement le projet « ${p.name} »${nb?` et ses ${nb} tâche(s)`:""} ?${mem?` Il sera aussi supprimé pour les ${mem} personne(s) avec qui il est partagé.`:""}\n\nCette action est irréversible. Pour un projet terminé, préférez « Archiver » : il sera masqué mais restera consultable.`))return;
     state.projects=state.projects.filter(x=>x.id!==p.id);
     state.tasks=state.tasks.filter(t=>t.projectId!==p.id);
+    state.requests=(state.requests||[]).filter(r=>r.projectId!==p.id);
     view="all"; save(); render();
   }
   function clearDone(){
@@ -1534,7 +1576,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   }
   function render(){
     if(view!=="all"&&!proj(view))view="all";
-    if(!["list","agenda","kanban","dash","trash"].includes(ui.mode))ui.mode="list";
+    if(!["list","agenda","kanban","dash","trash","requests"].includes(ui.mode))ui.mode="list";
+    if(["list","agenda","kanban"].includes(ui.mode))ui.taskMode=ui.mode;
     if(ui.mode==="trash"||ui.mode==="dash")view="all";
     const mode=ui.mode;
     const alive=live();
@@ -1543,7 +1586,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const wkS=iso(mondayOf(new Date())), wkE=iso(addDays(mondayOf(new Date()),6));
     const hidA=hiddenSet();
     const nWeek=open.filter(t=>t.due&&t.due>=wkS&&t.due<=wkE&&!hidA.has(t.projectId)).length;
-    const nTrash=state.tasks.length-alive.length;
+    const nTrash=state.tasks.length-alive.length+(state.requests||[]).filter(r=>r.deletedAt).length;
+    const nReq=liveReq().filter(r=>reqOpen(r)&&!isArch(r.projectId)).length;
     if(ui.scope!=="today")ui.scope="all";
 
     // vues
@@ -1553,6 +1597,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     vb("today","Aujourd'hui",nToday,view==="all"&&mode==="list"&&ui.scope==="today",go("list","today"));
     vb("agenda","Agenda de la semaine",nWeek,view==="all"&&mode==="agenda",go("agenda","all"));
     vb("all","Toutes les tâches",open.length,view==="all"&&(mode==="list"||mode==="kanban")&&ui.scope==="all",go(mode==="kanban"?"kanban":"list","all"));
+    vb("req","Demandes client",nReq||"",view==="all"&&mode==="requests",go("requests","all"));
     vb("dash","Tableau de bord","",mode==="dash",go("dash","all"));
     const tb=$("#trashbtn");
     if(tb){
@@ -1590,7 +1635,16 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const p=view==="all"?null:proj(view);
     const agenda=mode==="agenda";
     $("#wrap").classList.toggle("wide",agenda||mode==="kanban"||mode==="dash");
-    $("#quick").hidden=mode==="dash"||mode==="trash";
+    $("#quick").hidden=mode==="dash"||mode==="trash"||mode==="requests";
+    $("#wrap").classList.toggle("wide",agenda||mode==="kanban"||mode==="dash");
+    // onglets du projet : tâches / demandes client
+    const tabs=$("#ptabs");
+    if(p&&mode!=="dash"&&mode!=="trash"&&!query.trim()){
+      const nT=alive.filter(t=>t.projectId===p.id&&t.status!=="done").length, nR=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)).length;
+      tabs.hidden=false;
+      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="requests"}" data-tab="requests">Demandes client <span>${nR}</span></button>`;
+      tabs.querySelectorAll("[data-tab]").forEach(x=>x.onclick=()=>{ui.mode=x.dataset.tab==="requests"?"requests":(ui.taskMode||"list");if(ui.mode!=="list")ui.scope="all";saveUi();editing=null;editingReq=null;render()});
+    } else {tabs.hidden=true;tabs.innerHTML=""}
     if(!weekStart)weekStart=mondayOf(new Date());
     const wEnd=addDays(weekStart,6);
     let title, sub;
@@ -1603,9 +1657,14 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       title="Tableau de bord";
       const na=actP.length;
       sub=`${cap(longDay(today()))} · ${na} projet${na>1?"s":""} actif${na>1?"s":""}${archP.length?`, ${archP.length} archivé${archP.length>1?"s":""}`:""}`;
+    } else if(mode==="requests"){
+      title=p?`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`:"Demandes client";
+      const rs=liveReq().filter(r=>(p?r.projectId===p.id:!isArch(r.projectId))&&reqOpen(r));
+      const late=rs.filter(reqLate).length, out=rs.filter(r=>r.scope==="out").length, q=rs.filter(r=>r.quote==="todo").length;
+      sub=`${rs.length} demande${rs.length>1?"s":""} client ouverte${rs.length>1?"s":""}`+(late?`, ${late} réponse${late>1?"s":""} en retard`:"")+(out?`, ${out} hors périmètre`:"")+(q?`, ${q} devis à faire`:"");
     } else if(mode==="trash"){
       title="Corbeille";
-      sub=nTrash?`${nTrash} tâche${nTrash>1?"s":""} supprimée${nTrash>1?"s":""}`:"Aucune tâche supprimée";
+      sub=nTrash?`${nTrash} élément${nTrash>1?"s":""} supprimé${nTrash>1?"s":""}`:"La corbeille est vide";
     } else {
       title=p?`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`:(ui.scope==="today"?"Aujourd'hui":"Toutes les tâches");
       const poolOpen=alive.filter(t=>t.status!=="done"&&(p?t.projectId===p.id:!isArch(t.projectId)));
@@ -1630,7 +1689,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(MODE==="cloud"){if(cloud.email)sugg.add(nameOf(cloud.email));Object.values(cloud.meta).forEach(m=>{sugg.add(nameOf(m.ownerEmail));m.members.forEach(e=>sugg.add(nameOf(e)))})}
     $("#people").innerHTML=[...sugg].filter(Boolean).map(n=>`<option value="${esc(n)}">`).join("");
     if(ui.who&&ui.who!=="__none"&&!people.includes(ui.who))ui.who="";
-    if(people.length&&mode!=="dash"&&mode!=="trash"){
+    if(people.length&&mode!=="dash"&&mode!=="trash"&&mode!=="requests"){
       const w=document.createElement("label");w.className="whobox";
       w.innerHTML=`Responsable <select id="whosel" aria-label="Filtrer par responsable"><option value="">Tout le monde</option>${people.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")}<option value="__none">Non attribuées</option></select>`;
       const sel=w.querySelector("select");sel.value=ui.who||"";sel.onchange=e=>{ui.who=e.target.value;saveUi();render()};
@@ -1652,7 +1711,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       wn.querySelectorAll("[data-w]").forEach(x=>x.onclick=()=>{const n=+x.dataset.w;weekStart=n?addDays(weekStart,7*n):mondayOf(new Date());render()});
       tools.appendChild(wn);
     }
-    if(mode!=="dash"&&mode!=="trash"){
+    if(mode!=="dash"&&mode!=="trash"&&mode!=="requests"){
     const seg=document.createElement("div");seg.className="seg";seg.setAttribute("role","group");seg.setAttribute("aria-label","Affichage");
     [["list","Liste"],["kanban","Kanban"],["agenda","Agenda"]].forEach(([m,l])=>{const x=document.createElement("button");x.type="button";x.textContent=l;x.setAttribute("aria-pressed",ui.mode===m);x.onclick=()=>{ui.mode=m;if(m!=="list")ui.scope="all";saveUi();editing=null;render()};seg.appendChild(x)});
     tools.appendChild(seg);
@@ -1677,6 +1736,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(!state.projects.length){
       L.innerHTML=`<div class="empty">Commencez par créer un projet (« + Nouveau projet » dans la colonne de gauche), puis ajoutez vos tâches ici.</div>`;return;
     }
+    if(mode==="requests"&&!query.trim()){renderRequests(L,p);return}
     const base=alive.filter(t=>(!p||t.projectId===p.id)&&(!ui.who||mode==="dash"||(ui.who==="__none"?!(t.who||"").trim():whoName(t)===ui.who)));
     if(query.trim()){
       const found=base.filter(matches);
@@ -1947,6 +2007,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(t.priority==="haute")tags.push(`<span class="tag hi">Priorité haute</span>`);
     if(t.priority==="basse")tags.push(`<span class="tag">Priorité basse</span>`);
     if(t.who)tags.push(`<span class="tag who">${hl(whoName(t))}</span>`);
+    const rq=reqOf(t); if(rq)tags.push(`<button type="button" class="tag reqtag" data-a="req" title="Ouvrir la demande client">Demande : ${esc(short(rq.title))}</button>`);
     if(nCom)tags.push(`<button type="button" class="tag" data-a="edit" title="Voir les commentaires" style="border:0;cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg>${nCom} commentaire${nCom>1?"s":""}</button>`);
     li.innerHTML=`<input type="checkbox" class="chk" ${t.status==="done"?"checked":""} aria-label="Marquer comme terminée">
       <div><div class="ttl">${hl(t.title)}</div>${tags.length?`<div class="meta">${tags.join("")}</div>`:""}
@@ -1967,6 +2028,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       if(a==="edit"){editing=editing===t.id?null:t.id;render()}
       if(a==="del")removeTask(t);
       if(a==="wait")changeStatus(t,"waiting");
+      if(a==="req")openRequest(reqOf(t));
       if(a==="hist"){histOpen=t.id;editing=t.id;render();const el=document.querySelector(`.task[data-id="${t.id}"] .hbox`);if(el)el.scrollIntoView({block:"nearest"})}
     });
     if(editing===t.id){
@@ -1979,12 +2041,15 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         <select aria-label="Répétition">${REPEATS.map(([k,l])=>`<option value="${k}" ${k===repKey(t.repeat)?"selected":""}>${l}</option>`).join("")}</select>
         <select aria-label="Statut">${Object.entries(STATUS).map(([k,l])=>`<option value="${k}" ${k===(t.status||"todo")?"selected":""}>${l}</option>`).join("")}</select>
         <input type="text" value="${esc(t.waitingFor||"")}" placeholder="En attente de (client, collègue, validation…)" aria-label="En attente de" maxlength="120">
+        <select aria-label="Demande client liée"></select>
         <div class="famsel"><select aria-label="Famille"></select><button type="button" class="btn ghost" data-f="ren">Renommer</button><button type="button" class="btn ghost" data-f="del">Supprimer</button></div>
         <textarea class="full" placeholder="Note (contexte, contact, référence Jira…)" aria-label="Note">${esc(t.note)}</textarea>
         <div class="stepedit"><span class="lbl">Étapes</span><div class="steplist"></div>
           <div class="steprow"><input type="text" placeholder="Ajouter une étape puis Entrée" aria-label="Nouvelle étape"><button class="btn" type="button">Ajouter</button></div></div>
         <div class="full"><button class="btn primary" type="button" data-k="ok">Enregistrer</button> <button class="btn ghost" type="button" data-k="ko">Annuler</button></div>`;
-      const [ti,sp,spr,dd,wh,rp,stS,wfI]=f.querySelectorAll(":scope > input, :scope > select");const ta=f.querySelector(":scope > textarea");
+      const [ti,sp,spr,dd,wh,rp,stS,wfI,rqS]=f.querySelectorAll(":scope > input, :scope > select");
+      const fillReq=()=>{const list=liveReq().filter(r=>r.projectId===sp.value&&(reqOpen(r)||r.id===t.requestId));rqS.innerHTML=`<option value="">Aucune demande client liée</option>${list.map(r=>`<option value="${esc(r.id)}" ${r.id===t.requestId?"selected":""}>Demande : ${esc(short(r.title))}</option>`).join("")}`;rqS.hidden=!list.length};
+      fillReq();sp.addEventListener("change",fillReq);const ta=f.querySelector(":scope > textarea");
       const syncWf=()=>{wfI.hidden=stS.value!=="waiting"};syncWf();stS.onchange=()=>{syncWf();if(!wfI.hidden)wfI.focus()};
       sp.innerHTML=state.projects.filter(x=>!x.archived||x.id===t.projectId).map(x=>`<option value="${x.id}" ${x.id===t.projectId?"selected":""}>${esc(x.name)}</option>`).join("");
       // famille : liste déroulante propre au projet choisi
@@ -2031,6 +2096,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         cur.repeat=r?{...r,...(repKey(cur.repeat)===rp.value&&cur.repeat.nextId?{nextId:cur.repeat.nextId}:{})}:null;
         const nx=applyStatus(cur,stS.value);
         if(cur.status==="waiting")cur.waitingFor=wfI.value.trim();
+        cur.requestId=rqS.value||null;
         editing=null;save();render();
         if(nx)setSync(`Tâche récurrente : prochaine occurrence créée pour le ${shortDay(nx.due)}`)};
       f.querySelector("[data-k=ko]").onclick=()=>{editing=null;render()};
@@ -2062,10 +2128,10 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
 
   // ---------- Annulation ----------
   let toastT=null;
-  function toast(msg,undo){
+  function toast(msg,undo,label){
     let el=$("#toast");
     if(!el){el=document.createElement("div");el.id="toast";el.className="toast";el.setAttribute("role","status");document.body.appendChild(el)}
-    el.innerHTML=`<span>${esc(msg)}</span>${undo?`<button type="button">Annuler</button>`:""}`;
+    el.innerHTML=`<span>${esc(msg)}</span>${undo?`<button type="button">${esc(label||"Annuler")}</button>`:""}`;
     el.hidden=false;
     clearTimeout(toastT);toastT=setTimeout(()=>{el.hidden=true},undo?8000:4000);
     if(undo)el.querySelector("button").onclick=()=>{el.hidden=true;clearTimeout(toastT);undo()};
@@ -2092,24 +2158,31 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   // ---------- Corbeille ----------
   const TRASH_DAYS=30;
   function emptyTrash(){
-    const n=state.tasks.filter(t=>t.deletedAt).length;
-    if(!n||!confirm(`Supprimer définitivement ${n>1?`les ${n} tâches`:"la tâche"} de la corbeille ? Cette action est irréversible.`))return;
-    state.tasks=state.tasks.filter(t=>!t.deletedAt);save();render();
+    const n=state.tasks.filter(t=>t.deletedAt).length+(state.requests||[]).filter(r=>r.deletedAt).length;
+    if(!n||!confirm(`Supprimer définitivement ${n>1?`les ${n} éléments`:"l'élément"} de la corbeille ? Cette action est irréversible.`))return;
+    state.tasks=state.tasks.filter(t=>!t.deletedAt);state.requests=(state.requests||[]).filter(r=>!r.deletedAt);save();render();
   }
   function purgeTrash(){
     const lim=Date.now()-TRASH_DAYS*864e5;
-    if(state.tasks.some(t=>t.deletedAt&&t.deletedAt<lim)){state.tasks=state.tasks.filter(t=>!(t.deletedAt&&t.deletedAt<lim));save();render()}
+    const old=x=>x.deletedAt&&x.deletedAt<lim;
+    if(state.tasks.some(old)||(state.requests||[]).some(old)){state.tasks=state.tasks.filter(t=>!old(t));state.requests=(state.requests||[]).filter(r=>!old(r));save();render()}
   }
   function renderTrash(L){
-    const items=state.tasks.filter(t=>t.deletedAt).sort((a,b)=>b.deletedAt-a.deletedAt);
-    L.insertAdjacentHTML("beforeend",`<p class="hint">Les tâches supprimées restent ${TRASH_DAYS} jours dans la corbeille, puis sont effacées définitivement.${MODE==="cloud"?" Sur un projet partagé, la corbeille est commune à tous ses membres.":""}</p>`);
+    const items=[...state.tasks.filter(t=>t.deletedAt),...(state.requests||[]).filter(r=>r.deletedAt).map(r=>Object.assign(Object.create(null),{__req:r,...r}))].sort((a,b)=>b.deletedAt-a.deletedAt);
+    L.insertAdjacentHTML("beforeend",`<p class="hint">Les tâches et demandes supprimées restent ${TRASH_DAYS} jours dans la corbeille, puis sont effacées définitivement.${MODE==="cloud"?" Sur un projet partagé, la corbeille est commune à tous ses membres.":""}</p>`);
     if(!items.length){L.insertAdjacentHTML("beforeend",`<div class="empty">La corbeille est vide.</div>`);return}
     const ul=document.createElement("ul");ul.className="tasks";
     items.forEach(t=>{
       const p=proj(t.projectId), left=Math.max(0,TRASH_DAYS-Math.floor((Date.now()-t.deletedAt)/864e5));
       const li=document.createElement("li");li.className="trow";
-      li.innerHTML=`<div><div class="ttl" style="cursor:default">${esc(t.title)}</div><div class="meta">${p?`<span class="tag"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>`:""}<span class="tag">Supprimée le ${fmtWhen(t.deletedAt)}${MODE==="cloud"&&t.updatedBy?" par "+esc(nameOf(t.updatedBy)):""}</span><span class="tag">${left?`Effacement dans ${left} jour${left>1?"s":""}`:"Effacement imminent"}</span></div></div>
+      const isR=!!t.__req;
+      li.innerHTML=`<div><div class="ttl" style="cursor:default">${esc(t.title)}</div><div class="meta">${isR?`<span class="tag reqtag">Demande client</span>`:""}${p?`<span class="tag"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>`:""}<span class="tag">Supprimée le ${fmtWhen(t.deletedAt)}${MODE==="cloud"&&t.updatedBy?" par "+esc(nameOf(t.updatedBy)):""}</span><span class="tag">${left?`Effacement dans ${left} jour${left>1?"s":""}`:"Effacement imminent"}</span></div></div>
         <div class="acts"><button class="sbtn" type="button" data-r>Restaurer</button><button class="sbtn danger" type="button" data-x>Supprimer définitivement</button></div>`;
+      if(isR){
+        li.querySelector("[data-r]").onclick=()=>{const cur=state.requests.find(x=>x.id===t.id);if(!cur)return;cur.deletedAt=null;save();render();toast(`Demande « ${short(cur.title)} » restaurée`)};
+        li.querySelector("[data-x]").onclick=()=>{if(!confirm(`Supprimer définitivement la demande « ${t.title} » ? Cette action est irréversible.`))return;state.requests=state.requests.filter(x=>x.id!==t.id);live().forEach(x=>{if(x.requestId===t.id)x.requestId=null});save();render()};
+        ul.appendChild(li);return;
+      }
       li.querySelector("[data-r]").onclick=()=>{const cur=state.tasks.find(x=>x.id===t.id);if(!cur)return;cur.deletedAt=null;save();render();toast(`« ${short(cur.title)} » restaurée${isArch(cur.projectId)?" (projet archivé)":""}`)};
       li.querySelector("[data-x]").onclick=()=>{if(!confirm(`Supprimer définitivement « ${t.title} » ? Cette action est irréversible.`))return;state.tasks=state.tasks.filter(x=>x.id!==t.id);save();render()};
       ul.appendChild(li);
@@ -2164,6 +2237,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       ["En retard",open.filter(isLate).length,"bad",goList("today")],
       ["En attente",open.filter(t=>t.status==="waiting").length,"wait",()=>{view="all";ui.mode="kanban";ui.scope="all";saveUi();render()}],
       ["Échéance cette semaine",open.filter(t=>t.due&&t.due>=wS&&t.due<=wE).length,"",()=>{view="all";ui.mode="agenda";ui.scope="all";weekStart=null;saveUi();render()}],
+      ["Demandes client ouvertes",liveReq().filter(r=>reqOpen(r)&&!isArch(r.projectId)).length,liveReq().some(r=>reqLate(r)&&!isArch(r.projectId))?"bad":"",()=>{view="all";ui.mode="requests";saveUi();render();window.scrollTo({top:0})}],
       ["Terminées cette semaine",all.filter(t=>t.status==="done"&&dl(t.doneAt)>=wS&&dl(t.doneAt)<=wE).length,"ok",goList("all",{showDoneList:true})]
     ];
     const k=document.createElement("div");k.className="kpis";
@@ -2179,12 +2253,13 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         const pct=ts.length?Math.round(100*(ts.length-op.length)/ts.length):0;
         const next=op.filter(t=>t.due&&t.due>=t0).sort((a,b)=>a.due<b.due?-1:a.due>b.due?1:0)[0];
         const late=op.filter(isLate).length;
+        const rq=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)), rqLate=rq.filter(reqLate).length;
         return `<tr class="click" data-p="${esc(p.id)}"><td><span class="dot" style="background:${p.color};display:inline-block;margin-right:8px"></span>${esc(p.name)}</td>
           <td><span class="prog"><i><b style="width:${pct}%;background:${p.color}"></b></i>${pct} %</span></td>
-          <td class="num">${op.length}</td><td class="num">${op.filter(t=>t.status==="doing").length||""}</td><td class="num">${op.filter(t=>t.status==="waiting").length||""}</td><td class="num${late?" bad":""}">${late||""}</td>
+          <td class="num">${op.length}</td><td class="num">${op.filter(t=>t.status==="doing").length||""}</td><td class="num">${op.filter(t=>t.status==="waiting").length||""}</td><td class="num${late?" bad":""}">${late||""}</td><td class="num${rqLate?" bad":""}" title="${rqLate?rqLate+" réponse(s) en retard":""}">${rq.length||""}</td>
           <td>${next?`${shortDay(next.due)} · ${esc(short(next.title))}`:`<span class="muted">—</span>`}</td></tr>`;
       }).join("");
-      sp.insertAdjacentHTML("beforeend",`<div class="tscroll"><table class="dtable"><thead><tr><th>Projet</th><th>Avancement</th><th class="num">Ouvertes</th><th class="num">En cours</th><th class="num">En attente</th><th class="num">En retard</th><th>Prochaine échéance</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+      sp.insertAdjacentHTML("beforeend",`<div class="tscroll"><table class="dtable"><thead><tr><th>Projet</th><th>Avancement</th><th class="num">Ouvertes</th><th class="num">En cours</th><th class="num">En attente</th><th class="num">En retard</th><th class="num">Demandes</th><th>Prochaine échéance</th></tr></thead><tbody>${rows}</tbody></table></div>`);
       sp.querySelectorAll("[data-p]").forEach(tr=>tr.onclick=()=>{view=tr.dataset.p;ui.mode="list";ui.scope="all";saveUi();editing=null;render();window.scrollTo({top:0})});
     }
     L.appendChild(sp);
@@ -2418,6 +2493,155 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     $("#expnone").onclick=()=>$("#expprojs").querySelectorAll("input").forEach(i=>i.checked=false);
     if(dlg.showModal)dlg.showModal();else dlg.setAttribute("open","");
   }
+  // ---------- Demandes client ----------
+  const REQ=[["new","Nouvelle"],["analysis","En analyse"],["doing","En cours"],["waiting","En attente client"],["done","Traitée"],["refused","Refusée"]];
+  const REQL=Object.fromEntries(REQ);
+  const QUOTE={"":"Pas de devis",todo:"Devis à faire",sent:"Devis envoyé",accepted:"Devis accepté",refused:"Devis refusé"};
+  const SCOPE={"":"Périmètre non évalué","in":"Dans le périmètre","out":"Hors périmètre"};
+  const liveReq=()=>(state.requests||[]).filter(r=>!r.deletedAt);
+  const reqOpen=r=>r.status!=="done"&&r.status!=="refused";
+  const reqLate=r=>reqOpen(r)&&r.due&&parseD(r.due)<today();
+  const reqOf=t=>t&&t.requestId?liveReq().find(r=>r.id===t.requestId)||null:null;
+  const reqTasks=r=>live().filter(t=>t.requestId===r.id);
+  const fmtJ=n=>n==null||n===""?"":`${String(n).replace(".",",")} j`;
+  let editingReq=null;
+  function setReqStatus(r,st){
+    if(!r||r.status===st)return;
+    r.status=st;
+    r.closedAt=st==="done"||st==="refused"?(r.closedAt||Date.now()):null;
+  }
+  // Annulation pour les demandes (même principe que pour les tâches)
+  function reqUndoable(msg,r,fn){
+    const copy=JSON.parse(JSON.stringify(r));
+    fn();save();render();
+    toast(msg,()=>{const i=state.requests.findIndex(x=>x.id===copy.id);if(i>=0)state.requests[i]=copy;else state.requests.push(copy);save();render()});
+  }
+  function addRequest(f,pid){
+    const title=f.querySelector("[data-q=title]").value.trim();
+    if(!title){f.querySelector("[data-q=title]").focus();return}
+    pid=pid||f.querySelector("[data-q=proj]").value;
+    if(!pid){alert("Créez d'abord un projet.");return}
+    const id=MODE==="cloud"&&crypto.randomUUID?crypto.randomUUID():uid();
+    state.requests.push({id,projectId:pid,title,description:"",requester:f.querySelector("[data-q=who]").value.trim(),received:iso(today()),due:f.querySelector("[data-q=due]").value||"",priority:f.querySelector("[data-q=prio]").value,status:"new",scope:"",estimate:null,quote:"",createdAt:Date.now(),closedAt:null});
+    save();render();
+    const ni=document.querySelector("#reqadd [data-q=title]");if(ni)ni.focus();
+  }
+  function taskFromRequest(r){
+    const id=MODE==="cloud"&&crypto.randomUUID?crypto.randomUUID():uid();
+    const t={id,projectId:r.projectId,title:r.title,priority:r.priority||"normale",due:r.due||"",status:"todo",note:r.requester?`Demande de ${r.requester}`:"",who:"",createdAt:Date.now(),checklist:[],repeat:null,requestId:r.id};
+    state.tasks.push(t);
+    if(r.status==="new"||r.status==="analysis")setReqStatus(r,"doing");
+    save();render();
+    toast(`Tâche créée et liée à la demande « ${short(r.title)} »`,()=>{const cur=state.tasks.find(x=>x.id===id);if(cur){editing=id;openInList(cur)}},"Ouvrir la tâche");
+  }
+  function openRequest(r){
+    query="";$("#search").value="";
+    if(!r)return;
+    view=r.projectId;ui.mode="requests";saveUi();editingReq=r.id;editing=null;render();
+    const el=document.querySelector(`.req[data-r="${r.id}"]`);if(el)el.scrollIntoView({block:"center"});
+  }
+  function reqRow(r,showProj){
+    const li=document.createElement("li");
+    li.className=`task req${reqOpen(r)?"":" done"}`;li.dataset.r=r.id;
+    const p=proj(r.projectId), ts=reqTasks(r), tDone=ts.filter(t=>t.status==="done").length;
+    const tags=[];
+    if(showProj&&p)tags.push(`<span class="tag"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>`);
+    if(r.requester)tags.push(`<span class="tag who">${esc(r.requester)}</span>`);
+    if(r.received)tags.push(`<span class="tag" title="Date de réception">Reçue ${shortDay(r.received).toLowerCase()}</span>`);
+    if(r.due&&reqOpen(r))tags.push(`<span class="tag${reqLate(r)?" late":parseD(r.due).getTime()===today().getTime()?" today":""}" title="Réponse attendue">${reqLate(r)?"Réponse en retard · ":"Réponse "}${shortDay(r.due).toLowerCase()}</span>`);
+    if(r.priority==="haute")tags.push(`<span class="tag hi">Priorité haute</span>`);
+    if(r.priority==="basse")tags.push(`<span class="tag">Priorité basse</span>`);
+    if(r.scope==="out")tags.push(`<span class="tag scope-out">Hors périmètre</span>`);
+    if(r.scope==="in")tags.push(`<span class="tag">Dans le périmètre</span>`);
+    if(r.estimate!=null&&r.estimate!=="")tags.push(`<span class="tag" title="Estimation">${fmtJ(r.estimate)}</span>`);
+    if(r.quote)tags.push(`<span class="tag quote-${r.quote}">${QUOTE[r.quote]}</span>`);
+    if(ts.length)tags.push(`<span class="tag" title="Tâches liées">Tâches liées : ${tDone}/${ts.length} terminée${tDone>1?"s":""}</span>`);
+    const st=r.status||"new";
+    li.innerHTML=`<span class="rdot rs-${st}" aria-hidden="true"></span>
+      <div><div class="ttl">${esc(r.title)}</div>${tags.length?`<div class="meta">${tags.join("")}</div>`:""}
+      ${r.description&&editingReq!==r.id?`<div class="note">${esc(r.description)}</div>`:""}
+      ${ts.length&&editingReq!==r.id?`<ul class="steps rtasks">${ts.sort((a,b)=>(a.status==="done")-(b.status==="done")||sortOpen(a,b)).map(t=>`<li class="${t.status==="done"?"ok":""}"><input type="checkbox" ${t.status==="done"?"checked":""} data-t="${esc(t.id)}" aria-label="Tâche terminée : ${esc(t.title)}"><span><a href="#" data-o="${esc(t.id)}">${esc(t.title)}</a>${t.status!=="done"&&t.due?` <span class="mut">· ${shortDay(t.due).toLowerCase()}</span>`:""}${t.status==="doing"?` <span class="mut">· en cours</span>`:t.status==="waiting"?` <span class="mut">· en attente</span>`:""}</span></li>`).join("")}</ul>`:""}</div>
+      <div class="acts">
+        <select class="rsel" aria-label="Statut de la demande">${REQ.map(([k,l])=>`<option value="${k}" ${k===st?"selected":""}>${l}</option>`).join("")}</select>
+        <details class="more"><summary aria-label="Plus d'actions">${ICON_MORE}</summary>
+          <div class="menu"><button type="button" data-a="edit">${editingReq===r.id?"Fermer le détail":"Modifier"}</button><button type="button" data-a="task">Créer une tâche</button><button type="button" data-a="del" class="danger">Mettre à la corbeille</button></div>
+        </details>
+      </div>`;
+    li.querySelector(".ttl").onclick=()=>{editingReq=editingReq===r.id?null:r.id;render()};
+    li.querySelector(".rsel").onchange=e=>{const v=e.target.value;reqUndoable(`Demande « ${short(r.title)} » : ${REQL[v].toLowerCase()}`,r,()=>setReqStatus(r,v))};
+    li.querySelectorAll("[data-t]").forEach(cb=>cb.onchange=()=>{const t=state.tasks.find(x=>x.id===cb.dataset.t);if(t)toggle(t)});
+    li.querySelectorAll("[data-o]").forEach(a=>a.onclick=e=>{e.preventDefault();const t=state.tasks.find(x=>x.id===a.dataset.o);if(t){editing=t.id;openInList(t)}});
+    li.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>{
+      const a=b.dataset.a;
+      if(a==="edit"){editingReq=editingReq===r.id?null:r.id;render()}
+      if(a==="task")taskFromRequest(r);
+      if(a==="del"){if(editingReq===r.id)editingReq=null;reqUndoable(`Demande « ${short(r.title)} » mise à la corbeille`,r,()=>{r.deletedAt=Date.now()})}
+    });
+    if(editingReq===r.id){
+      const f=document.createElement("div");f.className="edit";
+      const projs=state.projects.filter(x=>!x.archived||x.id===r.projectId);
+      f.innerHTML=`<label class="full flbl">Objet<input type="text" data-f="title" value="${esc(r.title)}" maxlength="300"></label>
+        <label class="flbl">Projet<select data-f="proj">${projs.map(x=>`<option value="${x.id}" ${x.id===r.projectId?"selected":""}>${esc(x.name)}</option>`).join("")}</select></label>
+        <label class="flbl">Demandeur (client)<input type="text" data-f="who" value="${esc(r.requester||"")}" maxlength="120"></label>
+        <label class="flbl">Reçue le<input type="date" data-f="rec" value="${esc(r.received||"")}"></label>
+        <label class="flbl">Réponse attendue le<input type="date" data-f="due" value="${esc(r.due||"")}"></label>
+        <label class="flbl">Priorité<select data-f="prio">${["haute","normale","basse"].map(v=>`<option value="${v}" ${v===(r.priority||"normale")?"selected":""}>Priorité ${v}</option>`).join("")}</select></label>
+        <label class="flbl">Statut<select data-f="st">${REQ.map(([k,l])=>`<option value="${k}" ${k===st?"selected":""}>${l}</option>`).join("")}</select></label>
+        <label class="flbl">Périmètre<select data-f="scope">${Object.entries(SCOPE).map(([k,l])=>`<option value="${k}" ${k===(r.scope||"")?"selected":""}>${l}</option>`).join("")}</select></label>
+        <label class="flbl">Estimation (jours)<input type="text" inputmode="decimal" data-f="est" value="${r.estimate==null?"":esc(String(r.estimate).replace(".",","))}" placeholder="ex. 2,5" maxlength="8"></label>
+        <label class="flbl">Devis<select data-f="quote">${Object.entries(QUOTE).map(([k,l])=>`<option value="${k}" ${k===(r.quote||"")?"selected":""}>${l}</option>`).join("")}</select></label>
+        <label class="full flbl">Description<textarea data-f="desc" placeholder="Contexte, besoin exprimé, contraintes, référence du mail…">${esc(r.description||"")}</textarea></label>
+        <div class="full"><button class="btn primary" type="button" data-k="ok">Enregistrer</button> <button class="btn ghost" type="button" data-k="ko">Annuler</button></div>`;
+      const g=k=>f.querySelector(`[data-f=${k}]`);
+      f.querySelector("[data-k=ok]").onclick=()=>{
+        const cur=state.requests.find(x=>x.id===r.id);
+        if(!cur){editingReq=null;render();alert("Cette demande a été supprimée entre-temps (peut-être par un collègue).");return}
+        if(g("title").value.trim())cur.title=g("title").value.trim();
+        const np=g("proj").value;
+        if(np!==cur.projectId){live().forEach(t=>{if(t.requestId===cur.id&&t.projectId===cur.projectId)t.requestId=null});cur.projectId=np}
+        cur.requester=g("who").value.trim();cur.received=g("rec").value;cur.due=g("due").value;cur.priority=g("prio").value;
+        setReqStatus(cur,g("st").value);cur.scope=g("scope").value;
+        const e=g("est").value.trim().replace(",",".");cur.estimate=e===""||isNaN(+e)?null:Math.max(0,+e);
+        cur.quote=g("quote").value;cur.description=g("desc").value.trim();
+        editingReq=null;save();render();
+      };
+      f.querySelector("[data-k=ko]").onclick=()=>{editingReq=null;render()};
+      li.appendChild(f);
+      setTimeout(()=>g("title").focus(),0);
+    }
+    return li;
+  }
+  function renderRequests(L,p){
+    const all=liveReq().filter(r=>p?r.projectId===p.id:!isArch(r.projectId));
+    const qprojs=state.projects.filter(x=>!x.archived||(p&&x.id===p.id));
+    const add=document.createElement("form");add.className="quick";add.id="reqadd";add.autocomplete="off";
+    add.innerHTML=`<label class="qmain"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--muted)"><path d="M12 5v14M5 12h14"></path></svg><input type="text" data-q="title" placeholder="Nouvelle demande client…" aria-label="Objet de la demande" maxlength="300"></label>
+      ${p?"":`<select data-q="proj" aria-label="Projet">${qprojs.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select>`}
+      <input type="text" data-q="who" placeholder="Demandeur" aria-label="Demandeur côté client" class="qw">
+      <input type="date" data-q="due" aria-label="Réponse attendue le" title="Réponse attendue le">
+      <select data-q="prio" aria-label="Priorité"><option value="normale">Priorité normale</option><option value="haute">Priorité haute</option><option value="basse">Priorité basse</option></select>
+      <button class="qadd" type="submit">Ajouter</button>`;
+    add.onsubmit=e=>{e.preventDefault();addRequest(add,p&&p.id)};
+    L.appendChild(add);
+    const open=all.filter(reqOpen), closed=all.filter(r=>!reqOpen(r)).sort((a,b)=>(b.closedAt||0)-(a.closedAt||0));
+    const sortR=(a,b)=>(reqLate(b)-reqLate(a))||((a.due||"9999")<(b.due||"9999")?-1:(a.due||"9999")>(b.due||"9999")?1:0)||(prioRank[a.priority]??1)-(prioRank[b.priority]??1)||(a.createdAt||0)-(b.createdAt||0);
+    if(!all.length){L.insertAdjacentHTML("beforeend",`<div class="empty">Aucune demande client${p?" sur ce projet":""}. Saisissez la première dans la barre ci-dessus : objet, demandeur et date de réponse attendue. Le reste (périmètre, estimation, devis) se complète dans le détail.</div>`);return}
+    if(!open.length)L.insertAdjacentHTML("beforeend",`<div class="empty">Toutes les demandes sont traitées.</div>`);
+    REQ.slice(0,4).forEach(([k,l])=>{
+      const items=open.filter(r=>(r.status||"new")===k).sort(sortR);
+      if(!items.length)return;
+      const g=document.createElement("section");g.className="group g-req";
+      g.innerHTML=`<h2><span class="rdot rs-${k}" aria-hidden="true"></span>${l} <span>${items.length}</span></h2>`;
+      const ul=document.createElement("ul");ul.className="tasks";items.forEach(r=>ul.appendChild(reqRow(r,!p)));g.appendChild(ul);L.appendChild(g);
+    });
+    if(closed.length){
+      const btn=document.createElement("button");btn.type="button";btn.className="showdone";btn.setAttribute("aria-expanded",!!ui.showClosedReq);
+      btn.innerHTML=`${ICON_CHEV}${ui.showClosedReq?"Masquer":"Afficher"} ${closed.length>1?`les ${closed.length} demandes traitées ou refusées`:"la demande traitée ou refusée"}`;
+      btn.onclick=()=>{ui.showClosedReq=!ui.showClosedReq;saveUi();render()};
+      L.appendChild(btn);
+      if(ui.showClosedReq){const g=document.createElement("section");g.className="group g-req";g.innerHTML=`<h2>Traitées et refusées <span>${closed.length}</span></h2>`;const ul=document.createElement("ul");ul.className="tasks";closed.forEach(r=>ul.appendChild(reqRow(r,!p)));g.appendChild(ul);L.appendChild(g)}
+    }
+  }
   // ---------- Récap de la semaine ----------
   function buildRecap(offset){
     const ws=addDays(mondayOf(new Date()),7*offset), we=addDays(ws,6), wsI=iso(ws), weI=iso(we);
@@ -2493,7 +2717,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     $("#whoami").textContent="Mode local (sans compte)";$("#toolstitle").textContent="Fichier et sauvegarde";
     const cached=lsLoad();
     if(cached){state=normalize(cached);resetSnap()}
-    else{state={projects:[],tasks:[],deleted:[]};resetSnap()}
+    else{state={projects:[],tasks:[],requests:[],deleted:[]};resetSnap()}
     $("#exp").onclick=exportData;
     $("#imp").onclick=()=>$("#impf").click();
     $("#impf").onchange=e=>{if(e.target.files[0])importData(e.target.files[0]);e.target.value=""};

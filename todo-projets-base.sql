@@ -365,3 +365,39 @@ revoke execute on function public.log_task_change() from public, anon, authentic
 drop trigger if exists tasks_history on public.tasks;
 create trigger tasks_history after insert or update on public.tasks
   for each row execute function public.log_task_change();
+
+-- ---------- Demandes client (par projet) ----------
+create table if not exists public.client_requests (
+  id          text primary key default gen_random_uuid()::text,
+  project_id  text not null references public.projects(id) on delete cascade,
+  title       text not null check (length(trim(title)) between 1 and 300),
+  description text not null default '',
+  requester   text not null default '',
+  received    date,
+  due         date,
+  priority    text not null default 'normale' check (priority in ('haute','normale','basse')),
+  status      text not null default 'new' check (status in ('new','analysis','doing','waiting','done','refused')),
+  scope       text not null default '' check (scope in ('','in','out')),
+  estimate    numeric check (estimate is null or (estimate >= 0 and estimate < 10000)),
+  quote       text not null default '' check (quote in ('','todo','sent','accepted','refused')),
+  created_at  bigint not null default (extract(epoch from now()) * 1000)::bigint,
+  updated_at  bigint not null default (extract(epoch from now()) * 1000)::bigint,
+  closed_at   bigint,
+  deleted_at  bigint,
+  updated_by  text not null default lower(coalesce(auth.jwt() ->> 'email', ''))
+);
+create index if not exists client_requests_project_idx on public.client_requests(project_id);
+alter table public.client_requests enable row level security;
+drop policy if exists requests_all on public.client_requests;
+create policy requests_all on public.client_requests for all to authenticated
+  using (public.can_access(project_id)) with check (public.can_access(project_id));
+grant select, insert, update, delete on public.client_requests to authenticated;
+revoke all on public.client_requests from anon;
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='client_requests') then
+    alter publication supabase_realtime add table public.client_requests;
+  end if;
+end $$;
+-- Lien d'une tâche vers la demande client dont elle découle
+alter table public.tasks add column if not exists request_id text;
