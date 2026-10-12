@@ -312,6 +312,11 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 .toast span{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .toast button{flex:none;border:0;background:none;color:#F2B705;font-weight:700;cursor:pointer;padding:7px 10px;border-radius:6px;font-size:14px}
 .toast button:hover{background:#2B4557}
+/* Barres d'ajout : tâche ou demande client */
+.qkind{flex:none;align-self:stretch;display:flex;align-items:center;padding:0 10px;border-radius:6px;background:var(--chip);color:var(--chipink);font:600 12px "Barlow",sans-serif;text-transform:uppercase;letter-spacing:.04em}
+#reqadd{border-color:#9DB9D3;background:#F4F8FC}
+.qkind.qk-req{background:#1F4A66;color:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #reqadd{background:#16232B;border-color:#33536A}}
 /* Onglets du projet */
 .ptabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-top:-6px;overflow-x:auto}
 .ptabs button{border:0;background:none;padding:10px 14px;font:600 15px "Barlow",sans-serif;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap;display:inline-flex;align-items:center;gap:8px}
@@ -530,7 +535,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       <div class="ptabs" id="ptabs" role="tablist" aria-label="Contenu du projet" hidden></div>
       <div class="share" id="share" hidden></div>
       <form class="quick" id="quick" autocomplete="off">
-        <label class="qmain"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--muted)"><path d="M12 5v14M5 12h14"></path></svg>
+        <span class="qkind">Tâche</span><label class="qmain"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--muted)"><path d="M12 5v14M5 12h14"></path></svg>
           <input type="text" id="qt" placeholder="Ajouter une tâche…" aria-label="Intitulé de la tâche"></label>
         <select id="qp" aria-label="Projet"></select>
         <input type="date" id="qd" aria-label="Échéance">
@@ -2179,7 +2184,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       li.innerHTML=`<div><div class="ttl" style="cursor:default">${esc(t.title)}</div><div class="meta">${isR?`<span class="tag reqtag">Demande client</span>`:""}${p?`<span class="tag"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>`:""}<span class="tag">Supprimée le ${fmtWhen(t.deletedAt)}${MODE==="cloud"&&t.updatedBy?" par "+esc(nameOf(t.updatedBy)):""}</span><span class="tag">${left?`Effacement dans ${left} jour${left>1?"s":""}`:"Effacement imminent"}</span></div></div>
         <div class="acts"><button class="sbtn" type="button" data-r>Restaurer</button><button class="sbtn danger" type="button" data-x>Supprimer définitivement</button></div>`;
       if(isR){
-        li.querySelector("[data-r]").onclick=()=>{const cur=state.requests.find(x=>x.id===t.id);if(!cur)return;cur.deletedAt=null;save();render();toast(`Demande « ${short(cur.title)} » restaurée`)};
+        li.querySelector("[data-r]").onclick=()=>{const cur=state.requests.find(x=>x.id===t.id);if(!cur)return;const at=cur.deletedAt;const ts=state.tasks.filter(x=>x.requestId===cur.id&&x.deletedAt&&x.deletedAt===at);cur.deletedAt=null;ts.forEach(x=>x.deletedAt=null);save();render();toast(`Demande « ${short(cur.title)} » restaurée${ts.length?` avec ${ts.length>1?`ses ${ts.length} tâches`:"sa tâche"}`:""}`)};
         li.querySelector("[data-x]").onclick=()=>{if(!confirm(`Supprimer définitivement la demande « ${t.title} » ? Cette action est irréversible.`))return;state.requests=state.requests.filter(x=>x.id!==t.id);live().forEach(x=>{if(x.requestId===t.id)x.requestId=null});save();render()};
         ul.appendChild(li);return;
       }
@@ -2516,6 +2521,23 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     fn();save();render();
     toast(msg,()=>{const i=state.requests.findIndex(x=>x.id===copy.id);if(i>=0)state.requests[i]=copy;else state.requests.push(copy);save();render()});
   }
+  function deleteRequest(r){
+    if(editingReq===r.id)editingReq=null;
+    const ts=reqTasks(r);
+    let withT=false;
+    if(ts.length){
+      const list=ts.slice(0,5).map(t=>`• ${t.title}`).join("\n")+(ts.length>5?`\n• … et ${ts.length-5} autre(s)`:"");
+      withT=confirm(`Cette demande a ${ts.length>1?`${ts.length} tâches liées`:"une tâche liée"} :\n${list}\n\nOK : mettre aussi ${ts.length>1?"ces tâches":"cette tâche"} à la corbeille.\nAnnuler : supprimer seulement la demande et garder ${ts.length>1?"les tâches":"la tâche"}.`);
+    }
+    const copies=[r,...(withT?ts:[])].map(x=>JSON.parse(JSON.stringify(x)));
+    const at=Date.now();
+    r.deletedAt=at;if(withT)ts.forEach(t=>{t.deletedAt=at;if(editing===t.id)editing=null});
+    save();render();
+    toast(`Demande « ${short(r.title)} »${withT?` et ${ts.length>1?`ses ${ts.length} tâches`:"sa tâche"}`:""} mise${withT?"s":""} à la corbeille`,()=>{
+      copies.forEach(c=>{const arr=c.id===r.id?state.requests:state.tasks;const i=arr.findIndex(x=>x.id===c.id);if(i>=0){if(arr[i].history)c.history=arr[i].history;arr[i]=c}else arr.push(c)});
+      save();render();
+    });
+  }
   function addRequest(f,pid){
     const title=f.querySelector("[data-q=title]").value.trim();
     if(!title){f.querySelector("[data-q=title]").focus();return}
@@ -2564,7 +2586,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       <div class="acts">
         <select class="rsel" aria-label="Statut de la demande">${REQ.map(([k,l])=>`<option value="${k}" ${k===st?"selected":""}>${l}</option>`).join("")}</select>
         <details class="more"><summary aria-label="Plus d'actions">${ICON_MORE}</summary>
-          <div class="menu"><button type="button" data-a="edit">${editingReq===r.id?"Fermer le détail":"Modifier"}</button><button type="button" data-a="task">Créer une tâche</button><button type="button" data-a="del" class="danger">Mettre à la corbeille</button></div>
+          <div class="menu"><button type="button" data-a="edit">${editingReq===r.id?"Fermer le détail":"Modifier"}</button><button type="button" data-a="task">Créer une tâche liée à cette demande</button><button type="button" data-a="del" class="danger">Mettre à la corbeille</button></div>
         </details>
       </div>`;
     li.querySelector(".ttl").onclick=()=>{editingReq=editingReq===r.id?null:r.id;render()};
@@ -2575,7 +2597,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       const a=b.dataset.a;
       if(a==="edit"){editingReq=editingReq===r.id?null:r.id;render()}
       if(a==="task")taskFromRequest(r);
-      if(a==="del"){if(editingReq===r.id)editingReq=null;reqUndoable(`Demande « ${short(r.title)} » mise à la corbeille`,r,()=>{r.deletedAt=Date.now()})}
+      if(a==="del")deleteRequest(r);
     });
     if(editingReq===r.id){
       const f=document.createElement("div");f.className="edit";
@@ -2615,7 +2637,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const all=liveReq().filter(r=>p?r.projectId===p.id:!isArch(r.projectId));
     const qprojs=state.projects.filter(x=>!x.archived||(p&&x.id===p.id));
     const add=document.createElement("form");add.className="quick";add.id="reqadd";add.autocomplete="off";
-    add.innerHTML=`<label class="qmain"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--muted)"><path d="M12 5v14M5 12h14"></path></svg><input type="text" data-q="title" placeholder="Nouvelle demande client…" aria-label="Objet de la demande" maxlength="300"></label>
+    add.innerHTML=`<span class="qkind qk-req">Demande client</span><label class="qmain"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--muted)"><path d="M12 5v14M5 12h14"></path></svg><input type="text" data-q="title" placeholder="Nouvelle demande client…" aria-label="Objet de la demande" maxlength="300"></label>
       ${p?"":`<select data-q="proj" aria-label="Projet">${qprojs.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select>`}
       <input type="text" data-q="who" placeholder="Demandeur" aria-label="Demandeur côté client" class="qw">
       <input type="date" data-q="due" aria-label="Réponse attendue le" title="Réponse attendue le">
