@@ -1694,7 +1694,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       const nT=alive.filter(t=>t.projectId===p.id&&t.status!=="done").length, nR=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)).length;
       tabs.hidden=false;
       const nO=livePts().filter(o=>o.projectId===p.id&&o.status!=="closed").length;
-      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="requests"}" data-tab="requests">Demandes client <span>${nR}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points ouverts <span>${nO}</span></button>`;
+      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points ouverts <span>${nO}</span></button><button type="button" role="tab" aria-selected="${mode==="requests"}" data-tab="requests">Demandes client <span>${nR}</span></button>`;
       tabs.querySelectorAll("[data-tab]").forEach(x=>x.onclick=()=>{const k=x.dataset.tab;ui.mode=k==="tasks"?(ui.taskMode||"list"):k;if(ui.mode!=="list")ui.scope="all";saveUi();editing=null;editingReq=null;editingPt=null;render()});
     } else {tabs.hidden=true;tabs.innerHTML=""}
     if(!weekStart)weekStart=mondayOf(new Date());
@@ -2361,10 +2361,10 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         const npt=livePts().filter(o=>o.projectId===p.id&&o.status!=="closed").length;
         return `<tr class="click" data-p="${esc(p.id)}"><td><span class="dot" style="background:${p.color};display:inline-block;margin-right:8px"></span>${esc(p.name)}</td>
           <td><span class="prog"><i><b style="width:${pct}%;background:${p.color}"></b></i>${pct} %</span></td>
-          <td class="num">${op.length}</td><td class="num">${op.filter(t=>t.status==="doing").length||""}</td><td class="num">${op.filter(t=>t.status==="waiting").length||""}</td><td class="num${late?" bad":""}">${late||""}</td><td class="num${rqLate?" bad":""}" title="${rqLate?rqLate+" réponse(s) en retard":""}">${rq.length||""}</td><td class="num">${npt||""}</td>
+          <td class="num">${op.length}</td><td class="num">${op.filter(t=>t.status==="doing").length||""}</td><td class="num">${op.filter(t=>t.status==="waiting").length||""}</td><td class="num${late?" bad":""}">${late||""}</td><td class="num">${npt||""}</td><td class="num${rqLate?" bad":""}" title="${rqLate?rqLate+" réponse(s) en retard":""}">${rq.length||""}</td>
           <td>${next?`${shortDay(next.due)} · ${esc(short(next.title))}`:`<span class="muted">—</span>`}</td></tr>`;
       }).join("");
-      sp.insertAdjacentHTML("beforeend",`<div class="tscroll"><table class="dtable"><thead><tr><th>Projet</th><th>Avancement</th><th class="num">Ouvertes</th><th class="num">En cours</th><th class="num">En attente</th><th class="num">En retard</th><th class="num">Demandes</th><th class="num">Points ouverts</th><th>Prochaine échéance</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+      sp.insertAdjacentHTML("beforeend",`<div class="tscroll"><table class="dtable"><thead><tr><th>Projet</th><th>Avancement</th><th class="num">Ouvertes</th><th class="num">En cours</th><th class="num">En attente</th><th class="num">En retard</th><th class="num">Points ouverts</th><th class="num">Demandes</th><th>Prochaine échéance</th></tr></thead><tbody>${rows}</tbody></table></div>`);
       sp.querySelectorAll("[data-p]").forEach(tr=>tr.onclick=()=>{view=tr.dataset.p;ui.mode="list";ui.scope="all";saveUi();editing=null;render();window.scrollTo({top:0})});
     }
     L.appendChild(sp);
