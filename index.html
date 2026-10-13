@@ -330,6 +330,19 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 .dragging{background:var(--panel);box-shadow:0 6px 18px rgba(22,35,43,.18);border-radius:6px;position:relative;z-index:2}
 .sorting,.sorting *{cursor:grabbing!important}
 @media (pointer:coarse){.steps .grip{opacity:.55;width:26px;height:26px}.steprow .grip{width:28px}}
+/* Points ouverts */
+.quick .qtheme{width:190px}
+.qkind.qk-pt{background:#5B3FA0;color:#fff}
+#ptadd{border-color:#C5B8E6;background:#F7F5FC}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #ptadd{background:#1B1A26;border-color:#3D3560}}
+.pnum{color:var(--muted);font-weight:600;margin-right:2px;font-variant-numeric:tabular-nums}
+.ptxt{white-space:pre-wrap}
+.pans{margin-top:6px;font-size:14px;padding:6px 10px;border-left:3px solid var(--ok);background:var(--soft);border-radius:0 6px 6px 0;white-space:pre-wrap}
+.pans b{color:var(--ok);font-weight:600}
+.g-pt h2{display:flex;align-items:baseline;gap:10px}
+.g-pt h2::before{content:"";width:10px;height:10px;border-radius:50%;background:#5B3FA0;flex:none;align-self:center}
+.thren{font:400 13px "Barlow",sans-serif;margin-left:4px}
+.task.pt.done .ptxt{text-decoration:none;color:var(--muted)}
 /* Onglets du projet */
 .ptabs{display:flex;gap:4px;box-shadow:inset 0 -1px 0 var(--line);margin-top:-6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .ptabs::-webkit-scrollbar{display:none}
@@ -615,11 +628,17 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
 </dialog>
 <dialog id="expdlg" aria-labelledby="exptitle">
   <form method="dialog" class="rbox">
-    <h2 id="exptitle" style="margin:0;font:700 26px/1.1 'Barlow Condensed','Arial Narrow',sans-serif">Exporter les points ouverts</h2>
-    <p class="hint">Un document prêt à transmettre (client, comité de pilotage, hiérarchie) : tâches en retard, en cours, en attente et à faire, triées par échéance.</p>
+    <h2 id="exptitle" style="margin:0;font:700 26px/1.1 'Barlow Condensed','Arial Narrow',sans-serif">Exporter</h2>
+    <div class="seg" id="expkind" role="group" aria-label="Contenu à exporter" style="align-self:flex-start"><button type="button" data-k="tasks">Plan d'actions (tâches)</button><button type="button" data-k="points">Points ouverts</button></div>
+    <p class="hint" id="exphint"></p>
     <div class="pfhead"><b>Projets</b><span><button type="button" class="pflink" id="expall">Tout</button> · <button type="button" class="pflink" id="expnone">Aucun</button></span></div>
     <div class="exprojs" id="expprojs"></div>
-    <div class="expopts">
+    <div class="expopts" id="expopt-p" hidden>
+      <label><input type="checkbox" id="expptowner" checked> Afficher qui doit répondre</label>
+      <label><input type="checkbox" id="expptans" checked> Inclure les réponses / décisions</label>
+      <label><input type="checkbox" id="expptclosed"> Inclure les points levés</label>
+    </div>
+    <div class="expopts" id="expopt-t">
       <label><input type="checkbox" id="expwho" checked> Afficher le responsable</label>
       <label><input type="checkbox" id="expnote" checked> Inclure les notes</label>
       <label><input type="checkbox" id="expcom"> Inclure le dernier commentaire</label>
@@ -651,7 +670,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   };
   // ============================================
   const COLORS=["#3E7CB1","#C2410C","#2F7D5B","#8E5BB5","#B8860B","#C0396B","#4A6272","#1F8A8A"];
-  let state={projects:[],tasks:[],requests:[],deleted:[]};
+  let state={projects:[],tasks:[],requests:[],points:[],deleted:[]};
   let view="all"; // "all" ou id projet
   let editing=null;
   // Préférences d'affichage : stockées à part, jamais dans le fichier de données
@@ -690,7 +709,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   // ---------- Suivi des changements (pour fusionner à plusieurs) ----------
   let snap=new Map();
   const bare=o=>{const c={...o};delete c.updatedAt;return JSON.stringify(c)};
-  function resetSnap(){snap=new Map();state.projects.forEach(p=>snap.set("p:"+p.id,bare(p)));state.tasks.forEach(t=>snap.set("t:"+t.id,bare(t)));(state.requests||[]).forEach(r=>snap.set("r:"+r.id,bare(r)))}
+  function resetSnap(){snap=new Map();state.projects.forEach(p=>snap.set("p:"+p.id,bare(p)));state.tasks.forEach(t=>snap.set("t:"+t.id,bare(t)));(state.requests||[]).forEach(r=>snap.set("r:"+r.id,bare(r)));(state.points||[]).forEach(o=>snap.set("o:"+o.id,bare(o)))}
   function stamp(){
     const t0=Date.now(), seen=new Set(), changed=[], removed=[];
     const chk=(k,o)=>{seen.add(k);const prev=snap.get(k);if(prev!==bare(o)){if(MODE!=="cloud"&&k[0]==="t")logLocal(o,prev);o.updatedAt=t0;snap.set(k,bare(o));changed.push(k)}};
@@ -698,6 +717,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     state.tasks.forEach(t=>chk("t:"+t.id,t));
     if(!Array.isArray(state.requests))state.requests=[];
     state.requests.forEach(r=>chk("r:"+r.id,r));
+    if(!Array.isArray(state.points))state.points=[];
+    state.points.forEach(o=>chk("o:"+o.id,o));
     for(const k of [...snap.keys()])if(!seen.has(k)){snap.delete(k);removed.push(k);if(MODE!=="cloud")state.deleted.push({id:k.slice(2),at:t0})}
     return {changed,removed};
   }
@@ -717,11 +738,12 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       projects:pick(local.projects,remote.projects),
       tasks:pick(local.tasks,remote.tasks),
       requests:pick(local.requests||[],remote.requests||[]),
+      points:pick(local.points||[],remote.points||[]),
       deleted:[...tomb].filter(([,at])=>at>limit).map(([id,at])=>({id,at}))
     };
   }
-  const canon=d=>JSON.stringify([d.projects,[...d.tasks].sort((a,b)=>a.id<b.id?-1:1),[...(d.requests||[])].sort((a,b)=>a.id<b.id?-1:1),[...d.deleted].sort((a,b)=>a.id<b.id?-1:1)]);
-  function applyState(d){state=d;resetSnap();lsSave();if(editing&&!state.tasks.some(t=>t.id===editing))editing=null;if(editingReq&&!(state.requests||[]).some(r=>r.id===editingReq))editingReq=null;render()}
+  const canon=d=>JSON.stringify([d.projects,[...d.tasks].sort((a,b)=>a.id<b.id?-1:1),[...(d.requests||[])].sort((a,b)=>a.id<b.id?-1:1),[...(d.points||[])].sort((a,b)=>a.id<b.id?-1:1),[...d.deleted].sort((a,b)=>a.id<b.id?-1:1)]);
+  function applyState(d){state=d;resetSnap();lsSave();if(editing&&!state.tasks.some(t=>t.id===editing))editing=null;if(editingReq&&!(state.requests||[]).some(r=>r.id===editingReq))editingReq=null;if(editingPt&&!(state.points||[]).some(o=>o.id===editingPt))editingPt=null;render()}
 
   let fileHandle=null, fileTimer=null, fileOk=false, fileBusy=false, lastMod=0;
   const FSA="showSaveFilePicker" in window;
@@ -735,7 +757,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     } else setSync("Enregistré dans ce navigateur · "+now());
   }
   const now=()=>new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
-  const payload=d=>JSON.stringify({app:"todo-projets",version:2,savedAt:new Date().toISOString(),projects:d.projects,tasks:d.tasks,requests:d.requests||[],deleted:d.deleted},null,2);
+  const payload=d=>JSON.stringify({app:"todo-projets",version:2,savedAt:new Date().toISOString(),projects:d.projects,tasks:d.tasks,requests:d.requests||[],points:d.points||[],deleted:d.deleted},null,2);
   // Écriture : on relit d'abord le fichier pour intégrer les changements du collègue
   async function writeFile(){
     if(fileBusy){clearTimeout(fileTimer);fileTimer=setTimeout(()=>{fileTimer=null;writeFile()},300);return}
@@ -817,7 +839,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     else{info.className="fileinfo";info.textContent="Aucun fichier lié : les données sont seulement dans ce navigateur.";rl.hidden=true;ul.hidden=true}
   }
   function setSync(t){const e=$("#sync");e.textContent=t;e.className="status "+(/Hors connexion|Échec|impossible|Impossible|Erreur|injoignable|interrompue/.test(t)?"off":(/Synchronisé|Enregistré|chargées|Mis à jour/.test(t)?"ok":""))}
-  function normalize(d){return {projects:Array.isArray(d&&d.projects)?d.projects.slice():[],tasks:Array.isArray(d&&d.tasks)?d.tasks.slice():[],requests:Array.isArray(d&&d.requests)?d.requests.slice():[],deleted:Array.isArray(d&&d.deleted)?d.deleted.slice():[]}}
+  function normalize(d){return {projects:Array.isArray(d&&d.projects)?d.projects.slice():[],tasks:Array.isArray(d&&d.tasks)?d.tasks.slice():[],requests:Array.isArray(d&&d.requests)?d.requests.slice():[],points:Array.isArray(d&&d.points)?d.points.slice():[],deleted:Array.isArray(d&&d.deleted)?d.deleted.slice():[]}}
 
   // ---------- Sauvegarde fichier ----------
   function exportData(){
@@ -895,6 +917,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   const fromT=r=>({id:r.id,projectId:r.project_id,title:r.title,priority:r.priority,due:r.due||"",status:r.waiting&&r.status==="todo"?"waiting":r.status,waitingFor:r.waiting_for||"",deletedAt:r.deleted_at?Number(r.deleted_at):null,note:r.note||"",who:r.who||"",createdAt:Number(r.created_at),doneAt:r.done_at?Number(r.done_at):null,updatedAt:Number(r.updated_at),updatedBy:r.updated_by||"",checklist:Array.isArray(r.checklist)?r.checklist:[],repeat:r.repeat||null,family:r.family||"",requestId:r.request_id||null});
   const fromP=r=>({id:r.id,name:r.name,color:r.color||COLORS[0],archived:!!r.archived});
   const rowR=r=>({id:r.id,project_id:r.projectId,title:r.title,description:r.description||"",requester:r.requester||"",received:r.received||null,due:r.due||null,priority:r.priority||"normale",status:r.status||"new",scope:r.scope||"",estimate:r.estimate==null||r.estimate===""?null:Number(r.estimate),quote:r.quote||"",created_at:r.createdAt||Date.now(),updated_at:r.updatedAt||Date.now(),closed_at:r.closedAt||null,deleted_at:r.deletedAt||null,updated_by:cloud.email});
+  const rowO=o=>({id:o.id,project_id:o.projectId,text:o.text,answer:o.answer||"",theme:o.theme||"",owner:o.owner||"",owner_name:o.ownerName||"",status:o.status==="closed"?"closed":"open",task_id:o.taskId||null,request_id:o.requestId||null,created_at:o.createdAt||Date.now(),updated_at:o.updatedAt||Date.now(),closed_at:o.closedAt||null,deleted_at:o.deletedAt||null,updated_by:cloud.email});
+  const fromO=r=>({id:r.id,projectId:r.project_id,text:r.text,answer:r.answer||"",theme:r.theme||"",owner:r.owner||"",ownerName:r.owner_name||"",status:r.status,taskId:r.task_id||null,requestId:r.request_id||null,createdAt:Number(r.created_at),updatedAt:Number(r.updated_at),closedAt:r.closed_at?Number(r.closed_at):null,deletedAt:r.deleted_at?Number(r.deleted_at):null,updatedBy:r.updated_by||""});
   const fromR=r=>({id:r.id,projectId:r.project_id,title:r.title,description:r.description||"",requester:r.requester||"",received:r.received||"",due:r.due||"",priority:r.priority,status:r.status,scope:r.scope||"",estimate:r.estimate==null?null:Number(r.estimate),quote:r.quote||"",createdAt:Number(r.created_at),updatedAt:Number(r.updated_at),closedAt:r.closed_at?Number(r.closed_at):null,deletedAt:r.deleted_at?Number(r.deleted_at):null,updatedBy:r.updated_by||""});
   const transient=e=>!e||!e.code; // pas de code PostgreSQL = problème réseau
   function cloudStatus(){
@@ -924,9 +948,11 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         const steps=[
           [pUp,"projects",b=>{const o=state.projects.find(x=>x.id===b.k.slice(2));return o&&rowP(o)},"up"],
           [byKey("r:","up"),"client_requests",b=>{const o=(state.requests||[]).find(x=>x.id===b.k.slice(2));return o&&rowR(o)},"up"],
+          [byKey("o:","up"),"open_points",b=>{const o=(state.points||[]).find(x=>x.id===b.k.slice(2));return o&&rowO(o)},"up"],
           [byKey("t:","up"),"tasks",b=>{const o=state.tasks.find(x=>x.id===b.k.slice(2));return o&&rowT(o)},"up"],
           [byKey("t:","del"),"tasks",null,"del"],
           [byKey("r:","del"),"client_requests",null,"del"],
+          [byKey("o:","del"),"open_points",null,"del"],
           [byKey("p:","del").filter(b=>{if(isOwner(b.k.slice(2)))return true;done.push(b);return false}),"projects",null,"del"]
         ];
         for(const [items,table,mk,op] of steps){
@@ -954,9 +980,9 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   };
   cloud.fetch=async function(){
     if(!this.user)return;
-    if(editing||editingReq){clearTimeout(this.fetchT);this.fetchT=setTimeout(()=>this.fetch(),3000);return}
+    if(editing||editingReq||editingPt){clearTimeout(this.fetchT);this.fetchT=setTimeout(()=>this.fetch(),3000);return}
     const c=cloudClient();
-    const [P,M,T,C,PR,F,R]=await Promise.all([c.from("projects").select("*"),c.from("project_members").select("*"),c.from("tasks").select("*"),c.from("task_comments").select("*"),c.from("profiles").select("*"),c.from("project_families").select("*"),c.from("client_requests").select("*")]);
+    const [P,M,T,C,PR,F,R,O]=await Promise.all([c.from("projects").select("*"),c.from("project_members").select("*"),c.from("tasks").select("*"),c.from("task_comments").select("*"),c.from("profiles").select("*"),c.from("project_families").select("*"),c.from("client_requests").select("*"),c.from("open_points").select("*")]);
     if(!F.error){
       const fm={};F.data.slice().sort((a,b)=>Number(a.created_at)-Number(b.created_at)).forEach(r=>{(fm[r.project_id]=fm[r.project_id]||[]).push({id:r.id,name:r.name})});
       const js=JSON.stringify(fm);if(js!==this._lastFm){this._lastFm=js;this.families=fm;this._cmChanged=true}
@@ -989,10 +1015,11 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     let projects=P.data.slice().sort((a,b)=>Number(a.created_at)-Number(b.created_at)).map(fromP);
     let tasks=T.data.filter(r=>meta[r.project_id]).map(fromT);
     let requests=R.error?(state.requests||[]).slice():R.data.filter(r=>meta[r.project_id]).map(fromR);
+    let points=O.error?(state.points||[]).slice():O.data.filter(r=>meta[r.project_id]).map(fromO);
     // les modifications locales pas encore envoyées restent prioritaires
     for(const [k,v] of this.dirty){
       const id=k.slice(2);
-      const [arr,src]=({p:[projects,state.projects],t:[tasks,state.tasks],r:[requests,state.requests||[]]})[k[0]]||[[],[]];
+      const [arr,src]=({p:[projects,state.projects],t:[tasks,state.tasks],r:[requests,state.requests||[]],o:[points,state.points||[]]})[k[0]]||[[],[]];
       const loc=src.find(x=>x.id===id);
       const i=arr.findIndex(x=>x.id===id);
       if(v.op==="del"){if(i>=0)arr.splice(i,1)}
@@ -1001,7 +1028,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     tasks=tasks.filter(t=>projects.some(p=>p.id===t.projectId));
     this.meta=meta;
     requests=requests.filter(r=>projects.some(p=>p.id===r.projectId));
-    const next={projects,tasks,requests,deleted:[]};
+    points=points.filter(o=>projects.some(p=>p.id===o.projectId));
+    const next={projects,tasks,requests,points,deleted:[]};
     if(canon(next)!==canon(state)||JSON.stringify(meta)!==this._lastMeta){this._lastMeta=JSON.stringify(meta);this._cmChanged=false;applyState(next)}
     else if(this._cmChanged){this._cmChanged=false;render()}
     if(!this.dirty.size){this.lastOk=Date.now()}
@@ -1020,6 +1048,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       .on("postgres_changes",{event:"*",schema:"public",table:"profiles"},h)
       .on("postgres_changes",{event:"*",schema:"public",table:"project_families"},h)
       .on("postgres_changes",{event:"*",schema:"public",table:"client_requests"},h)
+      .on("postgres_changes",{event:"*",schema:"public",table:"open_points"},h)
       .subscribe();
   };
   async function startCloud(){
@@ -1042,7 +1071,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     try{localStorage.setItem("todo-mode","cloud")}catch(e){}
     // affichage immédiat de la dernière version connue, puis synchronisation
     let cache=null;try{cache=JSON.parse(localStorage.getItem("todo-cloud:"+user.id)||"null")}catch(e){}
-    state=cache?normalize(cache.state):{projects:[],tasks:[],requests:[],deleted:[]};
+    state=cache?normalize(cache.state):{projects:[],tasks:[],requests:[],points:[],deleted:[]};
     cloud.dirty=new Map(cache&&Array.isArray(cache.dirty)?cache.dirty:[]);
     resetSnap();view="all";editing=null;render();renderAccount();
     setSync("Synchronisation…");
@@ -1104,7 +1133,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(cloud.channel){c.removeChannel(cloud.channel);cloud.channel=null}
     try{await c.auth.signOut()}catch(e){}
     useSession(null);
-    cloud.user=null;cal.events=null;cal.hasLink=null;state={projects:[],tasks:[],requests:[],deleted:[]};render();
+    cloud.user=null;cal.events=null;cal.hasLink=null;state={projects:[],tasks:[],requests:[],points:[],deleted:[]};render();
     showGate("login");
   }
   async function changePassword(){
@@ -1138,6 +1167,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       d.projects.forEach((p,i)=>{ids[p.id]=nid();state.projects.push({id:ids[p.id],name:String(p.name||"Projet"),color:p.color||COLORS[(state.projects.length+i)%COLORS.length]})});
       const rids={};
       (Array.isArray(d.requests)?d.requests:[]).forEach(r=>{if(!ids[r.projectId]||r.deletedAt||!r.title)return;rids[r.id]=nid();state.requests.push({id:rids[r.id],projectId:ids[r.projectId],title:String(r.title).slice(0,300),description:String(r.description||""),requester:String(r.requester||""),received:/^\d{4}-\d{2}-\d{2}$/.test(r.received||"")?r.received:"",due:/^\d{4}-\d{2}-\d{2}$/.test(r.due||"")?r.due:"",priority:["haute","normale","basse"].includes(r.priority)?r.priority:"normale",status:REQL[r.status]?r.status:"new",scope:["","in","out"].includes(r.scope)?r.scope:"",estimate:r.estimate==null||isNaN(+r.estimate)?null:+r.estimate,quote:QUOTE[r.quote]!==undefined?r.quote:"",createdAt:Number(r.createdAt)||Date.now(),closedAt:r.closedAt||null})});
+      (Array.isArray(d.points)?d.points:[]).forEach(o=>{if(!ids[o.projectId]||o.deletedAt||!o.text)return;state.points.push({id:nid(),projectId:ids[o.projectId],text:String(o.text).slice(0,2000),answer:String(o.answer||""),theme:String(o.theme||"").slice(0,80),owner:OWNER[o.owner]!==undefined?o.owner:"",ownerName:String(o.ownerName||"").slice(0,120),status:o.status==="closed"?"closed":"open",taskId:null,requestId:null,createdAt:Number(o.createdAt)||Date.now(),closedAt:o.closedAt||null})});
       d.tasks.forEach(t=>{if(!ids[t.projectId]||t.deletedAt)return;state.tasks.push({id:nid(),projectId:ids[t.projectId],title:String(t.title||""),priority:["haute","normale","basse"].includes(t.priority)?t.priority:"normale",due:/^\d{4}-\d{2}-\d{2}$/.test(t.due||"")?t.due:"",status:["todo","doing","waiting","done"].includes(t.status)?t.status:"todo",waitingFor:String(t.waitingFor||""),note:String(t.note||""),who:String(t.who||""),createdAt:Number(t.createdAt)||Date.now(),doneAt:t.doneAt||null,checklist:Array.isArray(t.checklist)?t.checklist.filter(c=>c&&c.text).map(c=>({id:String(c.id||uid()),text:String(c.text),done:!!c.done})):[],repeat:t.repeat&&t.repeat.unit?{n:+t.repeat.n||1,unit:String(t.repeat.unit)}:null,requestId:rids[t.requestId]||null})});
       view="all";save();render();
     };
@@ -1155,7 +1185,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(!confirm(leaving?"Quitter ce projet ? Il disparaîtra de votre liste ; son propriétaire pourra vous le repartager.":`Retirer l'accès de ${email} à ce projet ?`))return;
     const {error}=await cloudClient().from("project_members").delete().eq("project_id",pid).eq("email",email);
     if(error){alert(transient(error)?"Serveur injoignable : réessayez quand la connexion sera rétablie.":"Action refusée : "+error.message);return}
-    if(leaving){for(const k of [...cloud.dirty.keys()]){const t=state.tasks.find(x=>"t:"+x.id===k)||(state.requests||[]).find(x=>"r:"+x.id===k);if(k==="p:"+pid||(t&&t.projectId===pid))cloud.dirty.delete(k)}view="all"}
+    if(leaving){for(const k of [...cloud.dirty.keys()]){const t=state.tasks.find(x=>"t:"+x.id===k)||(state.requests||[]).find(x=>"r:"+x.id===k)||(state.points||[]).find(x=>"o:"+x.id===k);if(k==="p:"+pid||(t&&t.projectId===pid))cloud.dirty.delete(k)}view="all"}
     await cloud.fetch();
   }
   let shareOpen=false;
@@ -1509,6 +1539,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     state.projects=state.projects.filter(x=>x.id!==p.id);
     state.tasks=state.tasks.filter(t=>t.projectId!==p.id);
     state.requests=(state.requests||[]).filter(r=>r.projectId!==p.id);
+    state.points=(state.points||[]).filter(o=>o.projectId!==p.id);
     view="all"; save(); render();
   }
   function clearDone(){
@@ -1595,7 +1626,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   }
   function render(){
     if(view!=="all"&&!proj(view))view="all";
-    if(!["list","agenda","kanban","dash","trash","requests"].includes(ui.mode))ui.mode="list";
+    if(!["list","agenda","kanban","dash","trash","requests","points"].includes(ui.mode))ui.mode="list";
+    if(ui.mode==="points"&&view==="all")ui.mode="list";
     if(["list","agenda","kanban"].includes(ui.mode))ui.taskMode=ui.mode;
     if(ui.mode==="trash"||ui.mode==="dash")view="all";
     const mode=ui.mode;
@@ -1605,7 +1637,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const wkS=iso(mondayOf(new Date())), wkE=iso(addDays(mondayOf(new Date()),6));
     const hidA=hiddenSet();
     const nWeek=open.filter(t=>t.due&&t.due>=wkS&&t.due<=wkE&&!hidA.has(t.projectId)).length;
-    const nTrash=state.tasks.length-alive.length+(state.requests||[]).filter(r=>r.deletedAt).length;
+    const nTrash=state.tasks.length-alive.length+(state.requests||[]).filter(r=>r.deletedAt).length+(state.points||[]).filter(o=>o.deletedAt).length;
     const nReq=liveReq().filter(r=>reqOpen(r)&&!isArch(r.projectId)).length;
     if(ui.scope!=="today")ui.scope="all";
 
@@ -1654,15 +1686,16 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const p=view==="all"?null:proj(view);
     const agenda=mode==="agenda";
     $("#wrap").classList.toggle("wide",agenda||mode==="kanban"||mode==="dash");
-    $("#quick").hidden=mode==="dash"||mode==="trash"||mode==="requests";
+    $("#quick").hidden=mode==="dash"||mode==="trash"||mode==="requests"||mode==="points";
     $("#wrap").classList.toggle("wide",agenda||mode==="kanban"||mode==="dash");
     // onglets du projet : tâches / demandes client
     const tabs=$("#ptabs");
     if(p&&mode!=="dash"&&mode!=="trash"&&!query.trim()){
       const nT=alive.filter(t=>t.projectId===p.id&&t.status!=="done").length, nR=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)).length;
       tabs.hidden=false;
-      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="requests"}" data-tab="requests">Demandes client <span>${nR}</span></button>`;
-      tabs.querySelectorAll("[data-tab]").forEach(x=>x.onclick=()=>{ui.mode=x.dataset.tab==="requests"?"requests":(ui.taskMode||"list");if(ui.mode!=="list")ui.scope="all";saveUi();editing=null;editingReq=null;render()});
+      const nO=livePts().filter(o=>o.projectId===p.id&&o.status!=="closed").length;
+      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="requests"}" data-tab="requests">Demandes client <span>${nR}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points ouverts <span>${nO}</span></button>`;
+      tabs.querySelectorAll("[data-tab]").forEach(x=>x.onclick=()=>{const k=x.dataset.tab;ui.mode=k==="tasks"?(ui.taskMode||"list"):k;if(ui.mode!=="list")ui.scope="all";saveUi();editing=null;editingReq=null;editingPt=null;render()});
     } else {tabs.hidden=true;tabs.innerHTML=""}
     if(!weekStart)weekStart=mondayOf(new Date());
     const wEnd=addDays(weekStart,6);
@@ -1681,6 +1714,11 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       const rs=liveReq().filter(r=>(p?r.projectId===p.id:!isArch(r.projectId))&&reqOpen(r));
       const late=rs.filter(reqLate).length, out=rs.filter(r=>r.scope==="out").length, q=rs.filter(r=>r.quote==="todo").length;
       sub=`${rs.length} demande${rs.length>1?"s":""} client ouverte${rs.length>1?"s":""}`+(late?`, ${late} réponse${late>1?"s":""} en retard`:"")+(out?`, ${out} hors périmètre`:"")+(q?`, ${q} devis à faire`:"");
+    } else if(mode==="points"){
+      title=`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`;
+      const ps=livePts().filter(o=>o.projectId===p.id), no=ps.filter(o=>o.status!=="closed");
+      const byO=k=>no.filter(o=>o.owner===k).length;
+      sub=`${no.length} point${no.length>1?"s":""} ouvert${no.length>1?"s":""}`+(ps.length-no.length?`, ${ps.length-no.length} levé${ps.length-no.length>1?"s":""}`:"")+([["client","côté client"],["mecalux","côté Mecalux"],["tiers","côté tiers"]].filter(([k])=>byO(k)).map(([k,l])=>` · ${byO(k)} ${l}`).join(""));
     } else if(mode==="trash"){
       title="Corbeille";
       sub=nTrash?`${nTrash} élément${nTrash>1?"s":""} supprimé${nTrash>1?"s":""}`:"La corbeille est vide";
@@ -1701,14 +1739,14 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       b("Supprimer le projet",()=>deleteProject(p));
     } else if(p&&MODE==="cloud")b("Quitter le projet",()=>shareRemove(p.id,cloud.email,true));
     if(mode==="trash"){if(nTrash)b("Vider la corbeille",emptyTrash);b("Fermer la corbeille",go("list","all"),"")}
-    else{b("Récap de la semaine",openRecap,"");b("Exporter",()=>openExport(p),"")}
+    else{b("Récap de la semaine",openRecap,"");b("Exporter",()=>openExport(p,mode==="points"?"points":"tasks"),"")}
     if(mode==="list"&&alive.some(t=>t.status==="done"&&(!p||t.projectId===p.id)))b("Vider les terminées",clearDone);
     const people=[...new Set(alive.map(whoName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"fr"));
     const sugg=new Set(people);
     if(MODE==="cloud"){if(cloud.email)sugg.add(nameOf(cloud.email));Object.values(cloud.meta).forEach(m=>{sugg.add(nameOf(m.ownerEmail));m.members.forEach(e=>sugg.add(nameOf(e)))})}
     $("#people").innerHTML=[...sugg].filter(Boolean).map(n=>`<option value="${esc(n)}">`).join("");
     if(ui.who&&ui.who!=="__none"&&!people.includes(ui.who))ui.who="";
-    if(people.length&&mode!=="dash"&&mode!=="trash"&&mode!=="requests"){
+    if(people.length&&mode!=="dash"&&mode!=="trash"&&mode!=="requests"&&mode!=="points"){
       const w=document.createElement("label");w.className="whobox";
       w.innerHTML=`Responsable <select id="whosel" aria-label="Filtrer par responsable"><option value="">Tout le monde</option>${people.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")}<option value="__none">Non attribuées</option></select>`;
       const sel=w.querySelector("select");sel.value=ui.who||"";sel.onchange=e=>{ui.who=e.target.value;saveUi();render()};
@@ -1730,7 +1768,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       wn.querySelectorAll("[data-w]").forEach(x=>x.onclick=()=>{const n=+x.dataset.w;weekStart=n?addDays(weekStart,7*n):mondayOf(new Date());render()});
       tools.appendChild(wn);
     }
-    if(mode!=="dash"&&mode!=="trash"&&mode!=="requests"){
+    if(mode!=="dash"&&mode!=="trash"&&mode!=="requests"&&mode!=="points"){
     const seg=document.createElement("div");seg.className="seg";seg.setAttribute("role","group");seg.setAttribute("aria-label","Affichage");
     [["list","Liste"],["kanban","Kanban"],["agenda","Agenda"]].forEach(([m,l])=>{const x=document.createElement("button");x.type="button";x.textContent=l;x.setAttribute("aria-pressed",ui.mode===m);x.onclick=()=>{ui.mode=m;if(m!=="list")ui.scope="all";saveUi();editing=null;render()};seg.appendChild(x)});
     tools.appendChild(seg);
@@ -1756,6 +1794,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       L.innerHTML=`<div class="empty">Commencez par créer un projet (« + Nouveau projet » dans la colonne de gauche), puis ajoutez vos tâches ici.</div>`;return;
     }
     if(mode==="requests"&&!query.trim()){renderRequests(L,p);return}
+    if(mode==="points"&&p&&!query.trim()){renderPoints(L,p);return}
     const base=alive.filter(t=>(!p||t.projectId===p.id)&&(!ui.who||mode==="dash"||(ui.who==="__none"?!(t.who||"").trim():whoName(t)===ui.who)));
     if(query.trim()){
       const found=base.filter(matches);
@@ -2218,26 +2257,31 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   // ---------- Corbeille ----------
   const TRASH_DAYS=30;
   function emptyTrash(){
-    const n=state.tasks.filter(t=>t.deletedAt).length+(state.requests||[]).filter(r=>r.deletedAt).length;
+    const n=state.tasks.filter(t=>t.deletedAt).length+(state.requests||[]).filter(r=>r.deletedAt).length+(state.points||[]).filter(o=>o.deletedAt).length;
     if(!n||!confirm(`Supprimer définitivement ${n>1?`les ${n} éléments`:"l'élément"} de la corbeille ? Cette action est irréversible.`))return;
-    state.tasks=state.tasks.filter(t=>!t.deletedAt);state.requests=(state.requests||[]).filter(r=>!r.deletedAt);save();render();
+    state.tasks=state.tasks.filter(t=>!t.deletedAt);state.requests=(state.requests||[]).filter(r=>!r.deletedAt);state.points=(state.points||[]).filter(o=>!o.deletedAt);save();render();
   }
   function purgeTrash(){
     const lim=Date.now()-TRASH_DAYS*864e5;
     const old=x=>x.deletedAt&&x.deletedAt<lim;
-    if(state.tasks.some(old)||(state.requests||[]).some(old)){state.tasks=state.tasks.filter(t=>!old(t));state.requests=(state.requests||[]).filter(r=>!old(r));save();render()}
+    if(state.tasks.some(old)||(state.requests||[]).some(old)||(state.points||[]).some(old)){state.tasks=state.tasks.filter(t=>!old(t));state.requests=(state.requests||[]).filter(r=>!old(r));state.points=(state.points||[]).filter(o=>!old(o));save();render()}
   }
   function renderTrash(L){
-    const items=[...state.tasks.filter(t=>t.deletedAt),...(state.requests||[]).filter(r=>r.deletedAt).map(r=>Object.assign(Object.create(null),{__req:r,...r}))].sort((a,b)=>b.deletedAt-a.deletedAt);
-    L.insertAdjacentHTML("beforeend",`<p class="hint">Les tâches et demandes supprimées restent ${TRASH_DAYS} jours dans la corbeille, puis sont effacées définitivement.${MODE==="cloud"?" Sur un projet partagé, la corbeille est commune à tous ses membres.":""}</p>`);
+    const items=[...state.tasks.filter(t=>t.deletedAt),...(state.requests||[]).filter(r=>r.deletedAt).map(r=>Object.assign(Object.create(null),{__req:r,...r})),...(state.points||[]).filter(o=>o.deletedAt).map(o=>Object.assign(Object.create(null),{__pt:o,...o,title:o.text}))].sort((a,b)=>b.deletedAt-a.deletedAt);
+    L.insertAdjacentHTML("beforeend",`<p class="hint">Les tâches, demandes et points supprimés restent ${TRASH_DAYS} jours dans la corbeille, puis sont effacées définitivement.${MODE==="cloud"?" Sur un projet partagé, la corbeille est commune à tous ses membres.":""}</p>`);
     if(!items.length){L.insertAdjacentHTML("beforeend",`<div class="empty">La corbeille est vide.</div>`);return}
     const ul=document.createElement("ul");ul.className="tasks";
     items.forEach(t=>{
       const p=proj(t.projectId), left=Math.max(0,TRASH_DAYS-Math.floor((Date.now()-t.deletedAt)/864e5));
       const li=document.createElement("li");li.className="trow";
-      const isR=!!t.__req;
-      li.innerHTML=`<div><div class="ttl" style="cursor:default">${esc(t.title)}</div><div class="meta">${isR?`<span class="tag reqtag">Demande client</span>`:""}${p?`<span class="tag"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>`:""}<span class="tag">Supprimée le ${fmtWhen(t.deletedAt)}${MODE==="cloud"&&t.updatedBy?" par "+esc(nameOf(t.updatedBy)):""}</span><span class="tag">${left?`Effacement dans ${left} jour${left>1?"s":""}`:"Effacement imminent"}</span></div></div>
+      const isR=!!t.__req, isO=!!t.__pt;
+      li.innerHTML=`<div><div class="ttl" style="cursor:default">${esc(t.title)}</div><div class="meta">${isR?`<span class="tag reqtag">Demande client</span>`:""}${isO?`<span class="tag reqtag">Point ouvert</span>`:""}${p?`<span class="tag"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>`:""}<span class="tag">Supprimée le ${fmtWhen(t.deletedAt)}${MODE==="cloud"&&t.updatedBy?" par "+esc(nameOf(t.updatedBy)):""}</span><span class="tag">${left?`Effacement dans ${left} jour${left>1?"s":""}`:"Effacement imminent"}</span></div></div>
         <div class="acts"><button class="sbtn" type="button" data-r>Restaurer</button><button class="sbtn danger" type="button" data-x>Supprimer définitivement</button></div>`;
+      if(isO){
+        li.querySelector("[data-r]").onclick=()=>{const cur=state.points.find(x=>x.id===t.id);if(!cur)return;cur.deletedAt=null;save();render();toast("Point ouvert restauré")};
+        li.querySelector("[data-x]").onclick=()=>{if(!confirm(`Supprimer définitivement ce point ouvert ? Cette action est irréversible.`))return;state.points=state.points.filter(x=>x.id!==t.id);save();render()};
+        ul.appendChild(li);return;
+      }
       if(isR){
         li.querySelector("[data-r]").onclick=()=>{const cur=state.requests.find(x=>x.id===t.id);if(!cur)return;const at=cur.deletedAt;const ts=state.tasks.filter(x=>x.requestId===cur.id&&x.deletedAt&&x.deletedAt===at);cur.deletedAt=null;ts.forEach(x=>x.deletedAt=null);save();render();toast(`Demande « ${short(cur.title)} » restaurée${ts.length?` avec ${ts.length>1?`ses ${ts.length} tâches`:"sa tâche"}`:""}`)};
         li.querySelector("[data-x]").onclick=()=>{if(!confirm(`Supprimer définitivement la demande « ${t.title} » ? Cette action est irréversible.`))return;state.requests=state.requests.filter(x=>x.id!==t.id);live().forEach(x=>{if(x.requestId===t.id)x.requestId=null});save();render()};
@@ -2314,12 +2358,13 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         const next=op.filter(t=>t.due&&t.due>=t0).sort((a,b)=>a.due<b.due?-1:a.due>b.due?1:0)[0];
         const late=op.filter(isLate).length;
         const rq=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)), rqLate=rq.filter(reqLate).length;
+        const npt=livePts().filter(o=>o.projectId===p.id&&o.status!=="closed").length;
         return `<tr class="click" data-p="${esc(p.id)}"><td><span class="dot" style="background:${p.color};display:inline-block;margin-right:8px"></span>${esc(p.name)}</td>
           <td><span class="prog"><i><b style="width:${pct}%;background:${p.color}"></b></i>${pct} %</span></td>
-          <td class="num">${op.length}</td><td class="num">${op.filter(t=>t.status==="doing").length||""}</td><td class="num">${op.filter(t=>t.status==="waiting").length||""}</td><td class="num${late?" bad":""}">${late||""}</td><td class="num${rqLate?" bad":""}" title="${rqLate?rqLate+" réponse(s) en retard":""}">${rq.length||""}</td>
+          <td class="num">${op.length}</td><td class="num">${op.filter(t=>t.status==="doing").length||""}</td><td class="num">${op.filter(t=>t.status==="waiting").length||""}</td><td class="num${late?" bad":""}">${late||""}</td><td class="num${rqLate?" bad":""}" title="${rqLate?rqLate+" réponse(s) en retard":""}">${rq.length||""}</td><td class="num">${npt||""}</td>
           <td>${next?`${shortDay(next.due)} · ${esc(short(next.title))}`:`<span class="muted">—</span>`}</td></tr>`;
       }).join("");
-      sp.insertAdjacentHTML("beforeend",`<div class="tscroll"><table class="dtable"><thead><tr><th>Projet</th><th>Avancement</th><th class="num">Ouvertes</th><th class="num">En cours</th><th class="num">En attente</th><th class="num">En retard</th><th class="num">Demandes</th><th>Prochaine échéance</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+      sp.insertAdjacentHTML("beforeend",`<div class="tscroll"><table class="dtable"><thead><tr><th>Projet</th><th>Avancement</th><th class="num">Ouvertes</th><th class="num">En cours</th><th class="num">En attente</th><th class="num">En retard</th><th class="num">Demandes</th><th class="num">Points ouverts</th><th>Prochaine échéance</th></tr></thead><tbody>${rows}</tbody></table></div>`);
       sp.querySelectorAll("[data-p]").forEach(tr=>tr.onclick=()=>{view=tr.dataset.p;ui.mode="list";ui.scope="all";saveUi();editing=null;render();window.scrollTo({top:0})});
     }
     L.appendChild(sp);
@@ -2425,8 +2470,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     });
   }
   const slug=s=>norm(s).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"projet";
-  const expBase=ps=>`points-ouverts-${ps.length>1?"projets":slug(ps[0].name)}-${iso(today())}`;
-  const expTitle=ps=>`Points ouverts – ${ps.length>1?ps.map(p=>p.name).join(", "):ps[0].name}`;
+  const expBase=ps=>`plan-actions-${ps.length>1?"projets":slug(ps[0].name)}-${iso(today())}`;
+  const expTitle=ps=>`Plan d'actions – ${ps.length>1?ps.map(p=>p.name).join(", "):ps[0].name}`;
   // Générateur Excel (.xlsx) intégré : aucune bibliothèque externe, fonctionne hors connexion
   const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
   const crc32=b=>{let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC_T[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0};
@@ -2491,7 +2536,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       const v={"Projet":st.p.name,"Statut":r.st,"Tâche":r.t.title,"Famille":r.fam,"Priorité":r.prio,"Responsable":r.who,"Échéance":r.due?parseD(r.due):"","En attente de":r.wf,"Étapes":r.steps,"Note":r.note,"Dernier commentaire":r.com};
       rows.push(cols.map(c=>({v:v[c[0]],s:c[0]==="Statut"?stS[r.cls]:c[0]==="Échéance"?5:4})));
     }));
-    const blob=buildXlsx("Points ouverts",rows,cols.map(c=>c[1]),4);
+    const blob=buildXlsx("Plan d'actions",rows,cols.map(c=>c[1]),4);
     const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=expBase(ps)+".xlsx";
     document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
     return true;
@@ -2533,17 +2578,24 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     ifr.srcdoc=html;
     return html;
   }
-  function openExport(p){
+  function openExport(p,kind){
     const dlg=$("#expdlg");
+    let k=kind==="points"?"points":"tasks";
+    const setKind=v=>{k=v;$("#expkind").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.k===k));$("#expopt-t").hidden=k!=="tasks";$("#expopt-p").hidden=k!=="points";
+      $("#exphint").textContent=k==="tasks"?"Plan d'actions prêt à transmettre (client, comité de pilotage, hiérarchie) : tâches en retard, en cours, en attente et à faire, triées par échéance.":"Liste des points ouverts prête à transmettre au client avant un atelier : numérotée, regroupée par thème, avec qui doit répondre.";
+      $("#expprojs").querySelectorAll("small").forEach(sm=>{const id=sm.dataset.p;sm.textContent=k==="tasks"?`${live().filter(t=>t.projectId===id&&t.status!=="done").length} tâche(s) ouverte(s)`:`${livePts().filter(o=>o.projectId===id&&o.status!=="closed").length} point(s) ouvert(s)`})};
+    $("#expkind").querySelectorAll("button").forEach(b=>b.onclick=()=>setKind(b.dataset.k));
     const projs=state.projects.filter(x=>!x.archived||(p&&x.id===p.id));
     if(!projs.length){alert("Aucun projet à exporter.");return}
-    $("#expprojs").innerHTML=projs.map(x=>`<label class="pfrow"><input type="checkbox" value="${esc(x.id)}" ${!p||x.id===p.id?"checked":""}><span class="dot" style="background:${x.color}"></span><span class="pfname">${esc(x.name)}</span><small>${live().filter(t=>t.projectId===x.id&&t.status!=="done").length} ouverte(s)</small></label>`).join("");
+    $("#expprojs").innerHTML=projs.map(x=>`<label class="pfrow"><input type="checkbox" value="${esc(x.id)}" ${!p||x.id===p.id?"checked":""}><span class="dot" style="background:${x.color}"></span><span class="pfname">${esc(x.name)}</span><small data-p="${esc(x.id)}"></small></label>`).join("");
+    setKind(k);
     $("#experr").textContent="";
     const sel=()=>[...$("#expprojs").querySelectorAll("input:checked")].map(i=>proj(i.value)).filter(Boolean);
     const opts=()=>({done:$("#expdone").checked,days:+$("#expdays").value,note:$("#expnote").checked,com:$("#expcom").checked,who:$("#expwho").checked});
     const go=async fmt=>{
       const ps=sel();if(!ps.length){$("#experr").textContent="Choisissez au moins un projet.";return}
       $("#experr").textContent="";
+      if(k==="points"){const po={closed:$("#expptclosed").checked,ans:$("#expptans").checked,owner:$("#expptowner").checked};if(fmt==="xlsx")exportPointsXlsx(ps,po);else exportPointsPdf(ps,po);return}
       if(fmt==="xlsx"){$("#expxlsx").disabled=true;try{await exportXlsx(ps,opts())}finally{$("#expxlsx").disabled=false}}
       else exportPdf(ps,opts());
     };
@@ -2552,6 +2604,212 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     $("#expall").onclick=()=>$("#expprojs").querySelectorAll("input").forEach(i=>i.checked=true);
     $("#expnone").onclick=()=>$("#expprojs").querySelectorAll("input").forEach(i=>i.checked=false);
     if(dlg.showModal)dlg.showModal();else dlg.setAttribute("open","");
+  }
+  // ---------- Points ouverts ----------
+  const OWNER={"":"Non défini",client:"Client",mecalux:"Mecalux",tiers:"Tiers"};
+  const livePts=()=>(state.points||[]).filter(x=>!x.deletedAt);
+  const ptThemes=pid=>[...new Set(livePts().filter(x=>x.projectId===pid&&x.theme).map(x=>x.theme))].sort((a,b)=>a.localeCompare(b,"fr",{sensitivity:"base"}));
+  const ownerTxt=x=>x.owner||x.ownerName?[x.owner?OWNER[x.owner]:"",x.ownerName].filter(Boolean).join(" · "):"";
+  let editingPt=null;
+  const newId=()=>MODE==="cloud"&&crypto.randomUUID?crypto.randomUUID():uid();
+  // Nettoie une ligne collée : puces, numéros, titre « Points ouverts : »
+  const cleanLine=l=>l.replace(/^\s*(?:[-*•·◦▪●–—]|\d{1,3}[.)]|[a-z][.)])\s+/i,"").replace(/^\s*[•·◦▪●]\s*/,"").trim();
+  function splitPasted(txt){
+    return String(txt||"").split(/\r?\n/).map(cleanLine).filter(l=>l&&!/^points?\s+ouverts?\s*:?$/i.test(l)&&!/^.{0,40}:\s*$/.test(l));
+  }
+  function addPoints(texts,pid,theme,owner){
+    const now=Date.now();
+    texts.forEach((t,i)=>state.points.push({id:newId(),projectId:pid,text:t.slice(0,2000),answer:"",theme:(theme||"").slice(0,80),owner:owner||"",ownerName:"",status:"open",taskId:null,requestId:null,createdAt:now+i,closedAt:null}));
+    save();render();
+  }
+  function ptUndoable(msg,x,fn){
+    const copy=JSON.parse(JSON.stringify(x));
+    fn();save();render();
+    toast(msg,()=>{const i=state.points.findIndex(y=>y.id===copy.id);if(i>=0)state.points[i]=copy;else state.points.push(copy);save();render()});
+  }
+  function closePoint(x,on){
+    if(on&&!x.answer){
+      const a=prompt("Réponse ou décision obtenue (facultatif) :","");
+      if(a===null){render();return}
+      ptUndoable("Point levé",x,()=>{x.answer=a.trim();x.status="closed";x.closedAt=Date.now()});
+      return;
+    }
+    ptUndoable(on?"Point levé":"Point rouvert",x,()=>{x.status=on?"closed":"open";x.closedAt=on?Date.now():null});
+  }
+  function pointToTask(x){
+    const id=newId();
+    state.tasks.push({id,projectId:x.projectId,title:x.text.split("\n")[0].slice(0,300),priority:"normale",due:"",status:"todo",note:`Issu du point ouvert : ${x.text}`,who:"",createdAt:Date.now(),checklist:[],repeat:null});
+    x.taskId=id;save();render();
+    toast("Tâche créée à partir du point ouvert",()=>{const t=state.tasks.find(y=>y.id===id);if(t){editing=id;openInList(t)}},"Ouvrir la tâche");
+  }
+  function pointToRequest(x){
+    const id=newId();
+    state.requests.push({id,projectId:x.projectId,title:x.text.split("\n")[0].slice(0,300),description:[x.text.includes("\n")?x.text:"",x.answer?`Réponse / décision : ${x.answer}`:""].filter(Boolean).join("\n\n"),requester:x.owner==="client"?x.ownerName:"",received:iso(today()),due:"",priority:"normale",status:"new",scope:"",estimate:null,quote:"",createdAt:Date.now(),closedAt:null});
+    x.requestId=id;save();render();
+    toast("Demande client créée à partir du point ouvert",()=>{openRequest(state.requests.find(r=>r.id===id))},"Ouvrir la demande");
+  }
+  function deletePoint(x){
+    if(editingPt===x.id)editingPt=null;
+    ptUndoable("Point mis à la corbeille",x,()=>{x.deletedAt=Date.now()});
+  }
+  function renameTheme(pid,old){
+    const n=prompt("Nouveau nom du thème",old);if(n===null)return;
+    const v=n.trim().slice(0,80);if(v===old)return;
+    livePts().forEach(x=>{if(x.projectId===pid&&x.theme===old)x.theme=v});save();render();
+  }
+  function ptRow(x,num){
+    const li=document.createElement("li");
+    li.className=`task pt${x.status==="closed"?" done":""}`;li.dataset.o=x.id;
+    const tags=[];
+    const ow=ownerTxt(x);
+    if(ow)tags.push(`<span class="tag who" title="Qui doit répondre">${esc(ow)}</span>`);
+    const t=x.taskId?live().find(y=>y.id===x.taskId):null, r=x.requestId?liveReq().find(y=>y.id===x.requestId):null;
+    if(t)tags.push(`<button type="button" class="tag reqtag" data-l="t" title="Ouvrir la tâche liée">Tâche${t.status==="done"?" terminée":""} : ${esc(short(t.title))}</button>`);
+    if(r)tags.push(`<button type="button" class="tag reqtag" data-l="r" title="Ouvrir la demande liée">Demande : ${esc(short(r.title))}</button>`);
+    if(x.status==="closed"&&x.closedAt)tags.push(`<span class="tag">Levé le ${fmtWhen(x.closedAt).split(" à ")[0]}</span>`);
+    li.innerHTML=`<input type="checkbox" class="chk" ${x.status==="closed"?"checked":""} aria-label="Point levé">
+      <div><div class="ttl ptxt"><span class="pnum">${num}.</span> ${esc(x.text)}</div>${tags.length?`<div class="meta">${tags.join("")}</div>`:""}
+      ${x.answer&&editingPt!==x.id?`<div class="pans"><b>Réponse :</b> ${esc(x.answer)}</div>`:""}</div>
+      <div class="acts"><details class="more"><summary aria-label="Plus d'actions">${ICON_MORE}</summary>
+        <div class="menu"><button type="button" data-a="edit">${editingPt===x.id?"Fermer le détail":"Modifier / répondre"}</button>${t?"":`<button type="button" data-a="task">Créer une tâche liée</button>`}${r?"":`<button type="button" data-a="req">Créer une demande client</button>`}<button type="button" data-a="del" class="danger">Mettre à la corbeille</button></div>
+      </details></div>`;
+    li.querySelector(".chk").onchange=e=>closePoint(x,e.target.checked);
+    li.querySelector(".ttl").onclick=()=>{editingPt=editingPt===x.id?null:x.id;render()};
+    const lt=li.querySelector("[data-l=t]");if(lt)lt.onclick=()=>{editing=t.id;openInList(t)};
+    const lr=li.querySelector("[data-l=r]");if(lr)lr.onclick=()=>openRequest(r);
+    li.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>{
+      const a=b.dataset.a;
+      if(a==="edit"){editingPt=editingPt===x.id?null:x.id;render()}
+      if(a==="task")pointToTask(x);
+      if(a==="req")pointToRequest(x);
+      if(a==="del")deletePoint(x);
+    });
+    if(editingPt===x.id){
+      const f=document.createElement("div");f.className="edit";
+      f.innerHTML=`<label class="full flbl">Point ouvert<textarea data-f="text" maxlength="2000">${esc(x.text)}</textarea></label>
+        <label class="flbl">Thème<input type="text" data-f="theme" value="${esc(x.theme||"")}" list="ptthemes-${esc(x.projectId)}" maxlength="80" placeholder="ex. Réception"></label>
+        <label class="flbl">Qui doit répondre<select data-f="owner">${Object.entries(OWNER).map(([k,l])=>`<option value="${k}" ${k===(x.owner||"")?"selected":""}>${l}</option>`).join("")}</select></label>
+        <label class="flbl">Interlocuteur<input type="text" data-f="oname" value="${esc(x.ownerName||"")}" maxlength="120" placeholder="Nom de la personne"></label>
+        <label class="flbl">Statut<select data-f="st"><option value="open" ${x.status!=="closed"?"selected":""}>Ouvert</option><option value="closed" ${x.status==="closed"?"selected":""}>Levé</option></select></label>
+        <label class="full flbl">Réponse / décision<textarea data-f="ans" placeholder="Réponse obtenue, décision prise, compte rendu d'atelier…">${esc(x.answer||"")}</textarea></label>
+        <datalist id="ptthemes-${esc(x.projectId)}">${ptThemes(x.projectId).map(v=>`<option value="${esc(v)}">`).join("")}</datalist>
+        <div class="full"><button class="btn primary" type="button" data-k="ok">Enregistrer</button> <button class="btn ghost" type="button" data-k="ko">Annuler</button></div>`;
+      const g=k=>f.querySelector(`[data-f=${k}]`);
+      f.querySelector("[data-k=ok]").onclick=()=>{
+        const cur=state.points.find(y=>y.id===x.id);
+        if(!cur){editingPt=null;render();alert("Ce point a été supprimé entre-temps (peut-être par un collègue).");return}
+        if(g("text").value.trim())cur.text=g("text").value.trim();
+        cur.theme=g("theme").value.trim();cur.owner=g("owner").value;cur.ownerName=g("oname").value.trim();cur.answer=g("ans").value.trim();
+        const st=g("st").value;if(st!==cur.status){cur.status=st;cur.closedAt=st==="closed"?Date.now():null}
+        editingPt=null;save();render();
+      };
+      f.querySelector("[data-k=ko]").onclick=()=>{editingPt=null;render()};
+      li.appendChild(f);
+      setTimeout(()=>g("text").focus(),0);
+    }
+    return li;
+  }
+  function renderPoints(L,p){
+    const all=livePts().filter(x=>x.projectId===p.id).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+    const num=new Map(all.map((x,i)=>[x.id,i+1]));
+    const themes=ptThemes(p.id);
+    const add=document.createElement("form");add.className="quick";add.id="ptadd";add.autocomplete="off";
+    add.innerHTML=`<label class="qmain"><span class="qkind qk-pt">Point ouvert</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--muted)"><path d="M12 5v14M5 12h14"></path></svg><input type="text" data-q="text" placeholder="Nouvelle question à trancher… (vous pouvez coller une liste)" aria-label="Point ouvert" maxlength="2000"></label>
+      <input type="text" data-q="theme" placeholder="Thème" aria-label="Thème" list="ptthemes-add" maxlength="80" class="qw qtheme" value="${esc(ui.lastTheme&&themes.includes(ui.lastTheme)?ui.lastTheme:"")}">
+      <datalist id="ptthemes-add">${themes.map(v=>`<option value="${esc(v)}">`).join("")}</datalist>
+      <select data-q="owner" aria-label="Qui doit répondre"><option value="">Qui doit répondre ?</option><option value="client">Client</option><option value="mecalux">Mecalux</option><option value="tiers">Tiers</option></select>
+      <button class="qadd" type="submit">Ajouter</button>`;
+    const q=k=>add.querySelector(`[data-q=${k}]`);
+    const submit=texts=>{if(!texts.length)return;const th=q("theme").value.trim();ui.lastTheme=th;saveUi();addPoints(texts,p.id,th,q("owner").value);const ni=document.querySelector("#ptadd [data-q=text]");if(ni)ni.focus()};
+    add.onsubmit=e=>{e.preventDefault();const v=q("text").value.trim();if(v)submit([v])};
+    q("text").addEventListener("paste",e=>{
+      const txt=(e.clipboardData||window.clipboardData).getData("text");
+      if(!/\n/.test(txt.trim()))return;
+      const lines=splitPasted(txt);
+      if(lines.length<2)return;
+      e.preventDefault();
+      if(confirm(`Ajouter ${lines.length} points ouverts ?\n\n${lines.slice(0,8).map(l=>"• "+l).join("\n")}${lines.length>8?`\n• … et ${lines.length-8} autre(s)`:""}`))submit(lines);
+    });
+    L.appendChild(add);
+    if(!all.length){L.insertAdjacentHTML("beforeend",`<div class="empty">Aucun point ouvert sur ce projet. Saisissez une question dans la barre ci-dessus, ou collez directement une liste (une ligne par point, les puces sont retirées automatiquement).</div>`);return}
+    const open=all.filter(x=>x.status!=="closed"), closed=all.filter(x=>x.status==="closed").sort((a,b)=>(b.closedAt||0)-(a.closedAt||0));
+    if(!open.length)L.insertAdjacentHTML("beforeend",`<div class="empty">Tous les points sont levés.</div>`);
+    const groups=new Map();open.forEach(x=>{const k=x.theme||"";if(!groups.has(k))groups.set(k,[]);groups.get(k).push(x)});
+    [...groups.keys()].sort((a,b)=>a===""?1:b===""?-1:a.localeCompare(b,"fr",{sensitivity:"base"})).forEach(k=>{
+      const g=document.createElement("section");g.className="group g-pt";
+      g.innerHTML=`<h2>${k?esc(k):"Sans thème"} <span>${groups.get(k).length}</span>${k?`<button type="button" class="pflink thren">Renommer</button>`:""}</h2>`;
+      const rb=g.querySelector(".thren");if(rb)rb.onclick=()=>renameTheme(p.id,k);
+      const ul=document.createElement("ul");ul.className="tasks";groups.get(k).forEach(x=>ul.appendChild(ptRow(x,num.get(x.id))));g.appendChild(ul);L.appendChild(g);
+    });
+    if(closed.length){
+      const btn=document.createElement("button");btn.type="button";btn.className="showdone";btn.setAttribute("aria-expanded",!!ui.showClosedPts);
+      btn.innerHTML=`${ICON_CHEV}${ui.showClosedPts?"Masquer":"Afficher"} ${closed.length>1?`les ${closed.length} points levés`:"le point levé"}`;
+      btn.onclick=()=>{ui.showClosedPts=!ui.showClosedPts;saveUi();render()};
+      L.appendChild(btn);
+      if(ui.showClosedPts){const g=document.createElement("section");g.className="group g-pt";g.innerHTML=`<h2>Points levés <span>${closed.length}</span></h2>`;const ul=document.createElement("ul");ul.className="tasks";closed.forEach(x=>ul.appendChild(ptRow(x,num.get(x.id))));g.appendChild(ul);L.appendChild(g)}
+    }
+  }
+  // Export des points ouverts (Excel / PDF) à transmettre au client
+  function pointSets(ps,o){
+    return ps.map(p=>{
+      const all=livePts().filter(x=>x.projectId===p.id).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+      const num=new Map(all.map((x,i)=>[x.id,i+1]));
+      const rows=all.filter(x=>x.status!=="closed"||o.closed).sort((a,b)=>((a.theme||"￿").localeCompare(b.theme||"￿","fr",{sensitivity:"base"}))||((a.status==="closed")-(b.status==="closed"))||(num.get(a.id)-num.get(b.id)));
+      return {p,rows:rows.map(x=>({x,n:num.get(x.id),theme:x.theme||"Sans thème",owner:ownerTxt(x),st:x.status==="closed"?"Levé":"Ouvert"}))};
+    });
+  }
+  const ptBase=ps=>`points-ouverts-${ps.length>1?"projets":slug(ps[0].name)}-${iso(today())}`;
+  const ptTitle=ps=>`Points ouverts – ${ps.length>1?ps.map(p=>p.name).join(", "):ps[0].name}`;
+  function exportPointsXlsx(ps,o){
+    const sets=pointSets(ps,o), multi=ps.length>1;
+    const cols=[multi&&["Projet",22],["N°",6],["Thème",20],["Point ouvert",60],o.owner&&["Qui doit répondre",24],["Statut",10],o.ans&&["Réponse / décision",60]].filter(Boolean);
+    const rows=[[{v:ptTitle(ps),s:1}],[{v:`Situation au ${new Date().toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}`,s:2}],[],cols.map(c=>({v:c[0],s:3}))];
+    sets.forEach(st=>st.rows.forEach(r=>{
+      const v={"Projet":st.p.name,"N°":r.n,"Thème":r.theme,"Point ouvert":r.x.text,"Qui doit répondre":r.owner,"Statut":r.st,"Réponse / décision":r.x.answer||""};
+      rows.push(cols.map(c=>({v:v[c[0]],s:c[0]==="Statut"?(r.st==="Levé"?9:6):4})));
+    }));
+    const blob=buildXlsx("Points ouverts",rows,cols.map(c=>c[1]),4);
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=ptBase(ps)+".xlsx";
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  }
+  function exportPointsPdf(ps,o){
+    const sets=pointSets(ps,o);
+    const dateL=new Date().toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"});
+    const total=sets.reduce((n,s)=>n+s.rows.filter(r=>r.st==="Ouvert").length,0);
+    const body=sets.map(s=>{
+      const nOpen=s.rows.filter(r=>r.st==="Ouvert").length, nClosed=s.rows.length-nOpen;
+      const byTheme=new Map();s.rows.forEach(r=>{if(!byTheme.has(r.theme))byTheme.set(r.theme,[]);byTheme.get(r.theme).push(r)});
+      const tables=[...byTheme].map(([th,rs])=>`<h3>${esc(th)}</h3><table><thead><tr><th class="n">N°</th><th class="pc">Point ouvert</th>${o.owner?"<th class=\"ow\">Qui doit répondre</th>":""}<th class="st">Statut</th>${o.ans?"<th>Réponse / décision</th>":""}</tr></thead><tbody>${rs.map(r=>`<tr><td class="n">${r.n}</td><td class="pre">${esc(r.x.text)}</td>${o.owner?`<td>${esc(r.owner)}</td>`:""}<td class="st ${r.st==="Levé"?"done":"open"}">${r.st}</td>${o.ans?`<td class="pre">${esc(r.x.answer||"")}</td>`:""}</tr>`).join("")}</tbody></table>`).join("");
+      return `<section><h2 style="border-color:${s.p.color}">${esc(s.p.name)}</h2><p class="sub">${nOpen} point${nOpen>1?"s":""} ouvert${nOpen>1?"s":""}${nClosed?` · ${nClosed} levé${nClosed>1?"s":""}`:""}</p>${s.rows.length?tables:`<p class="mut">Aucun point ouvert.</p>`}</section>`;
+    }).join("");
+    const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(ptBase(ps))}</title><style>
+      @page{size:A4 portrait;margin:14mm}
+      *{box-sizing:border-box}body{margin:0;font:10pt/1.45 "Segoe UI",Arial,sans-serif;color:#16232B}
+      h1{font-size:19pt;margin:0}.lead{color:#51646F;margin:3px 0 16px}
+      section{margin:0 0 20px}h2{font-size:13.5pt;margin:0;padding-bottom:3px;border-bottom:3px solid #2F4A5A}
+      h3{font-size:11pt;margin:14px 0 6px;color:#2F4A5A}
+      .sub{color:#51646F;margin:4px 0 4px;font-size:9.5pt}
+      table{width:100%;border-collapse:collapse;table-layout:fixed}thead{display:table-header-group}tr{page-break-inside:avoid}
+      th{background:#EEF1F3;text-align:left;font-size:8.5pt;font-weight:600;text-transform:uppercase;letter-spacing:.03em;padding:5px 6px;border-bottom:1px solid #C9D3D9}
+      td{word-wrap:break-word;padding:6px;border-bottom:1px solid #E3E8EB;vertical-align:top}
+      .n{width:6%;color:#51646F;white-space:nowrap}.st{width:10%;font-weight:600;white-space:nowrap}.ow{width:17%}.pc{width:38%}
+      .open{color:#B42318}.done{color:#2F7D5B}.pre{white-space:pre-wrap}.mut{color:#7A8A94}
+    </style></head><body><h1>${esc(ptTitle(ps))}</h1><p class="lead">Situation au ${dateL} · ${total} point${total>1?"s":""} ouvert${total>1?"s":""}</p>${body}</body></html>`;
+    printHtml(html,ptBase(ps));
+    return html;
+  }
+  function printHtml(html,base){
+    const ifr=document.createElement("iframe");ifr.setAttribute("aria-hidden","true");ifr.style.cssText="position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+    document.body.appendChild(ifr);
+    const prev=document.title;
+    ifr.onload=()=>{
+      document.title=base;
+      const w=ifr.contentWindow;
+      const done=()=>{document.title=prev;setTimeout(()=>ifr.remove(),1000)};
+      w.addEventListener("afterprint",done);
+      setTimeout(()=>{try{w.focus();w.print()}catch(e){alert("Impression impossible dans ce navigateur.");done()}},50);
+    };
+    ifr.srcdoc=html;
   }
   // ---------- Demandes client ----------
   const REQ=[["new","Nouvelle"],["analysis","En analyse"],["doing","En cours"],["waiting","En attente client"],["done","Traitée"],["refused","Refusée"]];
@@ -2794,7 +3052,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     $("#whoami").textContent="Mode local (sans compte)";$("#toolstitle").textContent="Fichier et sauvegarde";
     const cached=lsLoad();
     if(cached){state=normalize(cached);resetSnap()}
-    else{state={projects:[],tasks:[],requests:[],deleted:[]};resetSnap()}
+    else{state={projects:[],tasks:[],requests:[],points:[],deleted:[]};resetSnap()}
     $("#exp").onclick=exportData;
     $("#imp").onclick=()=>$("#impf").click();
     $("#impf").onchange=e=>{if(e.target.files[0])importData(e.target.files[0]);e.target.value=""};

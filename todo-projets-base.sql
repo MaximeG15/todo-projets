@@ -401,3 +401,35 @@ begin
 end $$;
 -- Lien d'une tâche vers la demande client dont elle découle
 alter table public.tasks add column if not exists request_id text;
+
+-- ---------- Points ouverts (questions à trancher, par projet) ----------
+create table if not exists public.open_points (
+  id          text primary key default gen_random_uuid()::text,
+  project_id  text not null references public.projects(id) on delete cascade,
+  text        text not null check (length(trim(text)) between 1 and 2000),
+  answer      text not null default '',
+  theme       text not null default '' check (length(theme) <= 80),
+  owner       text not null default '' check (owner in ('','client','mecalux','tiers')),
+  owner_name  text not null default '' check (length(owner_name) <= 120),
+  status      text not null default 'open' check (status in ('open','closed')),
+  task_id     text,
+  request_id  text,
+  created_at  bigint not null default (extract(epoch from now()) * 1000)::bigint,
+  updated_at  bigint not null default (extract(epoch from now()) * 1000)::bigint,
+  closed_at   bigint,
+  deleted_at  bigint,
+  updated_by  text not null default lower(coalesce(auth.jwt() ->> 'email', ''))
+);
+create index if not exists open_points_project_idx on public.open_points(project_id);
+alter table public.open_points enable row level security;
+drop policy if exists points_all on public.open_points;
+create policy points_all on public.open_points for all to authenticated
+  using (public.can_access(project_id)) with check (public.can_access(project_id));
+grant select, insert, update, delete on public.open_points to authenticated;
+revoke all on public.open_points from anon;
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='open_points') then
+    alter publication supabase_realtime add table public.open_points;
+  end if;
+end $$;
