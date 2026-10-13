@@ -385,6 +385,13 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 .viewbar .vbl,.viewbar .vbr{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .donerow{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .donerow .vider{font-size:13.5px}
+/* Couleur du projet */
+.swatches{padding:2px 4px 6px}
+.swatches .sw{display:grid;grid-template-columns:repeat(8,22px);gap:6px;padding:4px 8px}
+.swatches .sw button{width:22px;height:22px;border-radius:5px;border:2px solid transparent;padding:0;cursor:pointer}
+.swatches .sw button.on{outline:2px solid var(--ink);outline-offset:2px}
+.swatches .sw button.taken{opacity:.35}
+.swatches .sw button:hover{transform:scale(1.12)}
 /* Onglets du projet */
 .ptabs{display:flex;gap:4px;box-shadow:inset 0 -1px 0 var(--line);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .ptabs::-webkit-scrollbar{display:none}
@@ -716,7 +723,17 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     allowedDomains:[]
   };
   // ============================================
-  const COLORS=["#3E7CB1","#C2410C","#2F7D5B","#8E5BB5","#B8860B","#C0396B","#4A6272","#1F8A8A"];
+  // 16 couleurs bien distinctes ; un nouveau projet prend la première qui n'est pas déjà utilisée
+  const COLORS=["#3E7CB1","#C2410C","#2F7D5B","#8E5BB5","#B8860B","#C0396B","#1F8A8A","#4A6272","#D9480F","#5C7CFA","#2B8A3E","#AE3EC9","#E8590C","#0B7285","#A61E4D","#6B7B2A"];
+  function nextColor(extra){
+    const used=new Set([...state.projects.map(p=>String(p.color||"").toUpperCase()),...(extra||[]).map(c=>String(c).toUpperCase())]);
+    const free=COLORS.find(c=>!used.has(c.toUpperCase()));
+    if(free)return free;
+    // toutes prises : teinte générée, la plus éloignée possible des précédentes (angle d'or)
+    const h=Math.round((state.projects.length*137.508)%360);
+    const f=(n,k=(n+h/30)%12)=>0.42-0.28*Math.max(Math.min(k-3,9-k,1),-1);
+    return "#"+[f(0),f(8),f(4)].map(x=>Math.round(x*255).toString(16).padStart(2,"0")).join("").toUpperCase();
+  }
   let state={projects:[],tasks:[],requests:[],points:[],deleted:[]};
   let view="all"; // "all" ou id projet
   let editing=null;
@@ -1238,7 +1255,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         (Array.isArray(p.families)?p.families:[]).forEach(f=>{if(f&&f.id&&f.name){fmap[f.id]=nid();fams.push({id:fmap[f.id],pid:p.id,name:String(f.name).slice(0,60)})}});
         (Array.isArray(p.pointThemes)?p.pointThemes:[]).forEach(t=>{if(t&&t.name)themes.push({pid:p.id,name:String(t.name).slice(0,80)})});
       });
-      d.projects.forEach((p,i)=>{ids[p.id]=nid();state.projects.push({id:ids[p.id],name:String(p.name||"Projet"),color:p.color||COLORS[(state.projects.length+i)%COLORS.length]})});
+      d.projects.forEach((p,i)=>{ids[p.id]=nid();const used=state.projects.map(x=>String(x.color||"").toUpperCase());const col=p.color&&!used.includes(String(p.color).toUpperCase())?p.color:nextColor();state.projects.push({id:ids[p.id],name:String(p.name||"Projet"),color:col})});
       const rids={};
       (Array.isArray(d.requests)?d.requests:[]).forEach(r=>{if(!ids[r.projectId]||r.deletedAt||!r.title)return;rids[r.id]=nid();state.requests.push({id:rids[r.id],projectId:ids[r.projectId],title:String(r.title).slice(0,300),description:String(r.description||""),requester:String(r.requester||""),received:/^\d{4}-\d{2}-\d{2}$/.test(r.received||"")?r.received:"",due:/^\d{4}-\d{2}-\d{2}$/.test(r.due||"")?r.due:"",priority:["haute","normale","basse"].includes(r.priority)?r.priority:"normale",status:REQL[r.status]?r.status:"new",scope:["","in","out"].includes(r.scope)?r.scope:"",estimate:r.estimate==null||isNaN(+r.estimate)?null:+r.estimate,quote:QUOTE[r.quote]!==undefined?r.quote:"",createdAt:Number(r.createdAt)||Date.now(),closedAt:r.closedAt||null})});
       (Array.isArray(d.points)?d.points:[]).forEach(o=>{if(!ids[o.projectId]||o.deletedAt||!o.text)return;state.points.push({id:nid(),projectId:ids[o.projectId],text:String(o.text).slice(0,2000),answer:String(o.answer||""),hypothesis:String(o.hypothesis||""),erp:["oui","non"].includes(o.erp)?o.erp:"",theme:String(o.theme||"").slice(0,80),owner:OWNER[o.owner]!==undefined?o.owner:"",ownerName:String(o.ownerName||"").slice(0,120),status:o.status==="closed"?"closed":"open",taskId:null,requestId:null,createdAt:Number(o.createdAt)||Date.now(),closedAt:o.closedAt||null})});
@@ -1614,7 +1631,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   // ---------- Actions ----------
   function addProject(name){
     name=name.trim(); if(!name)return;
-    const p={id:uid(),name,color:COLORS[state.projects.length%COLORS.length]};
+    const p={id:uid(),name,color:nextColor()};
     state.projects.push(p); view=p.id; save(); render();
   }
   function renameProject(p){
@@ -1828,7 +1845,11 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       const d=document.createElement("details");d.className="more ddm"+(cls?" "+cls:"");
       d.innerHTML=`<summary class="btn" aria-label="${esc(label.replace(/[▾⋯]/g,"").trim()||"Plus d'actions")}">${label}</summary><div class="menu"></div>`;
       const m=d.querySelector(".menu");
-      items.filter(Boolean).forEach(it=>{if(it==="-"){m.insertAdjacentHTML("beforeend",`<hr>`);return}if(it.h){m.insertAdjacentHTML("beforeend",`<div class="mh">${esc(it.h)}</div>`);return}const x=document.createElement("button");x.type="button";x.textContent=it.t;if(it.cls)x.className=it.cls;x.onclick=()=>{d.open=false;it.fn()};m.appendChild(x)});
+      items.filter(Boolean).forEach(it=>{if(it==="-"){m.insertAdjacentHTML("beforeend",`<hr>`);return}
+        if(it.colors){const pr=it.colors, taken=new Set(state.projects.filter(x=>x.id!==pr.id).map(x=>String(x.color||"").toUpperCase()));
+          const w=document.createElement("div");w.className="swatches";w.innerHTML=`<div class="mh">Couleur du projet</div><div class="sw">${COLORS.map(c=>`<button type="button" data-c="${c}" style="background:${c}" aria-label="Couleur ${c}${taken.has(c)?" (déjà utilisée par un autre projet)":""}" title="${taken.has(c)?"Déjà utilisée par un autre projet":"Choisir cette couleur"}" class="${String(pr.color).toUpperCase()===c?"on":""}${taken.has(c)?" taken":""}"></button>`).join("")}</div>`;
+          w.querySelectorAll("[data-c]").forEach(bt=>bt.onclick=()=>{d.open=false;const cur=proj(pr.id);if(cur){cur.color=bt.dataset.c;save();render()}});
+          m.appendChild(w);return}if(it.h){m.insertAdjacentHTML("beforeend",`<div class="mh">${esc(it.h)}</div>`);return}const x=document.createElement("button");x.type="button";x.textContent=it.t;if(it.cls)x.className=it.cls;x.onclick=()=>{d.open=false;it.fn()};m.appendChild(x)});
       tools.appendChild(d);return d;
     };
     const initials=n=>String(n||"").replace(/@.*/,"").split(/[\s._-]+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("")||"?";
@@ -1843,7 +1864,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       }
       ddMenu("Exporter ▾",[{h:"Documents"},{t:"Récap de la semaine",fn:openRecap},{t:"Plan d'actions (Excel / PDF)",fn:()=>openExport(p,"tasks")},{t:"Points ouverts (Excel / PDF)",fn:()=>openExport(p,"points")}],"ddexp");
       if(p){
-        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[{t:"Renommer le projet",fn:()=>renameProject(p)},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
+        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[{t:"Renommer le projet",fn:()=>renameProject(p)},{colors:p},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
         else ddMenu("⋯",[{t:"Quitter le projet",fn:()=>shareRemove(p.id,cloud.email,true),cls:"danger"}],"ddmore");
       }
     }
