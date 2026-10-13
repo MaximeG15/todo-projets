@@ -356,6 +356,16 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 .g-pt h2::before{content:"";width:10px;height:10px;border-radius:50%;background:#5B3FA0;flex:none;align-self:center}
 .thren{font:400 13px "Barlow",sans-serif;margin-left:4px}
 .task.pt.done .ptxt{text-decoration:none;color:var(--muted)}
+/* En-tête figé : titre, onglets et barre d'ajout restent visibles au défilement */
+.sticky{position:sticky;top:0;z-index:6;background:var(--bg);display:flex;flex-direction:column;gap:16px;margin-top:-26px;padding-top:22px;padding-bottom:10px;transition:box-shadow .15s}
+.sticky #addslot:empty{display:none}
+.sticky.compact{box-shadow:0 10px 12px -12px rgba(22,35,43,.35)}
+.sticky.compact .psub,.sticky.compact #ptools{display:none}
+.sticky.compact .head h1{font-size:26px}
+.sticky.compact{padding-top:12px;gap:10px}
+.task,.req,.pt,.group{scroll-margin-top:260px}
+@media (max-width:760px){.sticky{position:static;margin-top:0;padding:0;background:none;box-shadow:none!important}.sticky.compact .psub,.sticky.compact #ptools{display:revert}.sticky.compact .head h1{font-size:30px}}
+@media print{.sticky{position:static}}
 /* Onglets du projet */
 .ptabs{display:flex;gap:4px;box-shadow:inset 0 -1px 0 var(--line);margin-top:-6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .ptabs::-webkit-scrollbar{display:none}
@@ -565,6 +575,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   </aside>
   <main>
     <div class="wrap" id="wrap">
+      <div class="sticky" id="stickytop">
       <div class="head">
         <div>
           <h1 id="ptitle"></h1>
@@ -573,7 +584,6 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         <div class="tools" id="ptools"></div>
       </div>
       <div class="ptabs" id="ptabs" role="tablist" aria-label="Contenu du projet" hidden></div>
-      <div class="share" id="share" hidden></div>
       <form class="quick" id="quick" autocomplete="off">
         <label class="qmain"><span class="qkind">Tâche</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--muted)"><path d="M12 5v14M5 12h14"></path></svg>
           <input type="text" id="qt" placeholder="Ajouter une tâche…" aria-label="Intitulé de la tâche"></label>
@@ -587,6 +597,9 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         <input type="text" id="qw" placeholder="Responsable" aria-label="Responsable" list="people" class="qw">
         <button class="qadd" type="submit">Ajouter</button>
       </form>
+      <div id="addslot"></div>
+      </div>
+      <div class="share" id="share" hidden></div>
       <datalist id="people"></datalist>
       <div id="lists" style="display:flex;flex-direction:column;gap:22px"></div>
     </div>
@@ -1809,7 +1822,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     qp.value=p?p.id:(qps.some(x=>x.id===cur)?cur:(qps[0]?.id||""));
 
     // contenu
-    const L=$("#lists"); L.innerHTML="";$("#wrap").classList.remove("twocol");
+    const L=$("#lists"); L.innerHTML="";$("#addslot").innerHTML="";$("#wrap").classList.remove("twocol");
     if(mode==="trash"&&!query.trim()){renderTrash(L);return}
     if(!state.projects.length){
       L.innerHTML=`<div class="empty">Commencez par créer un projet (« + Nouveau projet » dans la colonne de gauche), puis ajoutez vos tâches ici.</div>`;return;
@@ -2825,7 +2838,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       e.preventDefault();
       if(confirm(`Ajouter ${lines.length} points ouverts ?\n\n${lines.slice(0,8).map(l=>"• "+l).join("\n")}${lines.length>8?`\n• … et ${lines.length-8} autre(s)`:""}`))submit(lines);
     });
-    L.appendChild(add);
+    $("#addslot").appendChild(add);
     if(!all.length){L.insertAdjacentHTML("beforeend",`<div class="empty">Aucun point ouvert sur ce projet. Saisissez une question dans la barre ci-dessus, ou collez directement une liste (une ligne par point, les puces sont retirées automatiquement).</div>`);return}
     // filtres : thèmes (plusieurs possibles) et sujets ERP
     ui.ptFilter=ui.ptFilter&&typeof ui.ptFilter==="object"?ui.ptFilter:{};
@@ -3073,7 +3086,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       <select data-q="prio" aria-label="Priorité"><option value="normale">Priorité normale</option><option value="haute">Priorité haute</option><option value="basse">Priorité basse</option></select>
       <button class="qadd" type="submit">Ajouter</button>`;
     add.onsubmit=e=>{e.preventDefault();addRequest(add,p&&p.id)};
-    L.appendChild(add);
+    $("#addslot").appendChild(add);
     const open=all.filter(reqOpen), closed=all.filter(r=>!reqOpen(r)).sort((a,b)=>(b.closedAt||0)-(a.closedAt||0));
     const sortR=(a,b)=>(reqLate(b)-reqLate(a))||((a.due||"9999")<(b.due||"9999")?-1:(a.due||"9999")>(b.due||"9999")?1:0)||(prioRank[a.priority]??1)-(prioRank[b.priority]??1)||(a.createdAt||0)-(b.createdAt||0);
     if(!all.length){L.insertAdjacentHTML("beforeend",`<div class="empty">Aucune demande client${p?" sur ce projet":""}. Saisissez la première dans la barre ci-dessus : objet, demandeur et date de réponse attendue. Le reste (périmètre, estimation, devis) se complète dans le détail.</div>`);return}
@@ -3159,6 +3172,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   $("#gsignupbtn").onclick=()=>{if(cloudReady())showGate("signup")};
   $("#sback").onclick=()=>showGate("login");
   $("#tocloud").onclick=toCloud;
+  // En-tête figé : version compacte quand on a défilé
+  (()=>{let on=false;const st=$("#stickytop");const f=()=>{const y=window.scrollY;if(!on&&y>140){on=true;st.classList.add("compact")}else if(on&&y<30){on=false;st.classList.remove("compact")}};window.addEventListener("scroll",f,{passive:true});f()})();
   window.addEventListener("online",()=>{if(MODE==="cloud"){cloud.flush();cloud.fetch()}});
   window.addEventListener("focus",()=>{if(MODE==="cloud")cloud.schedule()});
   setInterval(()=>{if(MODE==="cloud"&&!document.hidden)cloud.fetch()},60000);
