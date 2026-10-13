@@ -366,6 +366,25 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 @media (min-width:761px){html{scroll-padding-top:200px}}
 @media (max-width:760px){.sticky{position:static;margin-top:0;padding:0;background:none;box-shadow:none!important}.task,.req,.pt,.group{scroll-margin-top:0}}
 @media print{.sticky{position:static}}
+/* En-tête : actions du projet et barre d'affichage */
+.head .tools{flex-wrap:nowrap}
+.ddm{position:relative}
+.ddm>summary{list-style:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;width:auto;height:auto;background:var(--panel)}
+.ddm>summary::-webkit-details-marker{display:none}
+.ddm.ddmore>summary{padding:8px 12px;font-weight:700;letter-spacing:.05em}
+.ddm[open]>summary{border-color:var(--steel);background:var(--panel)}
+.ddm .menu{top:42px;min-width:240px;z-index:8}
+.ddm .menu hr{border:0;border-top:1px solid var(--line2);margin:4px 0}
+.ddm .mh{font-size:11.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;padding:6px 12px 2px}
+.sharebtn{display:inline-flex;align-items:center;gap:8px}
+.avs{display:inline-flex}
+.avs span{width:24px;height:24px;border-radius:50%;color:#fff;font-size:10.5px;font-weight:600;display:grid;place-items:center;border:2px solid var(--panel);margin-left:-6px}
+.avs span:first-child{margin-left:0}
+.avs .more4{background:var(--chip)!important;color:var(--chipink)}
+.viewbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.viewbar .vbl,.viewbar .vbr{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.donerow{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.donerow .vider{font-size:13.5px}
 /* Onglets du projet */
 .ptabs{display:flex;gap:4px;box-shadow:inset 0 -1px 0 var(--line);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .ptabs::-webkit-scrollbar{display:none}
@@ -585,6 +604,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       <div class="sticky" id="stickytop">
       <div class="ptabs" id="ptabs" role="tablist" aria-label="Contenu du projet" hidden></div>
       <span class="stucklbl" id="stucklbl" aria-hidden="true"></span>
+      <div class="viewbar" id="viewbar" hidden></div>
       <form class="quick" id="quick" autocomplete="off">
         <label class="qmain"><span class="qkind">Tâche</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--muted)"><path d="M12 5v14M5 12h14"></path></svg>
           <input type="text" id="qt" placeholder="Ajouter une tâche…" aria-label="Intitulé de la tâche"></label>
@@ -1765,55 +1785,77 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     }
     $("#ptitle").innerHTML=title; $("#psub").textContent=sub;
 
+    // ---- Haut à droite : actions sur le projet (Partager, Exporter, ⋯) ----
     const tools=$("#ptools"); tools.innerHTML="";
-    const b=(txt,fn,cls)=>{const x=document.createElement("button");x.className="btn "+(cls||"ghost");x.type="button";x.textContent=txt;x.onclick=fn;tools.appendChild(x);return x};
-    if(p&&(MODE!=="cloud"||isOwner(p.id))){
-      if(MODE==="cloud")b(shareOpen?"Fermer le partage":"Partager",()=>{shareOpen=!shareOpen;render()},"");
-      b("Renommer",()=>renameProject(p));
-      b(p.archived?"Réactiver le projet":"Archiver",()=>archiveProject(p,!p.archived));
-      b("Supprimer le projet",()=>deleteProject(p));
-    } else if(p&&MODE==="cloud")b("Quitter le projet",()=>shareRemove(p.id,cloud.email,true));
+    const b=(txt,fn,cls,host)=>{const x=document.createElement("button");x.className="btn "+(cls||"ghost");x.type="button";x.textContent=txt;x.onclick=fn;(host||tools).appendChild(x);return x};
+    const ddMenu=(label,items,cls)=>{
+      const d=document.createElement("details");d.className="more ddm"+(cls?" "+cls:"");
+      d.innerHTML=`<summary class="btn" aria-label="${esc(label.replace(/[▾⋯]/g,"").trim()||"Plus d'actions")}">${label}</summary><div class="menu"></div>`;
+      const m=d.querySelector(".menu");
+      items.filter(Boolean).forEach(it=>{if(it==="-"){m.insertAdjacentHTML("beforeend",`<hr>`);return}if(it.h){m.insertAdjacentHTML("beforeend",`<div class="mh">${esc(it.h)}</div>`);return}const x=document.createElement("button");x.type="button";x.textContent=it.t;if(it.cls)x.className=it.cls;x.onclick=()=>{d.open=false;it.fn()};m.appendChild(x)});
+      tools.appendChild(d);return d;
+    };
+    const initials=n=>String(n||"").replace(/@.*/,"").split(/[\s._-]+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("")||"?";
+    const AVC=["#3E7CB1","#C2410C","#2F7D5B","#8E5BB5","#B8860B","#C0396B"];
     if(mode==="trash"){if(nTrash)b("Vider la corbeille",emptyTrash);b("Fermer la corbeille",go("list","all"),"")}
-    else{b("Récap de la semaine",openRecap,"");b("Exporter",()=>openExport(p,mode==="points"?"points":"tasks"),"")}
-    if(mode==="list"&&alive.some(t=>t.status==="done"&&(!p||t.projectId===p.id)))b("Vider les terminées",clearDone);
+    else{
+      if(p&&MODE==="cloud"&&isOwner(p.id)){
+        const m=cloud.meta[p.id], who=m?[m.ownerEmail,...m.members]:[cloud.email];
+        const sb=b("",()=>{shareOpen=!shareOpen;render()},"sharebtn");
+        sb.innerHTML=`${who.length>1?`<span class="avs">${who.slice(0,4).map((e,i)=>`<span style="background:${AVC[i%AVC.length]}" title="${esc(nameOf(e))}">${esc(initials(nameOf(e)))}</span>`).join("")}${who.length>4?`<span class="more4">+${who.length-4}</span>`:""}</span>`:""}${shareOpen?"Fermer le partage":"Partager"}`;
+        sb.title=who.length>1?"Partagé avec "+m.members.map(nameOf).join(", "):"Partager ce projet avec un collègue";
+      }
+      ddMenu("Exporter ▾",[{h:"Documents"},{t:"Récap de la semaine",fn:openRecap},{t:"Plan d'actions (Excel / PDF)",fn:()=>openExport(p,"tasks")},{t:"Points ouverts (Excel / PDF)",fn:()=>openExport(p,"points")}],"ddexp");
+      if(p){
+        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[{t:"Renommer le projet",fn:()=>renameProject(p)},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
+        else ddMenu("⋯",[{t:"Quitter le projet",fn:()=>shareRemove(p.id,cloud.email,true),cls:"danger"}],"ddmore");
+      }
+    }
+    // ---- Barre d'affichage propre à l'onglet (au-dessus de la liste) ----
+    const vbar=$("#viewbar");vbar.innerHTML="";
+    const vl=document.createElement("div");vl.className="vbl";const vr=document.createElement("div");vr.className="vbr";
     const people=[...new Set(alive.map(whoName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"fr"));
     const sugg=new Set(people);
     if(MODE==="cloud"){if(cloud.email)sugg.add(nameOf(cloud.email));Object.values(cloud.meta).forEach(m=>{sugg.add(nameOf(m.ownerEmail));m.members.forEach(e=>sugg.add(nameOf(e)))})}
     $("#people").innerHTML=[...sugg].filter(Boolean).map(n=>`<option value="${esc(n)}">`).join("");
     if(ui.who&&ui.who!=="__none"&&!people.includes(ui.who))ui.who="";
-    if(people.length&&mode!=="dash"&&mode!=="trash"&&mode!=="requests"&&mode!=="points"){
-      const w=document.createElement("label");w.className="whobox";
-      w.innerHTML=`Responsable <select id="whosel" aria-label="Filtrer par responsable"><option value="">Tout le monde</option>${people.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")}<option value="__none">Non attribuées</option></select>`;
-      const sel=w.querySelector("select");sel.value=ui.who||"";sel.onchange=e=>{ui.who=e.target.value;saveUi();render()};
-      tools.appendChild(w);
+    const taskView=mode==="list"||agenda;
+    if(taskView&&!query.trim()){
+      const seg=document.createElement("div");seg.className="seg";seg.setAttribute("role","group");seg.setAttribute("aria-label","Affichage");
+      [["list","Liste"],["agenda","Agenda"]].forEach(([m,l])=>{const x=document.createElement("button");x.type="button";x.textContent=l;x.setAttribute("aria-pressed",ui.mode===m);x.onclick=()=>{ui.mode=m;if(m!=="list")ui.scope="all";saveUi();editing=null;render()};seg.appendChild(x)});
+      vl.appendChild(seg);
+      if(agenda){
+        const wn=document.createElement("div");wn.className="wnav";
+        wn.innerHTML=`<button class="btn" type="button" data-w="-1" aria-label="Semaine précédente">${ICON_CHEV.replace('M9 6l6 6-6 6','M15 6l-6 6 6 6')}</button><button class="btn" type="button" data-w="0">Cette semaine</button><button class="btn" type="button" data-w="1" aria-label="Semaine suivante">${ICON_CHEV}</button>`;
+        wn.querySelectorAll("[data-w]").forEach(x=>x.onclick=()=>{const n=+x.dataset.w;weekStart=n?addDays(weekStart,7*n):mondayOf(new Date());render()});
+        vl.appendChild(wn);
+      }
+      if(mode==="list"){
+        const gb=document.createElement("div");gb.className="seg";gb.setAttribute("role","group");gb.setAttribute("aria-label","Grouper par");
+        gb.innerHTML=`<span class="seglbl">Grouper par</span>`;
+        [["due","Échéance"],["family","Famille"]].forEach(([k,l])=>{const x=document.createElement("button");x.type="button";x.textContent=l;x.setAttribute("aria-pressed",(ui.groupBy||"due")===k);x.onclick=()=>{ui.groupBy=k;saveUi();render()};gb.appendChild(x)});
+        vr.appendChild(gb);
+      }
+      if(agenda){
+        if(!p&&state.projects.length)vr.appendChild(projectFilter());
+        const mb=b("Réunions Outlook",()=>{
+          if(MODE!=="cloud"){alert("L'affichage des réunions Outlook est disponible en mode en ligne (avec un compte).");return}
+          ui.showMeetings=!ui.showMeetings;saveUi();
+          if(ui.showMeetings){if(cal.hasLink===false){openCalCfg();ui.showMeetings=false;saveUi();return}loadMeetings(false)}
+          render();
+        },"mtoggle",vr);
+        mb.setAttribute("aria-pressed",!!ui.showMeetings&&MODE==="cloud");
+        mb.title=MODE==="cloud"?"Afficher ou masquer vos réunions Outlook dans l'agenda":"Disponible en mode en ligne";
+        if(MODE==="cloud"&&ui.showMeetings)b("Réglages du calendrier",openCalCfg,"",vr);
+      }
+      if(people.length){
+        const w=document.createElement("label");w.className="whobox";
+        w.innerHTML=`Responsable <select id="whosel" aria-label="Filtrer par responsable"><option value="">Tout le monde</option>${people.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")}<option value="__none">Non attribuées</option></select>`;
+        const sel=w.querySelector("select");sel.value=ui.who||"";sel.onchange=e=>{ui.who=e.target.value;saveUi();render()};
+        vr.appendChild(w);
+      }
     }
-    if(agenda){
-      if(!p&&state.projects.length)tools.appendChild(projectFilter());
-      const mb=b("Réunions Outlook",()=>{
-        if(MODE!=="cloud"){alert("L'affichage des réunions Outlook est disponible en mode en ligne (avec un compte).");return}
-        ui.showMeetings=!ui.showMeetings;saveUi();
-        if(ui.showMeetings){if(cal.hasLink===false){openCalCfg();ui.showMeetings=false;saveUi();return}loadMeetings(false)}
-        render();
-      },"mtoggle");
-      mb.setAttribute("aria-pressed",!!ui.showMeetings&&MODE==="cloud");
-      mb.title=MODE==="cloud"?"Afficher ou masquer vos réunions Outlook dans l'agenda":"Disponible en mode en ligne";
-      if(MODE==="cloud"&&ui.showMeetings)b("Réglages du calendrier",openCalCfg);
-      const wn=document.createElement("div");wn.className="wnav";
-      wn.innerHTML=`<button class="btn" type="button" data-w="-1" aria-label="Semaine précédente">${ICON_CHEV.replace('M9 6l6 6-6 6','M15 6l-6 6 6 6')}</button><button class="btn" type="button" data-w="0">Cette semaine</button><button class="btn" type="button" data-w="1" aria-label="Semaine suivante">${ICON_CHEV}</button>`;
-      wn.querySelectorAll("[data-w]").forEach(x=>x.onclick=()=>{const n=+x.dataset.w;weekStart=n?addDays(weekStart,7*n):mondayOf(new Date());render()});
-      tools.appendChild(wn);
-    }
-    if(mode!=="dash"&&mode!=="trash"&&mode!=="requests"&&mode!=="points"){
-    const seg=document.createElement("div");seg.className="seg";seg.setAttribute("role","group");seg.setAttribute("aria-label","Affichage");
-    [["list","Liste"],["agenda","Agenda"]].forEach(([m,l])=>{const x=document.createElement("button");x.type="button";x.textContent=l;x.setAttribute("aria-pressed",ui.mode===m);x.onclick=()=>{ui.mode=m;if(m!=="list")ui.scope="all";saveUi();editing=null;render()};seg.appendChild(x)});
-    tools.appendChild(seg);
-    if(mode==="list"&&!query.trim()){
-      const gb=document.createElement("div");gb.className="seg";gb.setAttribute("role","group");gb.setAttribute("aria-label","Grouper par");
-      gb.innerHTML=`<span class="seglbl">Grouper par</span>`;
-      [["due","Échéance"],["family","Famille"]].forEach(([k,l])=>{const x=document.createElement("button");x.type="button";x.textContent=l;x.setAttribute("aria-pressed",(ui.groupBy||"due")===k);x.onclick=()=>{ui.groupBy=k;saveUi();render()};gb.appendChild(x)});
-      tools.insertBefore(gb,seg);
-    }
-    }
+    vbar.append(vl,vr);vbar.hidden=!vl.children.length&&!vr.children.length;
     renderShare(p);
 
     // sélecteur projet
@@ -1869,7 +1911,9 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       const btn=document.createElement("button");btn.type="button";btn.className="showdone";btn.setAttribute("aria-expanded",!!ui.showDoneList);
       btn.innerHTML=`${ICON_CHEV}${ui.showDoneList?"Masquer":"Afficher"} ${done.length>1?`les ${done.length} tâches terminées`:"la tâche terminée"}`;
       btn.onclick=()=>{ui.showDoneList=!ui.showDoneList;saveUi();render()};
-      L.appendChild(btn);
+      const row=document.createElement("div");row.className="donerow";row.appendChild(btn);
+      const vd=document.createElement("button");vd.type="button";vd.className="btn ghost vider";vd.textContent="Vider les terminées";vd.title="Mettre toutes les tâches terminées à la corbeille (annulable)";vd.onclick=clearDone;row.appendChild(vd);
+      L.appendChild(row);
       if(ui.showDoneList)L.appendChild(group("done","Terminées","",done,!p));
     }
     splitCols(L);
