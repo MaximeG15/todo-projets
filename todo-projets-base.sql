@@ -458,3 +458,13 @@ begin
     alter publication supabase_realtime add table public.point_themes;
   end if;
 end $$;
+
+-- ---------- Performance des règles d'accès : identité évaluée une seule fois par requête ----------
+alter policy projects_select on public.projects using ((owner = (select auth.uid())) or public.can_access(id));
+alter policy projects_insert on public.projects with check (owner = (select auth.uid()));
+alter policy projects_update on public.projects using (owner = (select auth.uid())) with check (owner = (select auth.uid()));
+alter policy projects_delete on public.projects using (owner = (select auth.uid()));
+alter policy profiles_select on public.profiles using ((user_id = (select auth.uid())) or public.shares_project_with(email));
+alter policy profiles_insert on public.profiles with check (user_id = (select auth.uid()));
+alter policy profiles_update on public.profiles using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+alter policy user_calendar_own on public.user_calendar using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));

@@ -263,7 +263,7 @@ dialog#recap::backdrop{background:rgba(17,24,29,.45)}
 .group.g-family h2{display:flex;align-items:center;gap:10px}
 .group.g-family h2::before{content:"";width:10px;height:10px;border-radius:3px;background:#7A62C2;flex:none}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tag.fam{background:#2E2745;color:#CFC3F3}}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tag.wait{background:#2E2745;color:#CFC3F3}:root:not([data-theme="light"]) .kcol.k-waiting .dhead,:root:not([data-theme="light"]) .kpi.wait b,:root:not([data-theme="light"]) .card .cm .st.wait{color:#B9A6F0}:root:not([data-theme="light"]) .kcol.k-doing .dhead{color:#9CC3DD}}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tag.wait{background:#2E2745;color:#CFC3F3}:root:not([data-theme="light"]) .kpi.wait b,:root:not([data-theme="light"]) .card .cm .st.wait{color:#B9A6F0}}
 /* Filtre des projets de l'agenda */
 .pfilter{position:relative}
 .pfilter summary{list-style:none;display:inline-flex;align-items:center;gap:6px}
@@ -424,15 +424,6 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 .trashbtn[aria-pressed="true"]{background:var(--nav);color:#fff;border-color:var(--nav)}
 .trashbtn .tbn{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--late);color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center}
 .trashbtn .tbn:empty{display:none}
-/* Kanban */
-.kanban{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:start}
-.kanban .day{min-height:240px}
-.kcol.k-doing .dhead{color:#1F4A66}
-.kcol.k-waiting .dhead{color:#5B3FA0}
-.kcol.k-done .dhead{color:var(--ok)}
-.kmore{font-size:12.5px;color:var(--muted);text-align:center;padding:6px 4px}
-@container (max-width:900px){.kanban{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@container (max-width:480px){.kanban{grid-template-columns:1fr}.kanban .day{min-height:0}}
 /* Tableau de bord */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
 .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;text-align:left;cursor:pointer;color:var(--ink);font:inherit}
@@ -1731,8 +1722,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   }
   function render(){
     if(view!=="all"&&!proj(view))view="all";
-    // Le mode Kanban est retiré pour l'instant (le code reste disponible : renderKanban)
-    if(ui.mode==="kanban")ui.mode="list";
+    if(ui.mode==="kanban")ui.mode="list"; // ancien mode Kanban (retiré)
     if(ui.taskMode==="kanban")ui.taskMode="list";
     if(!["list","agenda","dash","trash","requests","points"].includes(ui.mode))ui.mode="list";
     if(ui.mode==="points"&&view==="all")ui.mode="list";
@@ -1793,9 +1783,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     // en-tête
     const p=view==="all"?null:proj(view);
     const agenda=mode==="agenda";
-    $("#wrap").classList.toggle("wide",agenda||mode==="kanban"||mode==="dash");
     $("#quick").hidden=mode==="dash"||mode==="trash"||mode==="requests"||mode==="points";
-    $("#wrap").classList.toggle("wide",agenda||mode==="kanban"||mode==="dash");
+    $("#wrap").classList.toggle("wide",agenda||mode==="dash");
     // onglets du projet : tâches / demandes client
     const tabs=$("#ptabs");$("#stucklbl").textContent=p?p.name:"";
     if(p&&mode!=="dash"&&mode!=="trash"&&!query.trim()){
@@ -2454,32 +2443,6 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(on&&view===id)view="all";
     save();render();
     toast(on?`Projet « ${short(p.name)} » archivé : il reste consultable dans « Projets archivés ».`:`Projet « ${short(p.name)} » réactivé.`,()=>{const cur=proj(id);if(!cur)return;cur.archived=!on;if(on)view=id;save();render()});
-  }
-
-  // ---------- Kanban ----------
-  function kDrop(el,st){
-    el.addEventListener("dragover",e=>{e.preventDefault();el.classList.add("over")});
-    el.addEventListener("dragleave",e=>{if(!el.contains(e.relatedTarget))el.classList.remove("over")});
-    el.addEventListener("drop",e=>{e.preventDefault();el.classList.remove("over");const id=e.dataTransfer.getData("text/plain");const t=state.tasks.find(x=>x.id===id);if(t)changeStatus(t,st)});
-  }
-  function renderKanban(L,p,pool){
-    L.insertAdjacentHTML("beforeend",`<p class="hint">Glissez une carte d'une colonne à l'autre pour changer son statut. Cliquez sur son intitulé pour l'ouvrir.</p>`);
-    const box=document.createElement("div");box.className="kanban";
-    const lim=Date.now()-14*864e5;
-    [["todo","À faire"],["doing","En cours"],["waiting","En attente"],["done","Terminé"]].forEach(([st,label])=>{
-      let items=pool.filter(t=>(t.status||"todo")===st), older=0;
-      if(st==="done"){items.sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));older=items.filter(t=>(t.doneAt||0)<lim).length;items=items.filter(t=>(t.doneAt||0)>=lim)}
-      else items.sort(sortOpen);
-      const col=document.createElement("section");col.className="day kcol k-"+st;
-      col.innerHTML=`<h2 class="dhead"><span>${label}</span><span class="n">${items.length||""}</span></h2><div class="dbody"></div>`;
-      const body=col.querySelector(".dbody");
-      items.forEach(t=>body.appendChild(card(t,!p,true)));
-      if(!items.length)body.innerHTML=`<div class="dempty">${st==="done"?"Rien de terminé ces 14 derniers jours":"Aucune tâche"}</div>`;
-      if(older)body.insertAdjacentHTML("beforeend",`<div class="kmore">${older} tâche${older>1?"s":""} terminée${older>1?"s":""} plus ancienne${older>1?"s":""} (vue Liste)</div>`);
-      kDrop(col,st);
-      box.appendChild(col);
-    });
-    L.appendChild(box);
   }
 
   // ---------- Tableau de bord ----------
@@ -3251,7 +3214,22 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         ["En retard",ts.filter(t=>t.status==="todo"&&t.due&&t.due<t0&&(offset===0||t.due<=weI)).sort(sortOpen).map(t=>line(t,"prévu le "+shortDay(t.due).toLowerCase()))],
         [offset===0?"Reste à faire cette semaine":"Prévu cette semaine, non terminé",ts.filter(t=>t.status==="todo"&&t.due&&t.due>=(offset===0?t0:wsI)&&t.due<=weI).sort(sortOpen).map(t=>line(t,shortDay(t.due).toLowerCase()))],
         ["Semaine suivante",ts.filter(t=>t.status!=="done"&&t.due&&t.due>=nS&&t.due<=nE&&t.status!=="doing").sort(sortOpen).map(t=>line(t,shortDay(t.due).toLowerCase()))]
-      ].filter(([,l])=>l.length);
+      ];
+      // points ouverts et demandes client de la semaine
+      const inW=ms=>ms&&dl(ms)>=wsI&&dl(ms)<=weI;
+      const cut=(x,n)=>{x=String(x||"").replace(/\s+/g," ").trim();return x.length>n?x.slice(0,n-1)+"…":x};
+      const pts=livePts().filter(o=>o.projectId===pr.id);
+      const ptsOpen=pts.filter(o=>o.status!=="closed").length;
+      sec.push(["Points ouverts levés",pts.filter(o=>o.status==="closed"&&inW(o.closedAt)).sort((a,b)=>a.closedAt-b.closedAt).map(o=>`- ${cut(o.text,140)}${o.answer?` – réponse : ${cut(o.answer,160)}`:""}`)]);
+      const ptsNew=pts.filter(o=>inW(o.createdAt)).length;
+      if(ptsOpen||ptsNew)sec.push(["Points ouverts",[`- ${ptsOpen} encore ouvert${ptsOpen>1?"s":""}${ptsNew?`, dont ${ptsNew} ajouté${ptsNew>1?"s":""} cette semaine`:""}`]]);
+      const rqs=liveReq().filter(r=>r.projectId===pr.id);
+      sec.push(["Demandes client reçues",rqs.filter(r=>r.received&&r.received>=wsI&&r.received<=weI).map(r=>`- ${r.title}${r.requester?` (${r.requester})`:""} – ${REQL[r.status].toLowerCase()}`)]);
+      sec.push(["Demandes client traitées ou refusées",rqs.filter(r=>!reqOpen(r)&&inW(r.closedAt)).map(r=>`- ${r.title} – ${REQL[r.status].toLowerCase()}`)]);
+      sec.push(["Demandes client en cours",rqs.filter(r=>reqOpen(r)&&!(r.received&&r.received>=wsI&&r.received<=weI)).sort((a,b)=>(a.due||"9999")<(b.due||"9999")?-1:1).map(r=>`- ${r.title} – ${REQL[r.status].toLowerCase()}${r.due?`, réponse attendue ${shortDay(r.due).toLowerCase()}`:""}`)]);
+      const secF=sec.filter(([,l])=>l.length);
+      if(!secF.length)return;
+      sec.length=0;sec.push(...secF);
       if(!sec.length)return;
       any=true;
       out.push(pr.name.toUpperCase());
