@@ -210,8 +210,10 @@ textarea{width:100%;resize:vertical;min-height:64px}
 .choice b{display:block;font-size:16px;margin-bottom:2px}
 .choice span{color:var(--muted);font-size:13.5px}
 .choice:disabled{opacity:.5;cursor:not-allowed}
-#glogin label,#gsignup label{display:grid;gap:4px;font-size:13px;color:var(--muted);margin-bottom:12px}
-#glogin input,#gsignup input{padding:10px 11px;font-size:15px;color:var(--ink);width:100%;min-width:0;box-sizing:border-box}
+.linkbtn{display:block;margin:10px auto 0;background:none;border:0;color:var(--muted);font:inherit;font-size:13px;text-decoration:underline;cursor:pointer;padding:4px}
+.linkbtn:hover{color:var(--ink)}
+#glogin label,#gsignup label,#gforgot label,#greset label{display:grid;gap:4px;font-size:13px;color:var(--muted);margin-bottom:12px}
+#glogin input,#gsignup input,#gforgot input,#greset input{padding:10px 11px;font-size:15px;color:var(--ink);width:100%;min-width:0;box-sizing:border-box}
 .gerr{color:var(--late);font-size:13.5px;min-height:1em;margin:0 0 10px}
 .gok{color:var(--ok);font-size:13.5px;margin:0 0 10px}
 .gok:empty{display:none}
@@ -533,7 +535,23 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       <button class="btn primary" type="submit" id="lgo">Se connecter</button>
       <button class="btn ghost" type="button" id="lback">Retour</button>
       <button class="btn signup-cta" type="button" id="tosignup">Pas encore de compte ? Créer mon compte</button>
-      <p class="gnote">Mot de passe oublié ? Contactez la personne qui gère l'application : elle peut le réinitialiser.</p>
+      <button class="linkbtn" type="button" id="lforgot">Mot de passe oublié ?</button>
+    </form>
+    <form id="gforgot" hidden autocomplete="on">
+      <p class="sub">Mot de passe oublié</p>
+      <p class="gnote" style="margin:0 0 12px">Indiquez l'adresse de votre compte : vous recevrez un e-mail avec un lien pour choisir un nouveau mot de passe.</p>
+      <label>E-mail<input type="email" id="femail" autocomplete="username" required></label>
+      <p class="gerr" id="ferr" role="alert"></p>
+      <p class="gok" id="fok" role="status"></p>
+      <button class="btn primary" type="submit" id="fgo">Recevoir le lien</button>
+      <button class="btn ghost" type="button" id="fback">Retour à la connexion</button>
+    </form>
+    <form id="greset" hidden autocomplete="on">
+      <p class="sub">Choisir un nouveau mot de passe</p>
+      <label>Nouveau mot de passe (8 caractères minimum)<input type="password" id="rpass" autocomplete="new-password" minlength="8" required></label>
+      <label>Confirmer le mot de passe<input type="password" id="rpass2" autocomplete="new-password" minlength="8" required></label>
+      <p class="gerr" id="rerr" role="alert"></p>
+      <button class="btn primary" type="submit" id="rgo">Enregistrer et me connecter</button>
     </form>
     <form id="gsignup" hidden autocomplete="on">
       <p class="sub">Créer mon compte</p>
@@ -972,13 +990,15 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     }catch(e){}
     return fetch(input,init);
   }
+  const AUTH_HASH=(()=>{const h=location.hash||"";return{recovery:/type=recovery/.test(h),error:/error_code=|error=access_denied/.test(h)&&!/type=recovery/.test(h)}})();
+  if(AUTH_HASH.error)try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}
   function cloudClient(){
     if(!cloud.client){
       cloud.client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey,{
         auth:{persistSession:true,autoRefreshToken:true,storageKey:"todo-projets-auth",lock:async(name,timeout,fn)=>await fn()},
         global:{fetch:authFetch}
       });
-      try{cloud.client.auth.onAuthStateChange((ev,sess)=>{if(sess)useSession(sess);else if(ev==="SIGNED_OUT")useSession(null)})}catch(e){}
+      try{cloud.client.auth.onAuthStateChange((ev,sess)=>{if(sess)useSession(sess);else if(ev==="SIGNED_OUT")useSession(null);if(ev==="PASSWORD_RECOVERY")setTimeout(()=>showGate("reset"),0)})}catch(e){}
     }
     return cloud.client;
   }
@@ -1169,6 +1189,35 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     }catch(err){$("#lerr").textContent="Serveur injoignable : vérifiez votre connexion Internet."}
     finally{$("#lgo").disabled=false}
   }
+  async function forgot(e){
+    e.preventDefault();
+    const email=$("#femail").value.trim().toLowerCase();
+    $("#ferr").textContent="";$("#fok").textContent="";$("#fgo").disabled=true;
+    try{
+      const {error}=await cloudClient().auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+      if(error){$("#ferr").textContent=/rate|limit|seconds/i.test(error.message||"")?"Trop de demandes rapprochées : patientez quelques minutes avant de réessayer.":(transient(error)&&!error.status?"Serveur injoignable : vérifiez votre connexion Internet.":"Envoi impossible : "+error.message);return}
+      $("#fok").textContent="Si un compte existe pour "+email+", un e-mail vient d'être envoyé. Ouvrez le lien qu'il contient sur cet appareil (pensez à vérifier les courriers indésirables).";
+    }catch(err){$("#ferr").textContent="Serveur injoignable : vérifiez votre connexion Internet."}
+    finally{$("#fgo").disabled=false}
+  }
+  async function resetPass(e){
+    e.preventDefault();
+    const p1=$("#rpass").value,p2=$("#rpass2").value;
+    $("#rerr").textContent="";
+    if(p1.length<8){$("#rerr").textContent="Le mot de passe doit contenir au moins 8 caractères.";return}
+    if(p1!==p2){$("#rerr").textContent="Les deux mots de passe sont différents.";return}
+    $("#rgo").disabled=true;
+    try{
+      const {data,error}=await cloudClient().auth.updateUser({password:p1});
+      if(error){$("#rerr").textContent=/different|same/i.test(error.message||"")?"Choisissez un mot de passe différent de l'ancien.":/session|expired|jwt/i.test(error.message||"")?"Le lien a expiré : refaites une demande depuis « Mot de passe oublié ».":"Modification refusée : "+error.message;return}
+      $("#rpass").value="";$("#rpass2").value="";
+      let sess=null;try{sess=(await cloudClient().auth.getSession()).data.session}catch(x){}
+      if(sess)useSession(sess);
+      await enterCloud((data&&data.user)||(sess&&sess.user));
+      toast("Mot de passe modifié.");
+    }catch(err){$("#rerr").textContent="Serveur injoignable : vérifiez votre connexion Internet."}
+    finally{$("#rgo").disabled=false}
+  }
   const domainOk=email=>!CONFIG.allowedDomains||!CONFIG.allowedDomains.length||CONFIG.allowedDomains.includes(email.split("@").pop().toLowerCase());
   async function signup(e){
     e.preventDefault();
@@ -1306,6 +1355,9 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   function showGate(step){
     $("#gate").hidden=false;
     $("#gchoice").hidden=step!=="choice";$("#glogin").hidden=step!=="login";$("#gsignup").hidden=step!=="signup";
+    $("#gforgot").hidden=step!=="forgot";$("#greset").hidden=step!=="reset";
+    if(step==="forgot"){$("#ferr").textContent="";$("#fok").textContent="";$("#femail").value=$("#femail").value||$("#lemail").value;setTimeout(()=>$("#femail").focus(),0)}
+    if(step==="reset"){$("#rerr").textContent="";setTimeout(()=>$("#rpass").focus(),0)}
     const ok=cloudReady();$("#gcloud").disabled=!ok;$("#gsignupbtn").hidden=!ok;$("#gnocloud").hidden=ok;
     if(step==="login")setTimeout(()=>$("#lemail").focus(),0);
     if(step==="signup"){$("#sdomains").textContent=CONFIG.allowedDomains&&CONFIG.allowedDomains.length?"Réservé aux adresses "+CONFIG.allowedDomains.map(d=>"@"+d).join(", ")+".":"";setTimeout(()=>$("#semail").focus(),0)}
@@ -3275,6 +3327,10 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   $("#tosignup").onclick=e=>{e.preventDefault();showGate("signup")};
   $("#gsignupbtn").onclick=()=>{if(cloudReady())showGate("signup")};
   $("#sback").onclick=()=>showGate("login");
+  $("#lforgot").onclick=()=>showGate("forgot");
+  $("#fback").onclick=()=>showGate("login");
+  $("#gforgot").onsubmit=forgot;
+  $("#greset").onsubmit=resetPass;
   $("#tocloud").onclick=toCloud;
   // En-tête figé : version compacte quand on a défilé
   (()=>{const st=$("#stickytop");const f=()=>{const top=st.getBoundingClientRect().top;st.classList.toggle("compact",window.scrollY>0&&top<=0.5)};window.addEventListener("scroll",f,{passive:true});window.addEventListener("resize",f);f()})();
@@ -3320,7 +3376,14 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   $("#installbtn").onclick=async()=>{if(!installEvt)return;installEvt.prompt();try{await installEvt.userChoice}catch(e){}installEvt=null;$("#installbtn").hidden=true};
 
   let startMode=null;try{startMode=localStorage.getItem("todo-mode")}catch(e){}
-  if(startMode==="cloud")startCloud();
+  if(AUTH_HASH.recovery&&cloudReady())(async()=>{
+    // retour depuis le lien « Mot de passe oublié »
+    let sess=null;try{sess=(await cloudClient().auth.getSession()).data.session}catch(e){}
+    if(sess){useSession(sess);render();showGate("reset")}
+    else{render();showGate("forgot");$("#ferr").textContent="Le lien de réinitialisation n'est plus valide : demandez-en un nouveau."}
+  })();
+  else if(AUTH_HASH.error&&cloudReady()){render();showGate("forgot");$("#ferr").textContent="Le lien reçu par e-mail a expiré ou a déjà servi : demandez-en un nouveau."}
+  else if(startMode==="cloud")startCloud();
   else if(startMode==="local")startLocal();
   else{
     // Première ouverture : si des tâches locales existent déjà, on reste en local sans rien demander
