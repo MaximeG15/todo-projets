@@ -1644,9 +1644,12 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   }
   function render(){
     if(view!=="all"&&!proj(view))view="all";
-    if(!["list","agenda","kanban","dash","trash","requests","points"].includes(ui.mode))ui.mode="list";
+    // Le mode Kanban est retiré pour l'instant (le code reste disponible : renderKanban)
+    if(ui.mode==="kanban")ui.mode="list";
+    if(ui.taskMode==="kanban")ui.taskMode="list";
+    if(!["list","agenda","dash","trash","requests","points"].includes(ui.mode))ui.mode="list";
     if(ui.mode==="points"&&view==="all")ui.mode="list";
-    if(["list","agenda","kanban"].includes(ui.mode))ui.taskMode=ui.mode;
+    if(["list","agenda"].includes(ui.mode))ui.taskMode=ui.mode;
     if(ui.mode==="trash"||ui.mode==="dash")view="all";
     const mode=ui.mode;
     const alive=live();
@@ -1665,7 +1668,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const go=(mode,scope)=>()=>{query="";$("#search").value="";ui.mode=mode;ui.scope=scope;saveUi();view="all";editing=null;shareOpen=false;weekStart=null;closeMenu();render()};
     vb("today","Aujourd'hui",nToday,view==="all"&&mode==="list"&&ui.scope==="today",go("list","today"));
     vb("agenda","Agenda de la semaine",nWeek,view==="all"&&mode==="agenda",go("agenda","all"));
-    vb("all","Toutes les tâches",open.length,view==="all"&&(mode==="list"||mode==="kanban")&&ui.scope==="all",go(mode==="kanban"?"kanban":"list","all"));
+    vb("all","Toutes les tâches",open.length,view==="all"&&mode==="list"&&ui.scope==="all",go("list","all"));
     vb("req","Demandes client",nReq||"",view==="all"&&mode==="requests",go("requests","all"));
     vb("dash","Tableau de bord","",mode==="dash",go("dash","all"));
     const tb=$("#trashbtn");
@@ -1788,7 +1791,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     }
     if(mode!=="dash"&&mode!=="trash"&&mode!=="requests"&&mode!=="points"){
     const seg=document.createElement("div");seg.className="seg";seg.setAttribute("role","group");seg.setAttribute("aria-label","Affichage");
-    [["list","Liste"],["kanban","Kanban"],["agenda","Agenda"]].forEach(([m,l])=>{const x=document.createElement("button");x.type="button";x.textContent=l;x.setAttribute("aria-pressed",ui.mode===m);x.onclick=()=>{ui.mode=m;if(m!=="list")ui.scope="all";saveUi();editing=null;render()};seg.appendChild(x)});
+    [["list","Liste"],["agenda","Agenda"]].forEach(([m,l])=>{const x=document.createElement("button");x.type="button";x.textContent=l;x.setAttribute("aria-pressed",ui.mode===m);x.onclick=()=>{ui.mode=m;if(m!=="list")ui.scope="all";saveUi();editing=null;render()};seg.appendChild(x)});
     tools.appendChild(seg);
     if(mode==="list"&&!query.trim()){
       const gb=document.createElement("div");gb.className="seg";gb.setAttribute("role","group");gb.setAttribute("aria-label","Grouper par");
@@ -1827,7 +1830,6 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(mode==="dash"){renderDash(L);return}
     const pool=p?base:base.filter(t=>!isArch(t.projectId));
     if(agenda){renderAgenda(L,p,pool);return}
-    if(mode==="kanban"){renderKanban(L,p,pool);return}
     const openPool=pool.filter(t=>t.status!=="done").sort(sortOpen);
     const done=pool.filter(t=>t.status==="done").sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
     const wanted=ui.scope==="today"?["late","today","waiting"]:null;
@@ -2357,7 +2359,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const kpis=[
       ["Tâches ouvertes",open.length,"",goList("all")],
       ["En retard",open.filter(isLate).length,"bad",goList("today")],
-      ["En attente",open.filter(t=>t.status==="waiting").length,"wait",()=>{view="all";ui.mode="kanban";ui.scope="all";saveUi();render()}],
+      ["En attente",open.filter(t=>t.status==="waiting").length,"wait",()=>{view="all";ui.mode="list";ui.scope="all";ui.groupBy="due";saveUi();render();setTimeout(()=>{const g=document.querySelector(".g-waiting");if(g)g.scrollIntoView({block:"start"})},0)}],
       ["Échéance cette semaine",open.filter(t=>t.due&&t.due>=wS&&t.due<=wE).length,"",()=>{view="all";ui.mode="agenda";ui.scope="all";weekStart=null;saveUi();render()}],
       ["Demandes client ouvertes",liveReq().filter(r=>reqOpen(r)&&!isArch(r.projectId)).length,liveReq().some(r=>reqLate(r)&&!isArch(r.projectId))?"bad":"",()=>{view="all";ui.mode="requests";saveUi();render();window.scrollTo({top:0})}],
       ["Terminées cette semaine",all.filter(t=>t.status==="done"&&dl(t.doneAt)>=wS&&dl(t.doneAt)<=wE).length,"ok",goList("all",{showDoneList:true})]
