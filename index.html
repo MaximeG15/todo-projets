@@ -249,6 +249,18 @@ mark{background:var(--signalsoft);color:inherit;padding:0 1px;border-radius:2px}
 .cform{display:flex;gap:6px;align-items:flex-end}
 .cform textarea{min-height:44px;flex:1}
 /* Récap */
+dialog.uidlg{border:0;border-radius:12px;padding:0;width:min(520px,calc(100vw - 24px));max-height:calc(100vh - 24px);background:var(--panel);color:var(--ink);box-shadow:0 20px 50px rgba(22,35,43,.3)}
+dialog.uidlg::backdrop{background:rgba(17,24,29,.45)}
+dialog.uidlg form{padding:20px 20px 16px;display:grid;gap:12px}
+dialog.uidlg h3{margin:0;font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:600}
+dialog.uidlg .uimsg{margin:0;white-space:pre-line;line-height:1.45;font-size:15px;overflow-wrap:anywhere;max-height:50vh;overflow:auto}
+dialog.uidlg .uifld{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+dialog.uidlg .uifld input,dialog.uidlg .uifld textarea{width:100%;box-sizing:border-box;min-width:0;padding:9px 10px;font:inherit;font-size:15px;color:var(--ink)}
+dialog.uidlg .uierr{margin:0;color:var(--late);font-size:13px}
+dialog.uidlg .uierr:empty{display:none}
+dialog.uidlg .uibtns{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:4px}
+dialog.uidlg .btn.danger{background:var(--late);border-color:var(--late);color:var(--panel);font-weight:600}
+@media (max-width:520px){dialog.uidlg .uibtns{flex-direction:column-reverse}dialog.uidlg .uibtns .btn{width:100%}}
 dialog#recap{border:0;border-radius:12px;padding:0;width:min(720px,calc(100vw - 24px));max-height:calc(100vh - 24px);background:var(--panel);color:var(--ink);box-shadow:0 20px 50px rgba(22,35,43,.3)}
 dialog#recap::backdrop{background:rgba(17,24,29,.45)}
 .rbox{display:flex;flex-direction:column;gap:12px;padding:20px}
@@ -883,7 +895,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         else if(mode==="open"){view="all";editing=null;applyState(d);setSync("Données chargées depuis "+h.name)}
         else{const merged=merge(state,d);applyState(merged);if(canon(merged)!==canon(d))save();else setSync("Données chargées depuis "+h.name)}
       }
-      catch(e){alert("Ce fichier n'est pas un fichier de données To do projets valide.");fileHandle=null;fileOk=false;await keepHandle(null)}
+      catch(e){uiAlert("Ce fichier n'est pas un fichier de données To do projets valide.");fileHandle=null;fileOk=false;await keepHandle(null)}
     } else save();
     showFile();
   }
@@ -901,7 +913,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     }catch(e){setSync("Impossible de rouvrir le fichier : utilisez « Ouvrir un fichier ».")}
   }
   async function unlink(){
-    if(!confirm("Délier le fichier ? Vos données restent dans le navigateur et dans le fichier, mais le fichier ne sera plus mis à jour."))return;
+    if(!await uiConfirm("Délier le fichier ? Vos données restent dans le navigateur et dans le fichier, mais le fichier ne sera plus mis à jour.",{ok:"Délier"}))return;
     fileHandle=null;fileOk=false;await keepHandle(null);showFile();setSync("Fichier délié : enregistrement dans le navigateur uniquement.");
   }
   function showFile(){
@@ -941,22 +953,22 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   }
   function importData(file){
     const r=new FileReader();
-    r.onload=()=>{
+    r.onload=async()=>{
       try{
         const d=JSON.parse(r.result);
         if(!Array.isArray(d.projects)||!Array.isArray(d.tasks))throw 0;
-        if(!confirm(`Remplacer vos données actuelles par ce fichier (${d.projects.length} projet(s), ${d.tasks.length} tâche(s)) ?`))return;
+        if(!await uiConfirm(`Remplacer vos données actuelles par ce fichier (${d.projects.length} projet(s), ${d.tasks.length} tâche(s)) ?`,{ok:"Remplacer",danger:true}))return;
         // les éléments absents du fichier importé sont considérés comme supprimés
         const imp=normalize(d), t0=Date.now();
         imp.projects.forEach(p=>p.updatedAt=t0);imp.tasks.forEach(t=>t.updatedAt=t0);
         view="all";editing=null;state=imp;save();render();
-      }catch(e){alert("Ce fichier n'est pas une sauvegarde valide de To do projets.")}
+      }catch(e){uiAlert("Ce fichier n'est pas une sauvegarde valide de To do projets.")}
     };
     r.readAsText(file);
   }
   function mergeData(file){
     const r=new FileReader();
-    r.onload=()=>{
+    r.onload=async()=>{
       try{
         const d=JSON.parse(r.result);
         if(!Array.isArray(d.projects)||!Array.isArray(d.tasks))throw 0;
@@ -964,7 +976,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         applyState(merge(state,normalize(d)));
         if(fileHandle&&fileOk)writeFile();
         setSync(`Fusion terminée : ${state.tasks.length-before>0?state.tasks.length-before+" tâche(s) ajoutée(s)":"aucune nouvelle tâche"}`);
-      }catch(e){alert("Ce fichier n'est pas un fichier de données To do projets valide.")}
+      }catch(e){uiAlert("Ce fichier n'est pas un fichier de données To do projets valide.")}
     };
     r.readAsText(file);
   }
@@ -1060,7 +1072,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         }
         done.forEach(b=>{const cur=this.dirty.get(b.k);if(cur&&cur.seq===b.seq)this.dirty.delete(b.k)});
         lsSave();
-        if(refused){alert(`${refused} modification(s) n'ont pas pu être enregistrées (droits insuffisants : le projet a peut-être été supprimé ou ne vous est plus partagé). L'affichage va être actualisé.`);this.fetch()}
+        if(refused){uiAlert(`${refused} modification(s) n'ont pas pu être enregistrées (droits insuffisants : le projet a peut-être été supprimé ou ne vous est plus partagé). L'affichage va être actualisé.`);this.fetch()}
         this.netDown=netFail;
         if(netFail){this.again=false;this.retry=setTimeout(()=>this.flush(),15000);break}
         if(!this.dirty.size)this.lastOk=Date.now();
@@ -1253,7 +1265,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     finally{$("#sgo").disabled=false}
   }
   async function logout(){
-    if(cloud.dirty.size&&!confirm(`${cloud.dirty.size} modification(s) ne sont pas encore envoyées. Se déconnecter quand même ? Elles seront envoyées à votre prochaine connexion sur ce navigateur.`))return;
+    if(cloud.dirty.size&&!await uiConfirm(`${cloud.dirty.size} modification(s) ne sont pas encore envoyées. Se déconnecter quand même ? Elles seront envoyées à votre prochaine connexion sur ce navigateur.`,{ok:"Se déconnecter"}))return;
     const c=cloudClient();
     if(cloud.channel){c.removeChannel(cloud.channel);cloud.channel=null}
     try{await c.auth.signOut()}catch(e){}
@@ -1262,11 +1274,11 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     showGate("login");
   }
   async function changePassword(){
-    const a=prompt("Nouveau mot de passe (8 caractères minimum)");if(!a)return;
-    if(a.length<8){alert("Le mot de passe doit contenir au moins 8 caractères.");return}
-    const b=prompt("Confirmez le nouveau mot de passe");if(a!==b){alert("Les deux saisies sont différentes : mot de passe inchangé.");return}
-    const {error}=await cloudClient().auth.updateUser({password:a});
-    alert(error?"Changement refusé : "+error.message:"Mot de passe modifié.");
+    const r=await uiForm("Changer de mot de passe",[{k:"a",label:"Nouveau mot de passe (8 caractères minimum)",type:"password",ac:"new-password"},{k:"b",label:"Confirmer le mot de passe",type:"password",ac:"new-password"}],
+      v=>v.a.length<8?"Le mot de passe doit contenir au moins 8 caractères.":v.a!==v.b?"Les deux saisies sont différentes.":"",{ok:"Enregistrer"});
+    if(!r)return;
+    const {error}=await cloudClient().auth.updateUser({password:r.a});
+    if(error)uiAlert("Changement refusé : "+error.message);else toast("Mot de passe modifié.");
   }
   function renderAccount(){
     const a=$("#acc");
@@ -1285,10 +1297,10 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   // Import d'un fichier .json (export ou fichier de données local) dans le compte en ligne
   function importToCloud(file){
     const r=new FileReader();
-    r.onload=()=>{
-      let d;try{d=JSON.parse(r.result);if(!Array.isArray(d.projects)||!Array.isArray(d.tasks))throw 0}catch(e){alert("Ce fichier n'est pas un fichier de données To do projets valide.");return}
+    r.onload=async()=>{
+      let d;try{d=JSON.parse(r.result);if(!Array.isArray(d.projects)||!Array.isArray(d.tasks))throw 0}catch(e){uiAlert("Ce fichier n'est pas un fichier de données To do projets valide.");return}
       const nT=d.tasks.filter(t=>!t.deletedAt).length, nO=(d.points||[]).filter(o=>!o.deletedAt).length, nR=(d.requests||[]).filter(x=>!x.deletedAt).length;
-      if(!confirm(`Importer ${d.projects.length} projet(s), ${nT} tâche(s)${nO?`, ${nO} point(s) ouvert(s)`:""}${nR?`, ${nR} demande(s) client`:""} dans votre compte ?\n\nIls s'ajoutent à vos projets en ligne existants : rien n'est remplacé ni supprimé.`))return;
+      if(!await uiConfirm(`Importer ${d.projects.length} projet(s), ${nT} tâche(s)${nO?`, ${nO} point(s) ouvert(s)`:""}${nR?`, ${nR} demande(s) client`:""} dans votre compte ?\n\nIls s'ajoutent à vos projets en ligne existants : rien n'est remplacé ni supprimé.`,{ok:"Importer"}))return;
       const ids={}, nid=()=>(crypto.randomUUID?crypto.randomUUID():uid()+uid());
       const fams=[], fmap={}, themes=[], coms=[];
       d.projects.forEach(p=>{
@@ -1320,16 +1332,16 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   }
   async function shareAdd(pid,email){
     email=email.trim().toLowerCase();
-    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){alert("Adresse e-mail invalide.");return}
-    if(email===cloud.email){alert("C'est votre propre adresse.");return}
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){uiAlert("Adresse e-mail invalide.");return}
+    if(email===cloud.email){uiAlert("C'est votre propre adresse.");return}
     const {error}=await cloudClient().from("project_members").insert({project_id:pid,email});
-    if(error&&error.code!=="23505"){alert(transient(error)?"Serveur injoignable : réessayez quand la connexion sera rétablie.":"Partage refusé : "+error.message);return}
+    if(error&&error.code!=="23505"){uiAlert(transient(error)?"Serveur injoignable : réessayez quand la connexion sera rétablie.":"Partage refusé : "+error.message);return}
     await cloud.fetch();
   }
   async function shareRemove(pid,email,leaving){
-    if(!confirm(leaving?"Quitter ce projet ? Il disparaîtra de votre liste ; son propriétaire pourra vous le repartager.":`Retirer l'accès de ${email} à ce projet ?`))return;
+    if(!await uiConfirm(leaving?"Quitter ce projet ? Il disparaîtra de votre liste ; son propriétaire pourra vous le repartager.":`Retirer l'accès de ${email} à ce projet ?`,{ok:leaving?"Quitter":"Retirer",danger:true}))return;
     const {error}=await cloudClient().from("project_members").delete().eq("project_id",pid).eq("email",email);
-    if(error){alert(transient(error)?"Serveur injoignable : réessayez quand la connexion sera rétablie.":"Action refusée : "+error.message);return}
+    if(error){uiAlert(transient(error)?"Serveur injoignable : réessayez quand la connexion sera rétablie.":"Action refusée : "+error.message);return}
     if(leaving){for(const k of [...cloud.dirty.keys()]){const t=state.tasks.find(x=>"t:"+x.id===k)||(state.requests||[]).find(x=>"r:"+x.id===k)||(state.points||[]).find(x=>"o:"+x.id===k);if(k==="p:"+pid||(t&&t.projectId===pid))cloud.dirty.delete(k)}view="all"}
     await cloud.fetch();
   }
@@ -1362,15 +1374,15 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(step==="login")setTimeout(()=>$("#lemail").focus(),0);
     if(step==="signup"){$("#sdomains").textContent=CONFIG.allowedDomains&&CONFIG.allowedDomains.length?"Réservé aux adresses "+CONFIG.allowedDomains.map(d=>"@"+d).join(", ")+".":"";setTimeout(()=>$("#semail").focus(),0)}
   }
-  function toLocal(){
-    if(MODE==="cloud"&&cloud.dirty.size&&!confirm(`${cloud.dirty.size} modification(s) en ligne ne sont pas encore envoyées. Elles le seront à votre prochain passage en mode en ligne. Continuer ?`))return;
+  async function toLocal(){
+    if(MODE==="cloud"&&cloud.dirty.size&&!await uiConfirm(`${cloud.dirty.size} modification(s) en ligne ne sont pas encore envoyées. Elles le seront à votre prochain passage en mode en ligne. Continuer ?`,{ok:"Continuer"}))return;
     if(cloud.channel){cloudClient().removeChannel(cloud.channel);cloud.channel=null}
     cloud.user=null;
     try{localStorage.setItem("todo-mode","local")}catch(e){}
     location.reload();
   }
   function toCloud(){
-    if(!cloudReady()){alert("Le mode en ligne n'est pas configuré dans ce fichier, ou la connexion Internet est indisponible.");return}
+    if(!cloudReady()){uiAlert("Le mode en ligne n'est pas configuré dans ce fichier, ou la connexion Internet est indisponible.");return}
     try{localStorage.setItem("todo-mode","cloud")}catch(e){}
     location.reload();
   }
@@ -1531,7 +1543,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const id=crypto.randomUUID?crypto.randomUUID():uid()+uid();
     if(MODE==="cloud"){
       const {error}=await cloudClient().from("project_families").insert({id,project_id:pid,name});
-      if(error){alert(transient(error)?"Famille non créée : connexion au serveur impossible.":"Famille refusée : "+error.message);return null}
+      if(error){uiAlert(transient(error)?"Famille non créée : connexion au serveur impossible.":"Famille refusée : "+error.message);return null}
       (cloud.families[pid]=cloud.families[pid]||[]).push({id,name});cloud._lastFm=JSON.stringify(cloud.families);
       return id;
     }
@@ -1542,7 +1554,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     name=String(name||"").trim().slice(0,60); if(!name)return false;
     if(MODE==="cloud"){
       const {error}=await cloudClient().from("project_families").update({name}).eq("id",fid);
-      if(error){alert("Renommage impossible : "+error.message);return false}
+      if(error){uiAlert("Renommage impossible : "+error.message);return false}
       (cloud.families[pid]||[]).forEach(f=>{if(f.id===fid)f.name=name});cloud._lastFm=JSON.stringify(cloud.families);return true;
     }
     const pr=proj(pid); if(!pr)return false;
@@ -1551,10 +1563,10 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   async function deleteFamily(pid,fid){
     const f=getFamilies(pid).find(x=>x.id===fid); if(!f)return false;
     const n=state.tasks.filter(t=>t.projectId===pid&&t.family===fid).length;
-    if(!confirm(`Supprimer la famille « ${f.name} » ?${n?` Les ${n} tâche(s) qui l'utilisent passeront en « Sans famille ».`:""}`))return false;
+    if(!await uiConfirm(`Supprimer la famille « ${f.name} » ?${n?` Les ${n} tâche(s) qui l'utilisent passeront en « Sans famille ».`:""}`,{ok:"Supprimer",danger:true}))return false;
     if(MODE==="cloud"){
       const {error}=await cloudClient().from("project_families").delete().eq("id",fid);
-      if(error){alert("Suppression impossible : "+error.message);return false}
+      if(error){uiAlert("Suppression impossible : "+error.message);return false}
       cloud.families[pid]=(cloud.families[pid]||[]).filter(x=>x.id!==fid);cloud._lastFm=JSON.stringify(cloud.families);
     } else {const pr=proj(pid);pr.families=(pr.families||[]).filter(x=>x.id!==fid)}
     state.tasks.forEach(t=>{if(t.projectId===pid&&t.family===fid)t.family=""});
@@ -1665,7 +1677,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     cal.hasLink=true;ui.showMeetings=true;saveUi();cal.events=null;loadMeetings(true);render();
   }
   async function removeCal(){
-    if(!confirm("Retirer le lien de votre calendrier Outlook ? Les réunions ne s'afficheront plus."))return;
+    if(!await uiConfirm("Retirer le lien de votre calendrier Outlook ? Les réunions ne s'afficheront plus.",{ok:"Retirer",danger:true}))return;
     await cloudClient().from("user_calendar").delete().eq("user_id",cloud.user.id);
     cal.events=null;cal.hasLink=false;ui.showMeetings=false;saveUi();
     $("#calcfg").close&&$("#calcfg").close();render();
@@ -1677,13 +1689,13 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const p={id:uid(),name,color:nextColor()};
     state.projects.push(p); view=p.id; save(); render();
   }
-  function renameProject(p){
-    const n=prompt("Nouveau nom du projet",p.name); if(n&&n.trim()){p.name=n.trim();save();render()}
+  async function renameProject(p){
+    const n=await uiPrompt("Nouveau nom du projet",p.name,{ok:"Renommer"}); if(n&&n.trim()){p.name=n.trim();save();render()}
   }
-  function deleteProject(p){
+  async function deleteProject(p){
     const nb=state.tasks.filter(t=>t.projectId===p.id).length;
     const mem=MODE==="cloud"&&cloud.meta[p.id]?cloud.meta[p.id].members.length:0;
-    if(!confirm(`Supprimer définitivement le projet « ${p.name} »${nb?` et ses ${nb} tâche(s)`:""} ?${mem?` Il sera aussi supprimé pour les ${mem} personne(s) avec qui il est partagé.`:""}\n\nCette action est irréversible. Pour un projet terminé, préférez « Archiver » : il sera masqué mais restera consultable.`))return;
+    if(!await uiConfirm(`Supprimer définitivement le projet « ${p.name} »${nb?` et ses ${nb} tâche(s)`:""} ?${mem?` Il sera aussi supprimé pour les ${mem} personne(s) avec qui il est partagé.`:""}\n\nCette action est irréversible. Pour un projet terminé, préférez « Archiver » : il sera masqué mais restera consultable.`,{ok:"Supprimer le projet",danger:true}))return;
     state.projects=state.projects.filter(x=>x.id!==p.id);
     state.tasks=state.tasks.filter(t=>t.projectId!==p.id);
     state.requests=(state.requests||[]).filter(r=>r.projectId!==p.id);
@@ -1699,7 +1711,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   function addTask(){
     const title=$("#qt").value.trim(); const pid=$("#qp").value;
     if(!title)return;
-    if(!pid){alert("Créez d'abord un projet.");return}
+    if(!pid){uiAlert("Créez d'abord un projet.");return}
     state.tasks.push({id:uid(),projectId:pid,title,priority:$("#qprio").value,due:$("#qd").value||"",status:"todo",note:"",who:$("#qw").value.trim(),createdAt:Date.now(),checklist:[],repeat:null});
     $("#qt").value="";$("#qd").value="";$("#qprio").value="normale";
     save(); render(); $("#qt").focus();
@@ -1937,7 +1949,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       if(agenda){
         if(!p&&state.projects.length)vr.appendChild(projectFilter());
         const mb=b("Réunions Outlook",()=>{
-          if(MODE!=="cloud"){alert("L'affichage des réunions Outlook est disponible en mode en ligne (avec un compte).");return}
+          if(MODE!=="cloud"){uiAlert("L'affichage des réunions Outlook est disponible en mode en ligne (avec un compte).");return}
           ui.showMeetings=!ui.showMeetings;saveUi();
           if(ui.showMeetings){if(cal.hasLink===false){openCalCfg();ui.showMeetings=false;saveUi();return}loadMeetings(false)}
           render();
@@ -2190,11 +2202,11 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   const fmtWhen=ms=>{const d=new Date(ms);return d.toLocaleDateString("fr-FR",{day:"numeric",month:"short"})+" à "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})};
   async function addComment(t,text){
     text=text.trim(); if(!text)return false;
-    if(text.length>4000){alert("Commentaire trop long (4000 caractères maximum).");return false}
+    if(text.length>4000){uiAlert("Commentaire trop long (4000 caractères maximum).");return false}
     if(MODE==="cloud"){
       const id=crypto.randomUUID?crypto.randomUUID():uid()+uid();
       const {error}=await cloudClient().from("task_comments").insert({id,task_id:t.id,body:text});
-      if(error){alert(transient(error)?"Commentaire non envoyé : connexion au serveur impossible. Réessayez dans un instant.":"Commentaire refusé : "+error.message);return false}
+      if(error){uiAlert(transient(error)?"Commentaire non envoyé : connexion au serveur impossible. Réessayez dans un instant.":"Commentaire refusé : "+error.message);return false}
       (cloud.comments[t.id]=cloud.comments[t.id]||[]).push({id,author:cloud.email,text,at:Date.now()});
       cloud._lastCm=JSON.stringify(cloud.comments);
       return true;
@@ -2204,10 +2216,10 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     save(); return true;
   }
   async function delComment(t,c){
-    if(!confirm("Supprimer ce commentaire ?"))return false;
+    if(!await uiConfirm("Supprimer ce commentaire ?",{ok:"Supprimer",danger:true}))return false;
     if(MODE==="cloud"){
       const {error}=await cloudClient().from("task_comments").delete().eq("id",c.id);
-      if(error){alert("Suppression impossible : "+error.message);return false}
+      if(error){uiAlert("Suppression impossible : "+error.message);return false}
       cloud.comments[t.id]=(cloud.comments[t.id]||[]).filter(x=>x.id!==c.id);
       cloud._lastCm=JSON.stringify(cloud.comments);
       return true;
@@ -2358,12 +2370,12 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       sp.addEventListener("change",()=>fillFam(fs.value));
       fs.onchange=async()=>{
         if(fs.value==="__new"){
-          const name=prompt("Nom de la nouvelle famille (propre au projet « "+((proj(sp.value)||{}).name||"")+" »)");
+          const name=await uiPrompt("Nom de la nouvelle famille (propre au projet « "+((proj(sp.value)||{}).name||"")+" »)","",{ok:"Créer"});
           const id=name?await addFamily(sp.value,name):null;
           fillFam(id||fs.dataset.prev||"");
         } else {fs.dataset.prev=fs.value;fRen.hidden=fDel.hidden=!fs.value}
       };
-      fRen.onclick=async()=>{const cur=getFamilies(sp.value).find(x=>x.id===fs.value);if(!cur)return;const n=prompt("Nouveau nom de la famille",cur.name);if(n&&await renameFamily(sp.value,cur.id,n))fillFam(cur.id)};
+      fRen.onclick=async()=>{const cur=getFamilies(sp.value).find(x=>x.id===fs.value);if(!cur)return;const n=await uiPrompt("Nouveau nom de la famille",cur.name,{ok:"Renommer"});if(n&&await renameFamily(sp.value,cur.id,n))fillFam(cur.id)};
       fDel.onclick=async()=>{const id=fs.value;if(id&&await deleteFamily(sp.value,id))fillFam("")};
       // étapes en cours d'édition (appliquées à l'enregistrement)
       let draft=steps.map(c=>({...c}));
@@ -2381,7 +2393,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       drawSteps();
       f.querySelector("[data-k=ok]").onclick=()=>{
         const cur=state.tasks.find(x=>x.id===t.id);
-        if(!cur){editing=null;render();alert("Cette tâche a été supprimée entre-temps (peut-être par un collègue).");return}
+        if(!cur){editing=null;render();uiAlert("Cette tâche a été supprimée entre-temps (peut-être par un collègue).");return}
         if(ti.value.trim())cur.title=ti.value.trim();cur.projectId=sp.value;cur.priority=spr.value;cur.due=dd.value;cur.who=wh.value.trim();cur.note=ta.value.trim();
         cur.family=fs.value&&fs.value!=="__new"?fs.value:"";
         if(sIn.value.trim())draft.push({id:uid(),text:sIn.value.trim(),done:false});
@@ -2412,16 +2424,67 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     return null;
   }
   const short=s=>{s=String(s||"");return s.length>60?s.slice(0,57)+"…":s};
-  function changeStatus(t,st){
+  async function changeStatus(t,st){
     if(!t||t.status===st)return;
     let wf="";
-    if(st==="waiting"){wf=prompt("En attente de qui ou de quoi ? (facultatif : client, collègue, validation…)",t.waitingFor||"");if(wf===null)return}
+    if(st==="waiting"){wf=await uiPrompt("En attente de qui ou de quoi ? (facultatif : client, collègue, validation…)",t.waitingFor||"",{ok:"Mettre en attente"});if(wf===null)return}
     const n=undoable(st==="done"?`« ${short(t.title)} » terminée`:`« ${short(t.title)} » : ${STATUS[st].toLowerCase()}`,[t],()=>{const r=applyStatus(t,st);if(st==="waiting")t.waitingFor=wf.trim();return r});
     if(n)setSync(`Tâche récurrente : prochaine occurrence créée pour le ${shortDay(n.due)}`);
   }
 
   // ---------- Annulation ----------
   let toastT=null;
+  // ---------- Boîtes de dialogue intégrées (remplacent alert / confirm / prompt du navigateur) ----------
+  // window.__testDialog : point d'entrée réservé aux tests automatisés.
+  function uiDialog(o){
+    if(typeof window.__testDialog==="function")return Promise.resolve(window.__testDialog({type:o.kind||"dialog",message:o.msg||"",def:o.def||"",fields:(o.fields||[]).map(f=>f.k)})).then(r=>{
+      r=r||{};if(o.kind==="alert")return;if(o.kind==="confirm")return r.ok!==false;
+      if(o.kind==="prompt")return r.ok===false?null:(r.v==null?(o.def||""):String(r.v));
+      if(o.fields)return r.ok===false?null:(r.v||{});
+      return r.ok===false?null:(r.v!=null?r.v:(o.buttons||[]).filter(b=>b.v!=null).pop().v);
+    });
+    return new Promise(res=>{
+      const prevFocus=document.activeElement;
+      const d=document.createElement("dialog");d.className="uidlg";d.setAttribute("aria-modal","true");
+      const fields=o.fields||(o.kind==="prompt"?[{k:"v",label:"",def:o.def||"",multiline:o.multiline}]:[]);
+      const btns=o.buttons||(o.kind==="alert"?[{v:true,label:o.ok||"OK",cls:"primary",focus:true}]:[{v:null,label:o.cancel||"Annuler",cls:"ghost",focus:!!o.danger&&!fields.length},{v:true,label:o.ok||"OK",cls:o.danger?"danger":"primary",focus:!o.danger}]);
+      d.innerHTML=`<form method="dialog">${o.title?`<h3>${esc(o.title)}</h3>`:""}${o.msg?`<p class="uimsg">${esc(o.msg)}</p>`:""}
+        ${fields.map((f,i)=>`<label class="uifld">${f.label?`<span>${esc(f.label)}</span>`:""}${f.multiline?`<textarea rows="3" data-k="${i}"></textarea>`:`<input data-k="${i}" type="${f.type||"text"}"${f.ac?` autocomplete="${f.ac}"`:""}>`}</label>`).join("")}
+        <p class="uierr" role="alert"></p>
+        <div class="uibtns">${btns.map((b,i)=>`<button type="button" class="btn ${b.cls==null?"":b.cls}" data-b="${i}">${esc(b.label)}</button>`).join("")}</div></form>`;
+      document.body.appendChild(d);
+      const ins=[...d.querySelectorAll("[data-k]")];ins.forEach((el,i)=>el.value=fields[i].def||"");
+      let done=false;
+      const finish=v=>{if(done)return;done=true;try{d.close()}catch(e){}d.remove();try{prevFocus&&prevFocus.focus&&document.contains(prevFocus)&&prevFocus.focus({preventScroll:true})}catch(e){}res(v)};
+      const value=b=>{
+        if(b.v==null)return null;
+        if(!fields.length)return b.v;
+        const vals={};fields.forEach((f,i)=>vals[f.k]=ins[i].value);
+        if(o.kind==="prompt")return vals.v;
+        return vals;
+      };
+      const click=i=>{
+        const b=btns[i],v=value(b);
+        if(b.v!=null&&o.validate&&fields.length){const err=o.validate(v);if(err){d.querySelector(".uierr").textContent=err;return}}
+        finish(o.kind==="alert"?undefined:o.kind==="confirm"?b.v!=null:v);
+      };
+      d.querySelectorAll("[data-b]").forEach(b=>b.onclick=()=>click(+b.dataset.b));
+      d.addEventListener("cancel",e=>{e.preventDefault();finish(o.kind==="alert"?undefined:o.kind==="confirm"?false:null)});
+      d.querySelector("form").onsubmit=e=>{e.preventDefault()};
+      d.addEventListener("keydown",e=>{
+        if(e.key==="Enter"&&!e.shiftKey&&!(e.target.tagName==="TEXTAREA"&&!(e.ctrlKey||e.metaKey))&&e.target.tagName!=="BUTTON"){
+          e.preventDefault();const k=btns.findIndex(b=>b.v!=null&&/primary|danger/.test(b.cls||""));click(k>=0?k:btns.length-1);
+        }
+      });
+      if(d.showModal)d.showModal();else d.setAttribute("open","");
+      const f=ins[0]||d.querySelector(`[data-b="${Math.max(0,btns.findIndex(b=>b.focus))}"]`);
+      setTimeout(()=>{f.focus();if(f.select&&ins[0])f.select()},0);
+    });
+  }
+  const uiAlert=(msg,o={})=>uiDialog({...o,kind:"alert",msg});
+  const uiConfirm=(msg,o={})=>uiDialog({...o,kind:"confirm",msg});
+  const uiPrompt=(msg,def="",o={})=>uiDialog({...o,kind:"prompt",msg,def});
+  const uiForm=(title,fields,validate,o={})=>uiDialog({...o,kind:"form",title,fields,validate});
   function toast(msg,undo,label){
     let el=$("#toast");
     if(!el){el=document.createElement("div");el.id="toast";el.className="toast";el.setAttribute("role","status");document.body.appendChild(el)}
@@ -2451,9 +2514,9 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
 
   // ---------- Corbeille ----------
   const TRASH_DAYS=30;
-  function emptyTrash(){
+  async function emptyTrash(){
     const n=state.tasks.filter(t=>t.deletedAt).length+(state.requests||[]).filter(r=>r.deletedAt).length+(state.points||[]).filter(o=>o.deletedAt).length;
-    if(!n||!confirm(`Supprimer définitivement ${n>1?`les ${n} éléments`:"l'élément"} de la corbeille ? Cette action est irréversible.`))return;
+    if(!n||!await uiConfirm(`Supprimer définitivement ${n>1?`les ${n} éléments`:"l'élément"} de la corbeille ? Cette action est irréversible.`,{ok:"Vider la corbeille",danger:true}))return;
     state.tasks=state.tasks.filter(t=>!t.deletedAt);state.requests=(state.requests||[]).filter(r=>!r.deletedAt);state.points=(state.points||[]).filter(o=>!o.deletedAt);save();render();
   }
   function purgeTrash(){
@@ -2474,16 +2537,16 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         <div class="acts"><button class="sbtn" type="button" data-r>Restaurer</button><button class="sbtn danger" type="button" data-x>Supprimer définitivement</button></div>`;
       if(isO){
         li.querySelector("[data-r]").onclick=()=>{const cur=state.points.find(x=>x.id===t.id);if(!cur)return;cur.deletedAt=null;save();render();toast("Point ouvert restauré")};
-        li.querySelector("[data-x]").onclick=()=>{if(!confirm(`Supprimer définitivement ce point ouvert ? Cette action est irréversible.`))return;state.points=state.points.filter(x=>x.id!==t.id);save();render()};
+        li.querySelector("[data-x]").onclick=async()=>{if(!await uiConfirm(`Supprimer définitivement ce point ouvert ? Cette action est irréversible.`,{ok:"Supprimer",danger:true}))return;state.points=state.points.filter(x=>x.id!==t.id);save();render()};
         ul.appendChild(li);return;
       }
       if(isR){
         li.querySelector("[data-r]").onclick=()=>{const cur=state.requests.find(x=>x.id===t.id);if(!cur)return;const at=cur.deletedAt;const ts=state.tasks.filter(x=>x.requestId===cur.id&&x.deletedAt&&x.deletedAt===at);cur.deletedAt=null;ts.forEach(x=>x.deletedAt=null);save();render();toast(`Demande « ${short(cur.title)} » restaurée${ts.length?` avec ${ts.length>1?`ses ${ts.length} tâches`:"sa tâche"}`:""}`)};
-        li.querySelector("[data-x]").onclick=()=>{if(!confirm(`Supprimer définitivement la demande « ${t.title} » ? Cette action est irréversible.`))return;state.requests=state.requests.filter(x=>x.id!==t.id);live().forEach(x=>{if(x.requestId===t.id)x.requestId=null});save();render()};
+        li.querySelector("[data-x]").onclick=async()=>{if(!await uiConfirm(`Supprimer définitivement la demande « ${t.title} » ? Cette action est irréversible.`,{ok:"Supprimer",danger:true}))return;state.requests=state.requests.filter(x=>x.id!==t.id);live().forEach(x=>{if(x.requestId===t.id)x.requestId=null});save();render()};
         ul.appendChild(li);return;
       }
       li.querySelector("[data-r]").onclick=()=>{const cur=state.tasks.find(x=>x.id===t.id);if(!cur)return;cur.deletedAt=null;save();render();toast(`« ${short(cur.title)} » restaurée${isArch(cur.projectId)?" (projet archivé)":""}`)};
-      li.querySelector("[data-x]").onclick=()=>{if(!confirm(`Supprimer définitivement « ${t.title} » ? Cette action est irréversible.`))return;state.tasks=state.tasks.filter(x=>x.id!==t.id);save();render()};
+      li.querySelector("[data-x]").onclick=async()=>{if(!await uiConfirm(`Supprimer définitivement « ${t.title} » ? Cette action est irréversible.`,{ok:"Supprimer",danger:true}))return;state.tasks=state.tasks.filter(x=>x.id!==t.id);save();render()};
       ul.appendChild(li);
     });
     L.appendChild(ul);
@@ -2742,7 +2805,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       const w=ifr.contentWindow;
       const done=()=>{document.title=prev;setTimeout(()=>ifr.remove(),1000)};
       w.addEventListener("afterprint",done);
-      setTimeout(()=>{try{w.focus();w.print()}catch(e){alert("Impression impossible dans ce navigateur.");done()}},50);
+      setTimeout(()=>{try{w.focus();w.print()}catch(e){uiAlert("Impression impossible dans ce navigateur.");done()}},50);
     };
     ifr.srcdoc=html;
     return html;
@@ -2755,7 +2818,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       $("#expprojs").querySelectorAll("small").forEach(sm=>{const id=sm.dataset.p;sm.textContent=k==="tasks"?`${live().filter(t=>t.projectId===id&&t.status!=="done").length} tâche(s) ouverte(s)`:`${livePts().filter(o=>o.projectId===id&&o.status!=="closed").length} point(s) ouvert(s)`})};
     $("#expkind").querySelectorAll("button").forEach(b=>b.onclick=()=>setKind(b.dataset.k));
     const projs=state.projects.filter(x=>!x.archived||(p&&x.id===p.id));
-    if(!projs.length){alert("Aucun projet à exporter.");return}
+    if(!projs.length){uiAlert("Aucun projet à exporter.");return}
     $("#expprojs").innerHTML=projs.map(x=>`<label class="pfrow"><input type="checkbox" value="${esc(x.id)}" ${!p||x.id===p.id?"checked":""}><span class="dot" style="background:${x.color}"></span><span class="pfname">${esc(x.name)}</span><small data-p="${esc(x.id)}"></small></label>`).join("");
     setKind(k);
     $("#experr").textContent="";
@@ -2791,7 +2854,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const id=crypto.randomUUID?crypto.randomUUID():uid()+uid();
     if(MODE==="cloud"){
       const {error}=await cloudClient().from("point_themes").insert({id,project_id:pid,name});
-      if(error&&error.code!=="23505"){alert(transient(error)?"Thème non créé : connexion au serveur impossible.":"Thème refusé : "+error.message);return null}
+      if(error&&error.code!=="23505"){uiAlert(transient(error)?"Thème non créé : connexion au serveur impossible.":"Thème refusé : "+error.message);return null}
       (cloud.ptThemes[pid]=cloud.ptThemes[pid]||[]).push({id,name});cloud._lastPt=JSON.stringify(cloud.ptThemes);
       return name;
     }
@@ -2800,11 +2863,11 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   }
   async function renameThemeTo(pid,old,v){
     v=String(v||"").trim().slice(0,80);if(!v||v===old)return false;
-    if(ptThemes(pid).some(n=>n!==old&&n.toLowerCase()===v.toLowerCase())&&!confirm(`Le thème « ${v} » existe déjà : fusionner « ${old} » dedans ?`))return false;
+    if(ptThemes(pid).some(n=>n!==old&&n.toLowerCase()===v.toLowerCase())&&!await uiConfirm(`Le thème « ${v} » existe déjà : fusionner « ${old} » dedans ?`,{ok:"Fusionner"}))return false;
     const st=storedThemes(pid).find(t=>t.name===old), dup=storedThemes(pid).find(t=>t.name!==old&&t.name.toLowerCase()===v.toLowerCase());
     if(MODE==="cloud"){
       const c=cloudClient();
-      if(st){const {error}=dup?await c.from("point_themes").delete().eq("id",st.id):await c.from("point_themes").update({name:v}).eq("id",st.id);if(error){alert("Renommage impossible : "+error.message);return false}}
+      if(st){const {error}=dup?await c.from("point_themes").delete().eq("id",st.id):await c.from("point_themes").update({name:v}).eq("id",st.id);if(error){uiAlert("Renommage impossible : "+error.message);return false}}
       else if(!dup){const id=crypto.randomUUID?crypto.randomUUID():uid()+uid();await c.from("point_themes").insert({id,project_id:pid,name:v});(cloud.ptThemes[pid]=cloud.ptThemes[pid]||[]).push({id,name:v})}
       if(st){cloud.ptThemes[pid]=dup?(cloud.ptThemes[pid]||[]).filter(t=>t.id!==st.id):(cloud.ptThemes[pid]||[]).map(t=>t.id===st.id?{...t,name:v}:t)}
       cloud._lastPt=JSON.stringify(cloud.ptThemes);
@@ -2820,10 +2883,10 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   }
   async function deleteTheme(pid,name){
     const n=livePts().filter(x=>x.projectId===pid&&x.theme===name).length;
-    if(!confirm(`Supprimer le thème « ${name} » ?${n?` Les ${n} point(s) qui l'utilisent passeront en « Sans thème ».`:""}`))return false;
+    if(!await uiConfirm(`Supprimer le thème « ${name} » ?${n?` Les ${n} point(s) qui l'utilisent passeront en « Sans thème ».`:""}`,{ok:"Supprimer",danger:true}))return false;
     const st=storedThemes(pid).find(t=>t.name===name);
     if(MODE==="cloud"){
-      if(st){const {error}=await cloudClient().from("point_themes").delete().eq("id",st.id);if(error){alert("Suppression impossible : "+error.message);return false}}
+      if(st){const {error}=await cloudClient().from("point_themes").delete().eq("id",st.id);if(error){uiAlert("Suppression impossible : "+error.message);return false}}
       cloud.ptThemes[pid]=(cloud.ptThemes[pid]||[]).filter(t=>t.name!==name);cloud._lastPt=JSON.stringify(cloud.ptThemes);
     } else {const pr=proj(pid);pr.pointThemes=(pr.pointThemes||[]).filter(t=>t.name!==name)}
     livePts().forEach(x=>{if(x.projectId===pid&&x.theme===name)x.theme=""});
@@ -2838,7 +2901,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     sel.dataset.prev=sel.value;
     sel.addEventListener("change",async()=>{
       if(sel.value!=="__new"){sel.dataset.prev=sel.value;if(after)after();return}
-      const name=prompt("Nom du nouveau thème (propre à ce projet)");
+      const name=await uiPrompt("Nom du nouveau thème (propre à ce projet)","",{ok:"Créer"});
       const n=name?await addTheme(pid,name):null;
       sel.innerHTML=themeOptions(pid,n||sel.dataset.prev||"",emptyLabel);
       sel.value=n||sel.dataset.prev||"";sel.dataset.prev=sel.value;if(after)after(!!n);
@@ -2862,9 +2925,9 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     fn();save();render();
     toast(msg,()=>{const i=state.points.findIndex(y=>y.id===copy.id);if(i>=0)state.points[i]=copy;else state.points.push(copy);save();render()});
   }
-  function closePoint(x,on){
+  async function closePoint(x,on){
     if(on&&!x.answer){
-      const a=prompt("Réponse ou décision obtenue (facultatif) :","");
+      const a=await uiPrompt("Réponse ou décision obtenue (facultatif) :","",{ok:"Lever le point",multiline:true});
       if(a===null){render();return}
       ptUndoable("Point levé",x,()=>{x.answer=a.trim();x.status="closed";x.closedAt=Date.now()});
       return;
@@ -2887,8 +2950,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(editingPt===x.id)editingPt=null;
     ptUndoable("Point mis à la corbeille",x,()=>{x.deletedAt=Date.now()});
   }
-  function renameTheme(pid,old){
-    const n=prompt("Nouveau nom du thème",old);if(n===null)return;
+  async function renameTheme(pid,old){
+    const n=await uiPrompt("Nouveau nom du thème",old,{ok:"Renommer"});if(n===null)return;
     renameThemeTo(pid,old,n);
   }
   function ptNum(x){const l=livePts().filter(y=>y.projectId===x.projectId).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));return l.findIndex(y=>y.id===x.id)+1}
@@ -2940,11 +3003,11 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       const ths=g("theme"), thR=f.querySelector("[data-th=ren]"), thD=f.querySelector("[data-th=del]");
       const syncTh=()=>{thR.hidden=thD.hidden=!ths.value||ths.value==="__new"};syncTh();
       bindThemeSelect(ths,x.projectId,"Sans thème",syncTh);
-      thR.onclick=async()=>{const old=ths.value;if(!old)return;const n=prompt("Nouveau nom du thème",old);if(n===null)return;const keep={text:g("text").value,ans:g("ans").value,hyp:g("hyp").value};if(await renameThemeTo(x.projectId,old,n)){const el=document.querySelector(`.pt[data-o="${x.id}"] .edit`);if(el){el.querySelector("[data-f=text]").value=keep.text;el.querySelector("[data-f=ans]").value=keep.ans;el.querySelector("[data-f=hyp]").value=keep.hyp}}};
+      thR.onclick=async()=>{const old=ths.value;if(!old)return;const n=await uiPrompt("Nouveau nom du thème",old,{ok:"Renommer"});if(n===null)return;const keep={text:g("text").value,ans:g("ans").value,hyp:g("hyp").value};if(await renameThemeTo(x.projectId,old,n)){const el=document.querySelector(`.pt[data-o="${x.id}"] .edit`);if(el){el.querySelector("[data-f=text]").value=keep.text;el.querySelector("[data-f=ans]").value=keep.ans;el.querySelector("[data-f=hyp]").value=keep.hyp}}};
       thD.onclick=async()=>{const old=ths.value;if(!old)return;const keep={text:g("text").value,ans:g("ans").value,hyp:g("hyp").value};if(await deleteTheme(x.projectId,old)){const el=document.querySelector(`.pt[data-o="${x.id}"] .edit`);if(el){el.querySelector("[data-f=text]").value=keep.text;el.querySelector("[data-f=ans]").value=keep.ans;el.querySelector("[data-f=hyp]").value=keep.hyp}}};
       f.querySelector("[data-k=ok]").onclick=()=>{
         const cur=state.points.find(y=>y.id===x.id);
-        if(!cur){editingPt=null;render();alert("Ce point a été supprimé entre-temps (peut-être par un collègue).");return}
+        if(!cur){editingPt=null;render();uiAlert("Ce point a été supprimé entre-temps (peut-être par un collègue).");return}
         if(g("text").value.trim())cur.text=g("text").value.trim();
         cur.theme=g("theme").value==="__new"?cur.theme:g("theme").value;cur.owner=g("owner").value;cur.ownerName=g("oname").value.trim();cur.answer=g("ans").value.trim();cur.hypothesis=g("hyp").value.trim();cur.erp=g("erp").value;
         const st=g("st").value;if(st!==cur.status){cur.status=st;cur.closedAt=st==="closed"?Date.now():null}
@@ -2970,13 +3033,13 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       if(created){const txt=q("text").value, ow=q("owner").value;render();const na=$("#ptadd");if(na){na.querySelector("[data-q=text]").value=txt;na.querySelector("[data-q=owner]").value=ow;na.querySelector("[data-q=text]").focus()}}});
     const submit=texts=>{if(!texts.length)return;const th=q("theme").value==="__new"?"":q("theme").value;ui.lastTheme=th;saveUi();addPoints(texts,p.id,th,q("owner").value);const ni=document.querySelector("#ptadd [data-q=text]");if(ni)ni.focus()};
     add.onsubmit=e=>{e.preventDefault();const v=q("text").value.trim();if(v)submit([v])};
-    q("text").addEventListener("paste",e=>{
+    q("text").addEventListener("paste",async e=>{
       const txt=(e.clipboardData||window.clipboardData).getData("text");
       if(!/\n/.test(txt.trim()))return;
       const lines=splitPasted(txt);
       if(lines.length<2)return;
       e.preventDefault();
-      if(confirm(`Ajouter ${lines.length} points ouverts ?\n\n${lines.slice(0,8).map(l=>"• "+l).join("\n")}${lines.length>8?`\n• … et ${lines.length-8} autre(s)`:""}`))submit(lines);
+      if(await uiConfirm(`Ajouter ${lines.length} points ouverts ?\n\n${lines.slice(0,8).map(l=>"• "+l).join("\n")}${lines.length>8?`\n• … et ${lines.length-8} autre(s)`:""}`,{ok:"Ajouter"}))submit(lines);
     });
     $("#addslot").appendChild(add);
     if(!all.length){L.insertAdjacentHTML("beforeend",`<div class="empty">Aucun point ouvert sur ce projet. Saisissez une question dans la barre ci-dessus, ou collez directement une liste (une ligne par point, les puces sont retirées automatiquement).</div>`);return}
@@ -3076,7 +3139,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       const w=ifr.contentWindow;
       const done=()=>{document.title=prev;setTimeout(()=>ifr.remove(),1000)};
       w.addEventListener("afterprint",done);
-      setTimeout(()=>{try{w.focus();w.print()}catch(e){alert("Impression impossible dans ce navigateur.");done()}},50);
+      setTimeout(()=>{try{w.focus();w.print()}catch(e){uiAlert("Impression impossible dans ce navigateur.");done()}},50);
     };
     ifr.srcdoc=html;
   }
@@ -3103,13 +3166,15 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     fn();save();render();
     toast(msg,()=>{const i=state.requests.findIndex(x=>x.id===copy.id);if(i>=0)state.requests[i]=copy;else state.requests.push(copy);save();render()});
   }
-  function deleteRequest(r){
+  async function deleteRequest(r){
     if(editingReq===r.id)editingReq=null;
     const ts=reqTasks(r);
     let withT=false;
     if(ts.length){
       const list=ts.slice(0,5).map(t=>`• ${t.title}`).join("\n")+(ts.length>5?`\n• … et ${ts.length-5} autre(s)`:"");
-      withT=confirm(`Cette demande a ${ts.length>1?`${ts.length} tâches liées`:"une tâche liée"} :\n${list}\n\nOK : mettre aussi ${ts.length>1?"ces tâches":"cette tâche"} à la corbeille.\nAnnuler : supprimer seulement la demande et garder ${ts.length>1?"les tâches":"la tâche"}.`);
+      const ch=await uiDialog({title:"Supprimer la demande",msg:`Cette demande a ${ts.length>1?`${ts.length} tâches liées`:"une tâche liée"} :\n${list}`,buttons:[{v:null,label:"Annuler",cls:"ghost"},{v:"keep",label:`Garder ${ts.length>1?"les tâches":"la tâche"}`},{v:"all",label:`Supprimer aussi ${ts.length>1?"les tâches":"la tâche"}`,cls:"danger",focus:true}]});
+      if(ch==null)return;
+      withT=ch==="all";
     }
     const copies=[r,...(withT?ts:[])].map(x=>JSON.parse(JSON.stringify(x)));
     const at=Date.now();
@@ -3124,7 +3189,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const title=f.querySelector("[data-q=title]").value.trim();
     if(!title){f.querySelector("[data-q=title]").focus();return}
     pid=pid||f.querySelector("[data-q=proj]").value;
-    if(!pid){alert("Créez d'abord un projet.");return}
+    if(!pid){uiAlert("Créez d'abord un projet.");return}
     const id=MODE==="cloud"&&crypto.randomUUID?crypto.randomUUID():uid();
     state.requests.push({id,projectId:pid,title,description:"",requester:f.querySelector("[data-q=who]").value.trim(),received:iso(today()),due:f.querySelector("[data-q=due]").value||"",priority:f.querySelector("[data-q=prio]").value,status:"new",scope:"",estimate:null,quote:"",createdAt:Date.now(),closedAt:null});
     save();render();
@@ -3199,7 +3264,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       const g=k=>f.querySelector(`[data-f=${k}]`);
       f.querySelector("[data-k=ok]").onclick=()=>{
         const cur=state.requests.find(x=>x.id===r.id);
-        if(!cur){editingReq=null;render();alert("Cette demande a été supprimée entre-temps (peut-être par un collègue).");return}
+        if(!cur){editingReq=null;render();uiAlert("Cette demande a été supprimée entre-temps (peut-être par un collègue).");return}
         if(g("title").value.trim())cur.title=g("title").value.trim();
         const np=g("proj").value;
         if(np!==cur.projectId){live().forEach(t=>{if(t.requestId===cur.id&&t.projectId===cur.projectId)t.requestId=null});cur.projectId=np}
