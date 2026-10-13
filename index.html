@@ -356,18 +356,18 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 .g-pt h2::before{content:"";width:10px;height:10px;border-radius:50%;background:#5B3FA0;flex:none;align-self:center}
 .thren{font:400 13px "Barlow",sans-serif;margin-left:4px}
 .task.pt.done .ptxt{text-decoration:none;color:var(--muted)}
-/* En-tête figé : titre, onglets et barre d'ajout restent visibles au défilement */
-.sticky{position:sticky;top:0;z-index:6;background:var(--bg);display:flex;flex-direction:column;gap:16px;margin-top:-26px;padding-top:22px;padding-bottom:10px;transition:box-shadow .15s}
+/* Partie figée : onglets du projet et barre d'ajout restent visibles au défilement */
+.sticky{position:sticky;top:0;z-index:6;background:var(--bg);display:flex;flex-direction:column;gap:14px;margin-top:-10px;padding-top:10px;padding-bottom:10px;transition:box-shadow .15s}
 .sticky #addslot:empty{display:none}
 .sticky.compact{box-shadow:0 10px 12px -12px rgba(22,35,43,.35)}
-.sticky.compact .psub,.sticky.compact #ptools{display:none}
-.sticky.compact .head h1{font-size:26px}
-.sticky.compact{padding-top:12px;gap:10px}
-.task,.req,.pt,.group{scroll-margin-top:260px}
-@media (max-width:760px){.sticky{position:static;margin-top:0;padding:0;background:none;box-shadow:none!important}.sticky.compact .psub,.sticky.compact #ptools{display:revert}.sticky.compact .head h1{font-size:30px}}
+.stucklbl{position:absolute;right:0;top:20px;font:700 17px "Barlow Condensed","Arial Narrow",sans-serif;color:var(--muted);visibility:hidden;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sticky.compact #ptabs:not([hidden]) + .stucklbl{visibility:visible}
+.task,.req,.pt,.group{scroll-margin-top:200px}
+@media (min-width:761px){html{scroll-padding-top:200px}}
+@media (max-width:760px){.sticky{position:static;margin-top:0;padding:0;background:none;box-shadow:none!important}.task,.req,.pt,.group{scroll-margin-top:0}}
 @media print{.sticky{position:static}}
 /* Onglets du projet */
-.ptabs{display:flex;gap:4px;box-shadow:inset 0 -1px 0 var(--line);margin-top:-6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.ptabs{display:flex;gap:4px;box-shadow:inset 0 -1px 0 var(--line);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .ptabs::-webkit-scrollbar{display:none}
 .ptabs button{border:0;background:none;padding:10px 14px;font:600 15px "Barlow",sans-serif;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;display:inline-flex;align-items:center;gap:8px}
 .ptabs button span{font-weight:600;font-size:12px;background:var(--chip);color:var(--chipink);border-radius:9px;padding:1px 7px}
@@ -575,7 +575,6 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   </aside>
   <main>
     <div class="wrap" id="wrap">
-      <div class="sticky" id="stickytop">
       <div class="head">
         <div>
           <h1 id="ptitle"></h1>
@@ -583,7 +582,9 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         </div>
         <div class="tools" id="ptools"></div>
       </div>
+      <div class="sticky" id="stickytop">
       <div class="ptabs" id="ptabs" role="tablist" aria-label="Contenu du projet" hidden></div>
+      <span class="stucklbl" id="stucklbl" aria-hidden="true"></span>
       <form class="quick" id="quick" autocomplete="off">
         <label class="qmain"><span class="qkind">Tâche</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--muted)"><path d="M12 5v14M5 12h14"></path></svg>
           <input type="text" id="qt" placeholder="Ajouter une tâche…" aria-label="Intitulé de la tâche"></label>
@@ -1723,7 +1724,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     $("#quick").hidden=mode==="dash"||mode==="trash"||mode==="requests"||mode==="points";
     $("#wrap").classList.toggle("wide",agenda||mode==="kanban"||mode==="dash");
     // onglets du projet : tâches / demandes client
-    const tabs=$("#ptabs");
+    const tabs=$("#ptabs");$("#stucklbl").textContent=p?p.name:"";
     if(p&&mode!=="dash"&&mode!=="trash"&&!query.trim()){
       const nT=alive.filter(t=>t.projectId===p.id&&t.status!=="done").length, nR=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)).length;
       tabs.hidden=false;
@@ -3173,7 +3174,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   $("#sback").onclick=()=>showGate("login");
   $("#tocloud").onclick=toCloud;
   // En-tête figé : version compacte quand on a défilé
-  (()=>{let on=false;const st=$("#stickytop");const f=()=>{const y=window.scrollY;if(!on&&y>140){on=true;st.classList.add("compact")}else if(on&&y<30){on=false;st.classList.remove("compact")}};window.addEventListener("scroll",f,{passive:true});f()})();
+  (()=>{const st=$("#stickytop");const f=()=>{const top=st.getBoundingClientRect().top;st.classList.toggle("compact",window.scrollY>0&&top<=0.5)};window.addEventListener("scroll",f,{passive:true});window.addEventListener("resize",f);f()})();
   window.addEventListener("online",()=>{if(MODE==="cloud"){cloud.flush();cloud.fetch()}});
   window.addEventListener("focus",()=>{if(MODE==="cloud")cloud.schedule()});
   setInterval(()=>{if(MODE==="cloud"&&!document.hidden)cloud.fetch()},60000);
