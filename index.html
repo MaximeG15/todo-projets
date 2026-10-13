@@ -1143,21 +1143,74 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     cloudStatus();
   };
   cloud.schedule=function(){clearTimeout(this.fetchT);this.fetchT=setTimeout(()=>this.fetch(),400)};
+  // Synchronisation incrémentale : chaque événement temps réel est appliqué ligne par ligne,
+  // sans recharger toutes les tables. Les projets et les partages déclenchent un rechargement complet.
+  const RT_ROWS={tasks:["t","tasks",r=>fromT(r),["title","note","checklist"]],client_requests:["r","requests",r=>fromR(r),["title","description"]],open_points:["o","points",r=>fromO(r),["text","answer","hypothesis"]]};
+  cloud.rt={q:[],t:null};
+  cloud.onRow=function(table,pl){this.rt.q.push([table,pl||{}]);clearTimeout(this.rt.t);this.rt.t=setTimeout(()=>this.applyRows(),150)};
+  cloud.applyRows=function(){
+    if(!this.user||!this.rt.q.length)return;
+    if(editing||editingReq||editingPt){clearTimeout(this.rt.t);this.rt.t=setTimeout(()=>this.applyRows(),3000);return}
+    const q=this.rt.q;this.rt.q=[];
+    let full=false,changed=false,side=false;
+    const upList=(map,pid,row,sortKey)=>{let found=false;Object.keys(map).forEach(k=>{map[k]=map[k].map(x=>{if(x.id===row.id){found=true;return {...x,name:row.name}}return x})});if(!found&&pid)(map[pid]=map[pid]||[]).push({id:row.id,name:row.name})};
+    const rmList=(map,id)=>Object.keys(map).forEach(k=>{map[k]=map[k].filter(x=>x.id!==id);if(!map[k].length)delete map[k]});
+    for(const [table,pl] of q){
+      const ev=pl.eventType, nw=pl.new||{}, od=pl.old||{};
+      const id=ev==="DELETE"?od.id:nw.id;
+      if(RT_ROWS[table]){
+        const [pre,key,from,need]=RT_ROWS[table];
+        if(!id){full=true;continue}
+        const k=pre+":"+id;
+        if(this.dirty.has(k))continue; // modification locale pas encore envoyée : elle reste prioritaire
+        const arr=state[key]||(state[key]=[]), i=arr.findIndex(x=>x.id===id);
+        if(ev==="DELETE"){if(i>=0){arr.splice(i,1);snap.delete(k);changed=true}continue}
+        if(need.some(f=>!(f in nw))||!this.meta[nw.project_id]){full=true;continue}
+        if(i>=0&&Number(nw.updated_at)<(arr[i].updatedAt||0))continue; // écho d'une version plus ancienne
+        const o=from(nw);
+        if(i>=0&&bare(arr[i])===bare(o))continue;
+        if(i>=0)arr[i]=o;else arr.push(o);
+        snap.set(k,bare(o));changed=true;
+      } else if(table==="task_comments"){
+        const cm=this.comments||(this.comments={});
+        if(ev==="DELETE"){if(id)Object.keys(cm).forEach(t=>{cm[t]=cm[t].filter(c=>c.id!==id);if(!cm[t].length)delete cm[t]})}
+        else if(nw.task_id){const l=cm[nw.task_id]=(cm[nw.task_id]||[]).filter(c=>c.id!==nw.id);l.push({id:nw.id,author:nw.author_email,text:nw.body,at:Number(nw.created_at)});l.sort((a,b)=>a.at-b.at)}
+        this._lastCm=JSON.stringify(cm);side=true;
+      } else if(table==="project_families"){
+        const fm=this.families||(this.families={});
+        if(ev==="DELETE"){if(id)rmList(fm,id)}else upList(fm,nw.project_id,nw);
+        this._lastFm=JSON.stringify(fm);side=true;
+      } else if(table==="point_themes"){
+        const tm=this.ptThemes||(this.ptThemes={});
+        if(ev==="DELETE"){if(id)rmList(tm,id)}else upList(tm,nw.project_id,nw);
+        this._lastPt=JSON.stringify(tm);side=true;
+      } else if(table==="profiles"&&ev!=="DELETE"&&nw.email){
+        this.profiles[String(nw.email).toLowerCase()]={first:nw.first_name,last:nw.last_name};
+        this._lastPr=JSON.stringify(this.profiles);$("#whoami").textContent=nameOf(this.email);side=true;
+      } else full=true; // projets, partages, ou événement incomplet : rechargement complet
+    }
+    if(changed){
+      lsSave();
+      if(editing&&!state.tasks.some(t=>t.id===editing))editing=null;
+      if(editingReq&&!(state.requests||[]).some(r=>r.id===editingReq))editingReq=null;
+      if(editingPt&&!(state.points||[]).some(o=>o.id===editingPt))editingPt=null;
+    }
+    if(changed||side)render();
+    if(full)this.schedule();
+    else if(!this.dirty.size){this.lastOk=Date.now();cloudStatus()}
+  };
   cloud.subscribe=function(){
     const c=cloudClient();
     if(this.channel)c.removeChannel(this.channel);
-    const h=()=>this.schedule();
-    this.channel=c.channel("todo-"+this.user.id)
-      .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},h)
-      .on("postgres_changes",{event:"*",schema:"public",table:"projects"},h)
-      .on("postgres_changes",{event:"*",schema:"public",table:"project_members"},h)
-      .on("postgres_changes",{event:"*",schema:"public",table:"task_comments"},h)
-      .on("postgres_changes",{event:"*",schema:"public",table:"profiles"},h)
-      .on("postgres_changes",{event:"*",schema:"public",table:"project_families"},h)
-      .on("postgres_changes",{event:"*",schema:"public",table:"client_requests"},h)
-      .on("postgres_changes",{event:"*",schema:"public",table:"open_points"},h)
-      .on("postgres_changes",{event:"*",schema:"public",table:"point_themes"},h)
-      .subscribe();
+    let ch=c.channel("todo-"+this.user.id);
+    ["tasks","client_requests","open_points","task_comments","project_families","point_themes","profiles"].forEach(t=>{ch=ch.on("postgres_changes",{event:"*",schema:"public",table:t},pl=>this.onRow(t,pl))});
+    ["projects","project_members"].forEach(t=>{ch=ch.on("postgres_changes",{event:"*",schema:"public",table:t},()=>this.schedule())});
+    this._rtDown=false;
+    this.channel=ch.subscribe(st=>{
+      // après une coupure, on recharge tout pour rattraper les événements manqués
+      if(st==="SUBSCRIBED"){if(this._rtDown){this._rtDown=false;this.schedule()}}
+      else if(st==="CHANNEL_ERROR"||st==="TIMED_OUT"||st==="CLOSED")this._rtDown=true;
+    });
   };
   async function startCloud(){
     MODE="cloud";
@@ -3401,7 +3454,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   (()=>{const st=$("#stickytop");const f=()=>{const top=st.getBoundingClientRect().top;st.classList.toggle("compact",window.scrollY>0&&top<=0.5)};window.addEventListener("scroll",f,{passive:true});window.addEventListener("resize",f);f()})();
   window.addEventListener("online",()=>{if(MODE==="cloud"){cloud.flush();cloud.fetch()}});
   window.addEventListener("focus",()=>{if(MODE==="cloud")cloud.schedule()});
-  setInterval(()=>{if(MODE==="cloud"&&!document.hidden)cloud.fetch()},60000);
+  // filet de sécurité : rechargement complet toutes les 5 minutes (le temps réel fait le reste)
+  setInterval(()=>{if(MODE==="cloud"&&!document.hidden)cloud.fetch()},300000);
 
   function startLocal(){
     MODE="local";$("#localbox").hidden=false;$("#acc").hidden=true;$("#share").hidden=true;
