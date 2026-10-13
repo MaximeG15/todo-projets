@@ -331,6 +331,15 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 .sorting,.sorting *{cursor:grabbing!important}
 @media (pointer:coarse){.steps .grip{opacity:.55;width:26px;height:26px}.steprow .grip{width:28px}}
 /* Points ouverts */
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chipslbl{font-size:13px;color:var(--muted);margin-right:2px}
+.chip{border:1px solid var(--field);background:var(--panel);color:var(--ink);border-radius:999px;padding:5px 12px;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.chip span{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.chip:hover{border-color:var(--steel)}
+.chip[aria-pressed="true"]{background:#5B3FA0;border-color:#5B3FA0;color:#fff}
+.chip[aria-pressed="true"] span{color:#E4DCF7}
+.chip-erp[aria-pressed="true"]{background:var(--signal);border-color:var(--signal);color:#16232B}
+.chipsep{width:1px;height:22px;background:var(--line);margin:0 4px}
 .phyp{margin-top:6px;font-size:14px;padding:6px 10px;border-left:3px solid #3E7CB1;background:var(--soft);border-radius:0 6px 6px 0;white-space:pre-wrap}
 .phyp b{color:#1F4A66;font-weight:600}
 .tag.erp{background:var(--signalsoft);color:var(--signalink);font-weight:600}
@@ -2741,8 +2750,29 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     });
     L.appendChild(add);
     if(!all.length){L.insertAdjacentHTML("beforeend",`<div class="empty">Aucun point ouvert sur ce projet. Saisissez une question dans la barre ci-dessus, ou collez directement une liste (une ligne par point, les puces sont retirées automatiquement).</div>`);return}
-    const open=all.filter(x=>x.status!=="closed"), closed=all.filter(x=>x.status==="closed").sort((a,b)=>(b.closedAt||0)-(a.closedAt||0));
-    if(!open.length)L.insertAdjacentHTML("beforeend",`<div class="empty">Tous les points sont levés.</div>`);
+    // filtres : thèmes (plusieurs possibles) et sujets ERP
+    ui.ptFilter=ui.ptFilter&&typeof ui.ptFilter==="object"?ui.ptFilter:{};
+    const fl=ui.ptFilter[p.id]||{themes:[],erp:false};
+    const known=new Set(all.map(x=>x.theme||""));
+    fl.themes=(fl.themes||[]).filter(k=>known.has(k));
+    const setF=f=>{ui.ptFilter[p.id]=f;saveUi();render()};
+    const allOpen=all.filter(x=>x.status!=="closed");
+    const cnt=k=>allOpen.filter(x=>(x.theme||"")===k&&(!fl.erp||x.erp==="oui")).length;
+    const keys=[...known].sort((a,b)=>a===""?1:b===""?-1:a.localeCompare(b,"fr",{sensitivity:"base"}));
+    const bar=document.createElement("div");bar.className="chips";bar.setAttribute("role","group");bar.setAttribute("aria-label","Filtrer les points ouverts");
+    bar.innerHTML=`<span class="chipslbl">Filtrer :</span><button type="button" class="chip" data-all aria-pressed="${!fl.themes.length}">Tous les thèmes</button>${keys.map(k=>`<button type="button" class="chip" data-t="${esc(k)}" aria-pressed="${fl.themes.includes(k)}">${k?esc(k):"Sans thème"}<span>${cnt(k)}</span></button>`).join("")}<span class="chipsep" aria-hidden="true"></span><button type="button" class="chip chip-erp" data-erp aria-pressed="${!!fl.erp}">Sujets ERP uniquement</button>${fl.themes.length||fl.erp?`<button type="button" class="pflink" data-reset>Effacer les filtres</button>`:""}`;
+    bar.querySelector("[data-all]").onclick=()=>setF({...fl,themes:[]});
+    bar.querySelectorAll("[data-t]").forEach(b=>b.onclick=e=>{const k=b.dataset.t;let t=fl.themes.slice();
+      t=t.includes(k)?t.filter(x=>x!==k):[...t,k];
+      setF({...fl,themes:t})});
+    bar.querySelector("[data-erp]").onclick=()=>setF({...fl,erp:!fl.erp});
+    const rs=bar.querySelector("[data-reset]");if(rs)rs.onclick=()=>setF({themes:[],erp:false});
+    if(keys.length>1||fl.erp||all.some(x=>x.erp))L.appendChild(bar);
+    const pass=x=>(!fl.themes.length||fl.themes.includes(x.theme||""))&&(!fl.erp||x.erp==="oui");
+    const filtered=all.filter(pass);
+    const open=filtered.filter(x=>x.status!=="closed"), closed=filtered.filter(x=>x.status==="closed").sort((a,b)=>(b.closedAt||0)-(a.closedAt||0));
+    if(fl.themes.length||fl.erp)L.insertAdjacentHTML("beforeend",`<p class="hint">${open.length} point${open.length>1?"s":""} ouvert${open.length>1?"s":""} affiché${open.length>1?"s":""} sur ${allOpen.length}${fl.themes.length?` · thème${fl.themes.length>1?"s":""} : ${fl.themes.map(k=>esc(k||"Sans thème")).join(", ")}`:""}${fl.erp?" · sujets ERP":""}</p>`);
+    if(!open.length)L.insertAdjacentHTML("beforeend",`<div class="empty">${fl.themes.length||fl.erp?"Aucun point ouvert ne correspond aux filtres.":"Tous les points sont levés."}</div>`);
     const groups=new Map();open.forEach(x=>{const k=x.theme||"";if(!groups.has(k))groups.set(k,[]);groups.get(k).push(x)});
     [...groups.keys()].sort((a,b)=>a===""?1:b===""?-1:a.localeCompare(b,"fr",{sensitivity:"base"})).forEach(k=>{
       const g=document.createElement("section");g.className="group g-pt";
