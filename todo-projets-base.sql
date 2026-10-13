@@ -433,3 +433,7 @@ begin
     alter publication supabase_realtime add table public.open_points;
   end if;
 end $$;
+
+-- Points ouverts : hypothèse Mecalux et sujet ERP (format du fichier de points ouverts)
+alter table public.open_points add column if not exists hypothesis text not null default '';
+alter table public.open_points add column if not exists erp text not null default '' check (erp in ('','oui','non'));
