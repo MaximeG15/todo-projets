@@ -331,8 +331,9 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 .sorting,.sorting *{cursor:grabbing!important}
 @media (pointer:coarse){.steps .grip{opacity:.55;width:26px;height:26px}.steprow .grip{width:28px}}
 /* Onglets du projet */
-.ptabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-top:-6px;overflow-x:auto}
-.ptabs button{border:0;background:none;padding:10px 14px;font:600 15px "Barlow",sans-serif;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap;display:inline-flex;align-items:center;gap:8px}
+.ptabs{display:flex;gap:4px;box-shadow:inset 0 -1px 0 var(--line);margin-top:-6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.ptabs::-webkit-scrollbar{display:none}
+.ptabs button{border:0;background:none;padding:10px 14px;font:600 15px "Barlow",sans-serif;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;display:inline-flex;align-items:center;gap:8px}
 .ptabs button span{font-weight:600;font-size:12px;background:var(--chip);color:var(--chipink);border-radius:9px;padding:1px 7px}
 .ptabs button:hover{color:var(--ink)}
 .ptabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--signal)}
