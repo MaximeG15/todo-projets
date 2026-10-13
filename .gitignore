@@ -1,2 +1,4 @@
 # Ne jamais publier de données de tâches
 *.json
+tests/out/
+__pycache__/

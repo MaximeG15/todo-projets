@@ -1,0 +1,36 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Installer Playwright (Chromium)
+        run: |
+          pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Vérifier la syntaxe des scripts
+        run: |
+          node --check js/app.js
+          node --check js/xlsx.js
+          node --check js/config.js
+          node --check sw.js
+      - name: Lancer les tests
+        run: python tests/run_all.py
+      - name: Captures en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures-tests
+          path: tests/out/
+          retention-days: 7
