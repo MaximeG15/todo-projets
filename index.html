@@ -115,8 +115,8 @@ textarea{width:100%;resize:vertical;min-height:64px}
 /* Barre d'ajout */
 .quick{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--field);border-radius:10px;padding:8px;box-shadow:0 1px 0 var(--line)}
 .quick:focus-within{border-color:var(--steel)}
-.qmain{flex:1 1 220px;display:flex;align-items:center;gap:10px;padding:0 8px}
-.qmain input{flex:1;min-width:0;border:0;background:none;padding:10px 0;font-size:16px}
+.qmain{flex:1 1 260px;min-width:0;display:flex;align-items:center;gap:10px;padding:0 8px}
+.qmain input{flex:1;min-width:0;width:0;border:0;background:none;padding:10px 0;font-size:16px}
 .qmain input:focus-visible{outline:none}
 .quick select,.quick input[type=date],.quick .qw{background:var(--soft)}
 .quick .qw{width:130px}
@@ -313,10 +313,23 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 .toast button{flex:none;border:0;background:none;color:#F2B705;font-weight:700;cursor:pointer;padding:7px 10px;border-radius:6px;font-size:14px}
 .toast button:hover{background:#2B4557}
 /* Barres d'ajout : tâche ou demande client */
-.qkind{flex:none;align-self:stretch;display:flex;align-items:center;padding:0 10px;border-radius:6px;background:var(--chip);color:var(--chipink);font:600 12px "Barlow",sans-serif;text-transform:uppercase;letter-spacing:.04em}
+.quick .qmain{flex-basis:100%}.quick .qadd{margin-left:auto}
+.wrap.wide .quick .qmain{flex-basis:320px}
+@container (max-width:1180px){.wrap.wide .quick .qmain{flex-basis:100%}}
+.qkind{flex:none;display:flex;align-items:center;height:26px;padding:0 8px;margin-left:-4px;border-radius:6px;background:var(--chip);color:var(--chipink);font:600 12px "Barlow",sans-serif;text-transform:uppercase;letter-spacing:.04em}
 #reqadd{border-color:#9DB9D3;background:#F4F8FC}
 .qkind.qk-req{background:#1F4A66;color:#fff}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #reqadd{background:#16232B;border-color:#33536A}}
+/* Poignée de déplacement des étapes */
+.grip{flex:none;display:inline-grid;place-items:center;width:18px;height:28px;margin-left:-4px;color:var(--faint);cursor:grab;touch-action:none;border-radius:4px;user-select:none}
+.grip:hover,.grip:focus-visible{color:var(--steel);background:var(--chip)}
+.steps li{position:relative}
+.steps .grip{height:20px;opacity:0;transition:opacity .12s}
+.steps li:hover .grip,.steps .grip:focus-visible,.steps.sorting .grip{opacity:1}
+.steprow .grip{height:36px}
+.dragging{background:var(--panel);box-shadow:0 6px 18px rgba(22,35,43,.18);border-radius:6px;position:relative;z-index:2}
+.sorting,.sorting *{cursor:grabbing!important}
+@media (pointer:coarse){.steps .grip{opacity:.55;width:26px;height:26px}.steprow .grip{width:28px}}
 /* Onglets du projet */
 .ptabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-top:-6px;overflow-x:auto}
 .ptabs button{border:0;background:none;padding:10px 14px;font:600 15px "Barlow",sans-serif;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap;display:inline-flex;align-items:center;gap:8px}
@@ -535,7 +548,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       <div class="ptabs" id="ptabs" role="tablist" aria-label="Contenu du projet" hidden></div>
       <div class="share" id="share" hidden></div>
       <form class="quick" id="quick" autocomplete="off">
-        <span class="qkind">Tâche</span><label class="qmain"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--muted)"><path d="M12 5v14M5 12h14"></path></svg>
+        <label class="qmain"><span class="qkind">Tâche</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--muted)"><path d="M12 5v14M5 12h14"></path></svg>
           <input type="text" id="qt" placeholder="Ajouter une tâche…" aria-label="Intitulé de la tâche"></label>
         <select id="qp" aria-label="Projet"></select>
         <input type="date" id="qd" aria-label="Échéance">
@@ -1983,6 +1996,44 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     draw();
     return box;
   }
+  // ---------- Réordonner par glisser-déposer (souris, écran tactile et clavier) ----------
+  function sortable(box,done){
+    const rows=()=>[...box.children].filter(r=>r.dataset.idx!=null);
+    box.querySelectorAll(":scope > [data-idx] > .grip").forEach(h=>{
+      h.onpointerdown=e=>{
+        if(e.button>0)return;
+        e.preventDefault();
+        const row=h.parentElement, start=rows().map(r=>+r.dataset.idx);
+        row.classList.add("dragging");box.classList.add("sorting");
+        const pid=e.pointerId;
+        const move=ev=>{
+          if(ev.pointerId!==pid)return;
+          ev.preventDefault();
+          const others=rows().filter(r=>r!==row);
+          let before=null;
+          for(const r of others){const b=r.getBoundingClientRect();if(ev.clientY<b.top+b.height/2){before=r;break}}
+          if(before){if(row.nextElementSibling!==before)box.insertBefore(row,before)}
+          else{const last=others[others.length-1];if(last&&last.nextElementSibling!==row)last.after(row)}
+        };
+        const end=ev=>{
+          if(ev&&ev.pointerId!==pid)return;
+          window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",end);window.removeEventListener("pointercancel",end);
+          row.classList.remove("dragging");box.classList.remove("sorting");
+          const order=rows().map(r=>+r.dataset.idx);
+          if(order.join()!==start.join())done(order);
+        };
+        window.addEventListener("pointermove",move,{passive:false});window.addEventListener("pointerup",end);window.addEventListener("pointercancel",end);
+      };
+      h.onkeydown=e=>{
+        if(e.key!=="ArrowUp"&&e.key!=="ArrowDown")return;
+        e.preventDefault();
+        const order=rows().map(r=>+r.dataset.idx), i=order.indexOf(+h.parentElement.dataset.idx), j=e.key==="ArrowUp"?i-1:i+1;
+        if(j<0||j>=order.length)return;
+        [order[i],order[j]]=[order[j],order[i]];
+        done(order,j);
+      };
+    });
+  }
   // ---------- Étapes ----------
   function toggleStep(t,sid){
     const cur=state.tasks.find(x=>x.id===t.id); if(!cur)return;
@@ -2016,7 +2067,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(nCom)tags.push(`<button type="button" class="tag" data-a="edit" title="Voir les commentaires" style="border:0;cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg>${nCom} commentaire${nCom>1?"s":""}</button>`);
     li.innerHTML=`<input type="checkbox" class="chk" ${t.status==="done"?"checked":""} aria-label="Marquer comme terminée">
       <div><div class="ttl">${hl(t.title)}</div>${tags.length?`<div class="meta">${tags.join("")}</div>`:""}
-      ${steps.length&&editing!==t.id?`<ul class="steps">${steps.map(c=>`<li class="${c.done?"ok":""}"><input type="checkbox" ${c.done?"checked":""} data-s="${esc(c.id)}" aria-label="Étape terminée : ${esc(c.text)}"><span>${hl(c.text)}</span></li>`).join("")}</ul>`:""}
+      ${steps.length&&editing!==t.id?`<ul class="steps">${steps.map((c,i)=>`<li class="${c.done?"ok":""}" data-idx="${i}"><span class="grip" data-g="${i}" tabindex="0" role="button" title="Glisser pour changer l'ordre (ou flèches haut et bas)" aria-label="Déplacer l'étape ${i+1}"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg></span><input type="checkbox" ${c.done?"checked":""} data-s="${esc(c.id)}" aria-label="Étape terminée : ${esc(c.text)}"><span>${hl(c.text)}</span></li>`).join("")}</ul>`:""}
       ${t.note&&editing!==t.id?`<div class="note">${hl(t.note)}</div>`:""}</div>
       <div class="acts">
         ${t.status!=="done"?`<button class="sbtn" data-a="doing" type="button">${t.status==="doing"?"Mettre en pause":t.status==="waiting"?"Reprendre":"Démarrer"}</button>`:""}
@@ -2027,6 +2078,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     li.querySelector(".chk").onchange=()=>toggle(t);
     li.querySelector(".ttl").onclick=()=>{editing=editing===t.id?null:t.id;render()};
     li.querySelectorAll("[data-s]").forEach(cb=>cb.onchange=()=>toggleStep(t,cb.dataset.s));
+    const sul=li.querySelector(":scope > div > ul.steps");
+    if(sul)sortable(sul,order=>{const cur=state.tasks.find(x=>x.id===t.id);if(!cur||!Array.isArray(cur.checklist))return;const cl=cur.checklist.slice();if(order.some(i=>!cl[i])||order.length!==cl.length){render();return}cur.checklist=order.map(i=>cl[i]);save();render()});
     li.querySelectorAll("[data-a]").forEach(btn=>btn.onclick=()=>{
       const a=btn.dataset.a;
       if(a==="doing")cycleDoing(t);
@@ -2081,10 +2134,11 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       let draft=steps.map(c=>({...c}));
       const sl=f.querySelector(".steplist"), sIn=f.querySelector(".steprow input");
       const drawSteps=()=>{
-        sl.innerHTML=draft.map((c,i)=>`<div class="steprow"><input type="checkbox" ${c.done?"checked":""} data-i="${i}" aria-label="Étape terminée" style="width:18px;height:18px;accent-color:var(--nav)"><input type="text" value="${esc(c.text)}" data-t="${i}" aria-label="Étape ${i+1}"><button type="button" class="xbtn" data-x="${i}" aria-label="Retirer l'étape">×</button></div>`).join("");
+        sl.innerHTML=draft.map((c,i)=>`<div class="steprow" data-idx="${i}"><span class="grip" data-g="${i}" tabindex="0" role="button" title="Glisser pour changer l'ordre (ou flèches haut et bas)" aria-label="Déplacer l'étape ${i+1}"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg></span><input type="checkbox" ${c.done?"checked":""} data-i="${i}" aria-label="Étape terminée" style="width:18px;height:18px;accent-color:var(--nav)"><input type="text" value="${esc(c.text)}" data-t="${i}" aria-label="Étape ${i+1}"><button type="button" class="xbtn" data-x="${i}" aria-label="Retirer l'étape">×</button></div>`).join("");
         sl.querySelectorAll("[data-i]").forEach(x=>x.onchange=()=>{draft[+x.dataset.i].done=x.checked});
         sl.querySelectorAll("[data-t]").forEach(x=>x.oninput=()=>{draft[+x.dataset.t].text=x.value});
         sl.querySelectorAll("[data-x]").forEach(x=>x.onclick=()=>{draft.splice(+x.dataset.x,1);drawSteps()});
+        sortable(sl,(order,focusIdx)=>{draft=order.map(i=>draft[i]);drawSteps();if(focusIdx!=null){const g=sl.querySelector(`[data-g="${focusIdx}"]`);if(g)g.focus()}});
       };
       const addStep=()=>{const v=sIn.value.trim();if(!v)return;draft.push({id:uid(),text:v,done:false});sIn.value="";drawSteps();sIn.focus()};
       f.querySelector(".steprow .btn").onclick=addStep;
@@ -2637,7 +2691,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const all=liveReq().filter(r=>p?r.projectId===p.id:!isArch(r.projectId));
     const qprojs=state.projects.filter(x=>!x.archived||(p&&x.id===p.id));
     const add=document.createElement("form");add.className="quick";add.id="reqadd";add.autocomplete="off";
-    add.innerHTML=`<span class="qkind qk-req">Demande client</span><label class="qmain"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--muted)"><path d="M12 5v14M5 12h14"></path></svg><input type="text" data-q="title" placeholder="Nouvelle demande client…" aria-label="Objet de la demande" maxlength="300"></label>
+    add.innerHTML=`<label class="qmain"><span class="qkind qk-req">Demande client</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--muted)"><path d="M12 5v14M5 12h14"></path></svg><input type="text" data-q="title" placeholder="Nouvelle demande client…" aria-label="Objet de la demande" maxlength="300"></label>
       ${p?"":`<select data-q="proj" aria-label="Projet">${qprojs.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select>`}
       <input type="text" data-q="who" placeholder="Demandeur" aria-label="Demandeur côté client" class="qw">
       <input type="date" data-q="due" aria-label="Réponse attendue le" title="Réponse attendue le">
