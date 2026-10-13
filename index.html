@@ -556,7 +556,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     <div class="brand"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#F2B705" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l3 3 5-6"></path><path d="M14 8h7M4 15h3M10 15h11M4 20h3M10 20h11" stroke="#E8EEF2"></path></svg><b>To do projets</b>
       <button class="menubtn" type="button" id="menubtn" aria-expanded="false" aria-controls="side" aria-label="Menu, compte et sauvegarde"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
     </div>
-    <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg><input type="search" id="search" placeholder="Rechercher une tâche" aria-label="Rechercher une tâche"></label>
+    <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg><input type="search" id="search" placeholder="Rechercher (Ctrl+K)" aria-label="Rechercher dans les tâches, points ouverts et demandes client" title="Rechercher dans les tâches, les points ouverts et les demandes client (Ctrl+K)"></label>
     <nav class="views" id="views" aria-label="Vues"></nav>
     <div class="psec">
       <div class="plabel">Projets</div>
@@ -1910,13 +1910,32 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(mode==="points"&&p&&!query.trim()){renderPoints(L,p);return}
     const base=alive.filter(t=>(!p||t.projectId===p.id)&&(!ui.who||mode==="dash"||(ui.who==="__none"?!(t.who||"").trim():whoName(t)===ui.who)));
     if(query.trim()){
+      // Recherche dans les tâches, les points ouverts et les demandes client
       const found=base.filter(matches);
       const fo=found.filter(t=>t.status!=="done").sort(sortOpen), fd=found.filter(t=>t.status==="done").sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
+      const mq=txt=>{const h=norm(txt);return norm(query.trim()).split(/\s+/).every(w=>h.includes(w))};
+      const pn=x=>(proj(x.projectId)||{}).name||"";
+      const fp=livePts().filter(x=>(!p||x.projectId===p.id)&&mq([x.text,x.answer,x.hypothesis,x.theme,x.ownerName,ownerTxt(x),pn(x)].join("\n")))
+        .sort((a,b)=>((a.status==="closed")-(b.status==="closed"))||pn(a).localeCompare(pn(b),"fr")||(a.createdAt||0)-(b.createdAt||0));
+      const fr=liveReq().filter(r=>(!p||r.projectId===p.id)&&mq([r.title,r.description,r.requester,REQL[r.status],pn(r)].join("\n")))
+        .sort((a,b)=>(reqOpen(b)-reqOpen(a))||((a.due||"9999")<(b.due||"9999")?-1:1));
+      const total=found.length+fp.length+fr.length;
       $("#ptitle").innerHTML="Recherche";
-      $("#psub").textContent=`${found.length} résultat${found.length>1?"s":""} pour « ${query.trim()} »`+(p?` dans ${p.name}`:"");
-      if(fo.length)L.appendChild(group("res","À faire et en cours","",fo,!p));
-      if(fd.length)L.appendChild(group("done","Terminées","",fd,!p));
-      if(!found.length)L.insertAdjacentHTML("beforeend",`<div class="empty">Aucune tâche ne correspond. La recherche porte sur l'intitulé, la note, les étapes, les commentaires, le responsable et le projet.</div>`);
+      const part=(n,one,many)=>n?`${n} ${n>1?many:one}`:"";
+      $("#psub").textContent=`${total} résultat${total>1?"s":""} pour « ${query.trim()} »`+(p?` dans ${p.name}`:"")+(total?" : "+[part(found.length,"tâche","tâches"),part(fp.length,"point ouvert","points ouverts"),part(fr.length,"demande client","demandes client")].filter(Boolean).join(", "):"");
+      if(fo.length)L.appendChild(group("res","Tâches à faire et en cours","",fo,!p));
+      if(fd.length)L.appendChild(group("done","Tâches terminées","",fd,!p));
+      if(fp.length){
+        const g=document.createElement("section");g.className="group g-pt";
+        g.innerHTML=`<h2>Points ouverts <span>${fp.length}</span></h2>`;
+        const ul=document.createElement("ul");ul.className="tasks";fp.forEach(x=>ul.appendChild(ptRow(x,ptNum(x),!p)));g.appendChild(ul);L.appendChild(g);
+      }
+      if(fr.length){
+        const g=document.createElement("section");g.className="group g-req";
+        g.innerHTML=`<h2>Demandes client <span>${fr.length}</span></h2>`;
+        const ul=document.createElement("ul");ul.className="tasks";fr.forEach(r=>ul.appendChild(reqRow(r,!p)));g.appendChild(ul);L.appendChild(g);
+      }
+      if(!total)L.insertAdjacentHTML("beforeend",`<div class="empty">Aucun résultat${p?" dans ce projet":""}. La recherche porte sur les tâches (intitulé, note, étapes, commentaires, responsable), les points ouverts (point, thème, hypothèse, réponse, interlocuteur) et les demandes client (objet, description, demandeur).${p?" Pour chercher dans tous les projets, cliquez sur « Toutes les tâches » puis relancez la recherche.":""}</div>`);
       return;
     }
     if(mode==="dash"){renderDash(L);return}
@@ -2836,12 +2855,16 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const n=prompt("Nouveau nom du thème",old);if(n===null)return;
     renameThemeTo(pid,old,n);
   }
-  function ptRow(x,num){
+  function ptNum(x){const l=livePts().filter(y=>y.projectId===x.projectId).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));return l.findIndex(y=>y.id===x.id)+1}
+  function ptRow(x,num,showProj){
     const li=document.createElement("li");
     li.className=`task pt${x.status==="closed"?" done":""}`;li.dataset.o=x.id;
     const tags=[];
     const ow=ownerTxt(x);
-    if(ow)tags.push(`<span class="tag who" title="Qui doit répondre">${esc(ow)}</span>`);
+    const pp=proj(x.projectId);
+    if(showProj&&pp)tags.push(`<span class="tag"><span class="dot" style="background:${pp.color}"></span>${esc(pp.name)}</span>`);
+    if(showProj&&x.theme)tags.push(`<span class="tag fam">${hl(x.theme)}</span>`);
+    if(ow)tags.push(`<span class="tag who" title="Qui doit répondre">${hl(ow)}</span>`);
     if(x.erp==="oui")tags.push(`<span class="tag erp" title="Sujet ERP">Sujet ERP</span>`);
     if(x.erp==="non")tags.push(`<span class="tag" title="Sujet ERP">Hors ERP</span>`);
     const t=x.taskId?live().find(y=>y.id===x.taskId):null, r=x.requestId?liveReq().find(y=>y.id===x.requestId):null;
@@ -2849,9 +2872,9 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(r)tags.push(`<button type="button" class="tag reqtag" data-l="r" title="Ouvrir la demande liée">Demande : ${esc(short(r.title))}</button>`);
     if(x.status==="closed"&&x.closedAt)tags.push(`<span class="tag">Levé le ${fmtWhen(x.closedAt).split(" à ")[0]}</span>`);
     li.innerHTML=`<input type="checkbox" class="chk" ${x.status==="closed"?"checked":""} aria-label="Point levé">
-      <div><div class="ttl ptxt"><span class="pnum">${num}.</span> ${esc(x.text)}</div>${tags.length?`<div class="meta">${tags.join("")}</div>`:""}
-      ${x.hypothesis&&editingPt!==x.id?`<div class="phyp"><b>Hypothèse Mecalux :</b> ${esc(x.hypothesis)}</div>`:""}
-      ${x.answer&&editingPt!==x.id?`<div class="pans"><b>Réponse :</b> ${esc(x.answer)}</div>`:""}</div>
+      <div><div class="ttl ptxt"><span class="pnum">${num}.</span> ${hl(x.text)}</div>${tags.length?`<div class="meta">${tags.join("")}</div>`:""}
+      ${x.hypothesis&&editingPt!==x.id?`<div class="phyp"><b>Hypothèse Mecalux :</b> ${hl(x.hypothesis)}</div>`:""}
+      ${x.answer&&editingPt!==x.id?`<div class="pans"><b>Réponse :</b> ${hl(x.answer)}</div>`:""}</div>
       <div class="acts"><details class="more"><summary aria-label="Plus d'actions">${ICON_MORE}</summary>
         <div class="menu"><button type="button" data-a="edit">${editingPt===x.id?"Fermer le détail":"Modifier / répondre"}</button>${t?"":`<button type="button" data-a="task">Créer une tâche liée</button>`}${r?"":`<button type="button" data-a="req">Créer une demande client</button>`}<button type="button" data-a="del" class="danger">Mettre à la corbeille</button></div>
       </details></div>`;
@@ -3091,7 +3114,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const p=proj(r.projectId), ts=reqTasks(r), tDone=ts.filter(t=>t.status==="done").length;
     const tags=[];
     if(showProj&&p)tags.push(`<span class="tag"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>`);
-    if(r.requester)tags.push(`<span class="tag who">${esc(r.requester)}</span>`);
+    if(r.requester)tags.push(`<span class="tag who">${hl(r.requester)}</span>`);
     if(r.received)tags.push(`<span class="tag" title="Date de réception">Reçue ${shortDay(r.received).toLowerCase()}</span>`);
     if(r.due&&reqOpen(r))tags.push(`<span class="tag${reqLate(r)?" late":parseD(r.due).getTime()===today().getTime()?" today":""}" title="Réponse attendue">${reqLate(r)?"Réponse en retard · ":"Réponse "}${shortDay(r.due).toLowerCase()}</span>`);
     if(r.priority==="haute")tags.push(`<span class="tag hi">Priorité haute</span>`);
@@ -3103,8 +3126,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(ts.length)tags.push(`<span class="tag" title="Tâches liées">Tâches liées : ${tDone}/${ts.length} terminée${tDone>1?"s":""}</span>`);
     const st=r.status||"new";
     li.innerHTML=`<span class="rdot rs-${st}" aria-hidden="true"></span>
-      <div><div class="ttl">${esc(r.title)}</div>${tags.length?`<div class="meta">${tags.join("")}</div>`:""}
-      ${r.description&&editingReq!==r.id?`<div class="note">${esc(r.description)}</div>`:""}
+      <div><div class="ttl">${hl(r.title)}</div>${tags.length?`<div class="meta">${tags.join("")}</div>`:""}
+      ${r.description&&editingReq!==r.id?`<div class="note">${hl(r.description)}</div>`:""}
       ${ts.length&&editingReq!==r.id?`<ul class="steps rtasks">${ts.sort((a,b)=>(a.status==="done")-(b.status==="done")||sortOpen(a,b)).map(t=>`<li class="${t.status==="done"?"ok":""}"><input type="checkbox" ${t.status==="done"?"checked":""} data-t="${esc(t.id)}" aria-label="Tâche terminée : ${esc(t.title)}"><span><a href="#" data-o="${esc(t.id)}">${esc(t.title)}</a>${t.status!=="done"&&t.due?` <span class="mut">· ${shortDay(t.due).toLowerCase()}</span>`:""}${t.status==="doing"?` <span class="mut">· en cours</span>`:t.status==="waiting"?` <span class="mut">· en attente</span>`:""}</span></li>`).join("")}</ul>`:""}</div>
       <div class="acts">
         <select class="rsel" aria-label="Statut de la demande">${REQ.map(([k,l])=>`<option value="${k}" ${k===st?"selected":""}>${l}</option>`).join("")}</select>
@@ -3238,6 +3261,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   $("#lback").onclick=()=>showGate("choice");
   $("#glogin").onsubmit=login;
   document.addEventListener("click",e=>{if(!document.contains(e.target))return;document.querySelectorAll("details.more[open],details.pfilter[open]").forEach(d=>{if(!d.contains(e.target)){d.open=false;if(d.classList.contains("pfilter"))pfOpen=false}})});
+  document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&(e.key==="k"||e.key==="K")){e.preventDefault();const s=$("#search");s.focus();s.select()}});
   let searchT=null;
   $("#search").addEventListener("input",e=>{clearTimeout(searchT);searchT=setTimeout(()=>{query=e.target.value;editing=null;render()},150)});
   $("#search").addEventListener("keydown",e=>{if(e.key==="Escape"){e.target.value="";query="";render()}});
