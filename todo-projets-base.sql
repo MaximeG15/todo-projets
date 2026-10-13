@@ -437,3 +437,24 @@ end $$;
 -- Points ouverts : hypothèse Mecalux et sujet ERP (format du fichier de points ouverts)
 alter table public.open_points add column if not exists hypothesis text not null default '';
 alter table public.open_points add column if not exists erp text not null default '' check (erp in ('','oui','non'));
+
+-- ---------- Thèmes des points ouverts (créés manuellement, par projet) ----------
+create table if not exists public.point_themes (
+  id         text primary key default gen_random_uuid()::text,
+  project_id text not null references public.projects(id) on delete cascade,
+  name       text not null check (length(trim(name)) between 1 and 80),
+  created_at bigint not null default (extract(epoch from now()) * 1000)::bigint
+);
+create unique index if not exists point_themes_project_name_idx on public.point_themes(project_id, lower(name));
+alter table public.point_themes enable row level security;
+drop policy if exists point_themes_all on public.point_themes;
+create policy point_themes_all on public.point_themes for all to authenticated
+  using (public.can_access(project_id)) with check (public.can_access(project_id));
+grant select, insert, update, delete on public.point_themes to authenticated;
+revoke all on public.point_themes from anon;
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='point_themes') then
+    alter publication supabase_realtime add table public.point_themes;
+  end if;
+end $$;

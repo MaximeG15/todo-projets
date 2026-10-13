@@ -344,7 +344,7 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 .phyp b{color:#1F4A66;font-weight:600}
 .tag.erp{background:var(--signalsoft);color:var(--signalink);font-weight:600}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .phyp b{color:#9CC3DD}}
-.quick .qtheme{width:190px}
+.quick .qtheme{width:200px;background:var(--soft)}
 .qkind.qk-pt{background:#5B3FA0;color:#fff}
 #ptadd{border-color:#C5B8E6;background:#F7F5FC}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #ptadd{background:#1B1A26;border-color:#3D3560}}
@@ -894,7 +894,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   }
 
   // ---------- Mode en ligne (Supabase) ----------
-  const cloud={client:null,user:null,email:"",meta:{},comments:{},profiles:{},families:{},dirty:new Map(),seq:0,flushing:false,again:false,retry:null,channel:null,fetchT:null,lastOk:0};
+  const cloud={client:null,user:null,email:"",meta:{},comments:{},profiles:{},families:{},ptThemes:{},dirty:new Map(),seq:0,flushing:false,again:false,retry:null,channel:null,fetchT:null,lastOk:0};
   const cloudReady=()=>!!(CONFIG.supabaseUrl&&CONFIG.supabaseKey&&window.supabase&&window.supabase.createClient);
   // La session est aussi gardée en mémoire : si le navigateur ne la restitue pas à la librairie
   // (stockage bloqué, verrou entre onglets…), on joint nous-mêmes le jeton aux requêtes.
@@ -995,7 +995,11 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(!this.user)return;
     if(editing||editingReq||editingPt){clearTimeout(this.fetchT);this.fetchT=setTimeout(()=>this.fetch(),3000);return}
     const c=cloudClient();
-    const [P,M,T,C,PR,F,R,O]=await Promise.all([c.from("projects").select("*"),c.from("project_members").select("*"),c.from("tasks").select("*"),c.from("task_comments").select("*"),c.from("profiles").select("*"),c.from("project_families").select("*"),c.from("client_requests").select("*"),c.from("open_points").select("*")]);
+    const [P,M,T,C,PR,F,R,O,TH]=await Promise.all([c.from("projects").select("*"),c.from("project_members").select("*"),c.from("tasks").select("*"),c.from("task_comments").select("*"),c.from("profiles").select("*"),c.from("project_families").select("*"),c.from("client_requests").select("*"),c.from("open_points").select("*"),c.from("point_themes").select("*")]);
+    if(TH&&!TH.error){
+      const tm={};TH.data.slice().sort((a,b)=>Number(a.created_at)-Number(b.created_at)).forEach(r=>{(tm[r.project_id]=tm[r.project_id]||[]).push({id:r.id,name:r.name})});
+      const js=JSON.stringify(tm);if(js!==this._lastPt){this._lastPt=js;this.ptThemes=tm;this._cmChanged=true}
+    }
     if(!F.error){
       const fm={};F.data.slice().sort((a,b)=>Number(a.created_at)-Number(b.created_at)).forEach(r=>{(fm[r.project_id]=fm[r.project_id]||[]).push({id:r.id,name:r.name})});
       const js=JSON.stringify(fm);if(js!==this._lastFm){this._lastFm=js;this.families=fm;this._cmChanged=true}
@@ -1062,6 +1066,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
       .on("postgres_changes",{event:"*",schema:"public",table:"project_families"},h)
       .on("postgres_changes",{event:"*",schema:"public",table:"client_requests"},h)
       .on("postgres_changes",{event:"*",schema:"public",table:"open_points"},h)
+      .on("postgres_changes",{event:"*",schema:"public",table:"point_themes"},h)
       .subscribe();
   };
   async function startCloud(){
@@ -2621,7 +2626,73 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   // ---------- Points ouverts ----------
   const OWNER={"":"Non défini",client:"Client",mecalux:"Mecalux",tiers:"Tiers"};
   const livePts=()=>(state.points||[]).filter(x=>!x.deletedAt);
-  const ptThemes=pid=>[...new Set(livePts().filter(x=>x.projectId===pid&&x.theme).map(x=>x.theme))].sort((a,b)=>a.localeCompare(b,"fr",{sensitivity:"base"}));
+  // Thèmes : ceux créés manuellement + ceux déjà utilisés par des points
+  function storedThemes(pid){return MODE==="cloud"?(cloud.ptThemes[pid]||[]):((proj(pid)||{}).pointThemes||[])}
+  const ptThemes=pid=>{
+    const m=new Map();
+    storedThemes(pid).forEach(t=>m.set(t.name.toLowerCase(),t.name));
+    livePts().forEach(x=>{if(x.projectId===pid&&x.theme&&!m.has(x.theme.toLowerCase()))m.set(x.theme.toLowerCase(),x.theme)});
+    return [...m.values()].sort((a,b)=>a.localeCompare(b,"fr",{sensitivity:"base"}));
+  };
+  async function addTheme(pid,name){
+    name=String(name||"").trim().slice(0,80);if(!name)return null;
+    const ex=ptThemes(pid).find(n=>n.toLowerCase()===name.toLowerCase());if(ex)return ex;
+    const id=crypto.randomUUID?crypto.randomUUID():uid()+uid();
+    if(MODE==="cloud"){
+      const {error}=await cloudClient().from("point_themes").insert({id,project_id:pid,name});
+      if(error&&error.code!=="23505"){alert(transient(error)?"Thème non créé : connexion au serveur impossible.":"Thème refusé : "+error.message);return null}
+      (cloud.ptThemes[pid]=cloud.ptThemes[pid]||[]).push({id,name});cloud._lastPt=JSON.stringify(cloud.ptThemes);
+      return name;
+    }
+    const pr=proj(pid);if(!pr)return null;
+    pr.pointThemes=[...(pr.pointThemes||[]),{id,name}];save();return name;
+  }
+  async function renameThemeTo(pid,old,v){
+    v=String(v||"").trim().slice(0,80);if(!v||v===old)return false;
+    if(ptThemes(pid).some(n=>n!==old&&n.toLowerCase()===v.toLowerCase())&&!confirm(`Le thème « ${v} » existe déjà : fusionner « ${old} » dedans ?`))return false;
+    const st=storedThemes(pid).find(t=>t.name===old), dup=storedThemes(pid).find(t=>t.name!==old&&t.name.toLowerCase()===v.toLowerCase());
+    if(MODE==="cloud"){
+      const c=cloudClient();
+      if(st){const {error}=dup?await c.from("point_themes").delete().eq("id",st.id):await c.from("point_themes").update({name:v}).eq("id",st.id);if(error){alert("Renommage impossible : "+error.message);return false}}
+      else if(!dup){const id=crypto.randomUUID?crypto.randomUUID():uid()+uid();await c.from("point_themes").insert({id,project_id:pid,name:v});(cloud.ptThemes[pid]=cloud.ptThemes[pid]||[]).push({id,name:v})}
+      if(st){cloud.ptThemes[pid]=dup?(cloud.ptThemes[pid]||[]).filter(t=>t.id!==st.id):(cloud.ptThemes[pid]||[]).map(t=>t.id===st.id?{...t,name:v}:t)}
+      cloud._lastPt=JSON.stringify(cloud.ptThemes);
+    } else {
+      const pr=proj(pid);let l=(pr.pointThemes||[]).slice();
+      if(st)l=dup?l.filter(t=>t!==st):l.map(t=>t===st?{...t,name:v}:t);else if(!dup)l.push({id:uid(),name:v});
+      pr.pointThemes=l;
+    }
+    const target=dup?dup.name:v;
+    livePts().forEach(x=>{if(x.projectId===pid&&x.theme===old)x.theme=target});
+    if(ui.lastTheme===old){ui.lastTheme=target;saveUi()}
+    save();render();return true;
+  }
+  async function deleteTheme(pid,name){
+    const n=livePts().filter(x=>x.projectId===pid&&x.theme===name).length;
+    if(!confirm(`Supprimer le thème « ${name} » ?${n?` Les ${n} point(s) qui l'utilisent passeront en « Sans thème ».`:""}`))return false;
+    const st=storedThemes(pid).find(t=>t.name===name);
+    if(MODE==="cloud"){
+      if(st){const {error}=await cloudClient().from("point_themes").delete().eq("id",st.id);if(error){alert("Suppression impossible : "+error.message);return false}}
+      cloud.ptThemes[pid]=(cloud.ptThemes[pid]||[]).filter(t=>t.name!==name);cloud._lastPt=JSON.stringify(cloud.ptThemes);
+    } else {const pr=proj(pid);pr.pointThemes=(pr.pointThemes||[]).filter(t=>t.name!==name)}
+    livePts().forEach(x=>{if(x.projectId===pid&&x.theme===name)x.theme=""});
+    if(ui.lastTheme===name){ui.lastTheme="";saveUi()}
+    save();render();return true;
+  }
+  // Liste déroulante des thèmes avec « + Nouveau thème… »
+  function themeOptions(pid,sel,emptyLabel){
+    return `<option value="">${emptyLabel}</option>${ptThemes(pid).map(n=>`<option value="${esc(n)}" ${n===sel?"selected":""}>${esc(n)}</option>`).join("")}<option value="__new">+ Nouveau thème…</option>`;
+  }
+  function bindThemeSelect(sel,pid,emptyLabel,after){
+    sel.dataset.prev=sel.value;
+    sel.addEventListener("change",async()=>{
+      if(sel.value!=="__new"){sel.dataset.prev=sel.value;if(after)after();return}
+      const name=prompt("Nom du nouveau thème (propre à ce projet)");
+      const n=name?await addTheme(pid,name):null;
+      sel.innerHTML=themeOptions(pid,n||sel.dataset.prev||"",emptyLabel);
+      sel.value=n||sel.dataset.prev||"";sel.dataset.prev=sel.value;if(after)after(!!n);
+    });
+  }
   const ownerTxt=x=>x.owner||x.ownerName?[x.owner?OWNER[x.owner]:"",x.ownerName].filter(Boolean).join(" · "):"";
   let editingPt=null;
   const newId=()=>MODE==="cloud"&&crypto.randomUUID?crypto.randomUUID():uid();
@@ -2667,8 +2738,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   }
   function renameTheme(pid,old){
     const n=prompt("Nouveau nom du thème",old);if(n===null)return;
-    const v=n.trim().slice(0,80);if(v===old)return;
-    livePts().forEach(x=>{if(x.projectId===pid&&x.theme===old)x.theme=v});save();render();
+    renameThemeTo(pid,old,n);
   }
   function ptRow(x,num){
     const li=document.createElement("li");
@@ -2703,21 +2773,25 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     if(editingPt===x.id){
       const f=document.createElement("div");f.className="edit";
       f.innerHTML=`<label class="full flbl">Point ouvert<textarea data-f="text" maxlength="2000">${esc(x.text)}</textarea></label>
-        <label class="flbl">Thème<input type="text" data-f="theme" value="${esc(x.theme||"")}" list="ptthemes-${esc(x.projectId)}" maxlength="80" placeholder="ex. Réception"></label>
+        <label class="flbl">Thème<span class="famsel"><select data-f="theme">${themeOptions(x.projectId,x.theme||"","Sans thème")}</select><button type="button" class="btn ghost" data-th="ren">Renommer</button><button type="button" class="btn ghost" data-th="del">Supprimer</button></span></label>
         <label class="flbl">Qui doit répondre<select data-f="owner">${Object.entries(OWNER).map(([k,l])=>`<option value="${k}" ${k===(x.owner||"")?"selected":""}>${l}</option>`).join("")}</select></label>
         <label class="flbl">Interlocuteur<input type="text" data-f="oname" value="${esc(x.ownerName||"")}" maxlength="120" placeholder="Nom de la personne"></label>
         <label class="flbl">Statut<select data-f="st"><option value="open" ${x.status!=="closed"?"selected":""}>Ouvert</option><option value="closed" ${x.status==="closed"?"selected":""}>Levé</option></select></label>
         <label class="flbl">Sujet ERP ?<select data-f="erp"><option value="" ${!x.erp?"selected":""}>Non précisé</option><option value="oui" ${x.erp==="oui"?"selected":""}>Oui</option><option value="non" ${x.erp==="non"?"selected":""}>Non</option></select></label>
         <label class="full flbl">Hypothèse Mecalux<textarea data-f="hyp" placeholder="Proposition ou hypothèse de Mecalux à faire valider…">${esc(x.hypothesis||"")}</textarea></label>
         <label class="full flbl">Réponse / décision<textarea data-f="ans" placeholder="Réponse obtenue, décision prise, compte rendu d'atelier…">${esc(x.answer||"")}</textarea></label>
-        <datalist id="ptthemes-${esc(x.projectId)}">${ptThemes(x.projectId).map(v=>`<option value="${esc(v)}">`).join("")}</datalist>
         <div class="full"><button class="btn primary" type="button" data-k="ok">Enregistrer</button> <button class="btn ghost" type="button" data-k="ko">Annuler</button></div>`;
       const g=k=>f.querySelector(`[data-f=${k}]`);
+      const ths=g("theme"), thR=f.querySelector("[data-th=ren]"), thD=f.querySelector("[data-th=del]");
+      const syncTh=()=>{thR.hidden=thD.hidden=!ths.value||ths.value==="__new"};syncTh();
+      bindThemeSelect(ths,x.projectId,"Sans thème",syncTh);
+      thR.onclick=async()=>{const old=ths.value;if(!old)return;const n=prompt("Nouveau nom du thème",old);if(n===null)return;const keep={text:g("text").value,ans:g("ans").value,hyp:g("hyp").value};if(await renameThemeTo(x.projectId,old,n)){const el=document.querySelector(`.pt[data-o="${x.id}"] .edit`);if(el){el.querySelector("[data-f=text]").value=keep.text;el.querySelector("[data-f=ans]").value=keep.ans;el.querySelector("[data-f=hyp]").value=keep.hyp}}};
+      thD.onclick=async()=>{const old=ths.value;if(!old)return;const keep={text:g("text").value,ans:g("ans").value,hyp:g("hyp").value};if(await deleteTheme(x.projectId,old)){const el=document.querySelector(`.pt[data-o="${x.id}"] .edit`);if(el){el.querySelector("[data-f=text]").value=keep.text;el.querySelector("[data-f=ans]").value=keep.ans;el.querySelector("[data-f=hyp]").value=keep.hyp}}};
       f.querySelector("[data-k=ok]").onclick=()=>{
         const cur=state.points.find(y=>y.id===x.id);
         if(!cur){editingPt=null;render();alert("Ce point a été supprimé entre-temps (peut-être par un collègue).");return}
         if(g("text").value.trim())cur.text=g("text").value.trim();
-        cur.theme=g("theme").value.trim();cur.owner=g("owner").value;cur.ownerName=g("oname").value.trim();cur.answer=g("ans").value.trim();cur.hypothesis=g("hyp").value.trim();cur.erp=g("erp").value;
+        cur.theme=g("theme").value==="__new"?cur.theme:g("theme").value;cur.owner=g("owner").value;cur.ownerName=g("oname").value.trim();cur.answer=g("ans").value.trim();cur.hypothesis=g("hyp").value.trim();cur.erp=g("erp").value;
         const st=g("st").value;if(st!==cur.status){cur.status=st;cur.closedAt=st==="closed"?Date.now():null}
         editingPt=null;save();render();
       };
@@ -2733,12 +2807,13 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const themes=ptThemes(p.id);
     const add=document.createElement("form");add.className="quick";add.id="ptadd";add.autocomplete="off";
     add.innerHTML=`<label class="qmain"><span class="qkind qk-pt">Point ouvert</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--muted)"><path d="M12 5v14M5 12h14"></path></svg><input type="text" data-q="text" placeholder="Nouvelle question à trancher… (vous pouvez coller une liste)" aria-label="Point ouvert" maxlength="2000"></label>
-      <input type="text" data-q="theme" placeholder="Thème" aria-label="Thème" list="ptthemes-add" maxlength="80" class="qw qtheme" value="${esc(ui.lastTheme&&themes.includes(ui.lastTheme)?ui.lastTheme:"")}">
-      <datalist id="ptthemes-add">${themes.map(v=>`<option value="${esc(v)}">`).join("")}</datalist>
+      <select data-q="theme" aria-label="Thème" class="qtheme">${themeOptions(p.id,ui.lastTheme&&themes.includes(ui.lastTheme)?ui.lastTheme:"","Thème : aucun")}</select>
       <select data-q="owner" aria-label="Qui doit répondre"><option value="">Qui doit répondre ?</option><option value="client">Client</option><option value="mecalux">Mecalux</option><option value="tiers">Tiers</option></select>
       <button class="qadd" type="submit">Ajouter</button>`;
     const q=k=>add.querySelector(`[data-q=${k}]`);
-    const submit=texts=>{if(!texts.length)return;const th=q("theme").value.trim();ui.lastTheme=th;saveUi();addPoints(texts,p.id,th,q("owner").value);const ni=document.querySelector("#ptadd [data-q=text]");if(ni)ni.focus()};
+    bindThemeSelect(q("theme"),p.id,"Thème : aucun",created=>{ui.lastTheme=q("theme").value;saveUi();
+      if(created){const txt=q("text").value, ow=q("owner").value;render();const na=$("#ptadd");if(na){na.querySelector("[data-q=text]").value=txt;na.querySelector("[data-q=owner]").value=ow;na.querySelector("[data-q=text]").focus()}}});
+    const submit=texts=>{if(!texts.length)return;const th=q("theme").value==="__new"?"":q("theme").value;ui.lastTheme=th;saveUi();addPoints(texts,p.id,th,q("owner").value);const ni=document.querySelector("#ptadd [data-q=text]");if(ni)ni.focus()};
     add.onsubmit=e=>{e.preventDefault();const v=q("text").value.trim();if(v)submit([v])};
     q("text").addEventListener("paste",e=>{
       const txt=(e.clipboardData||window.clipboardData).getData("text");
@@ -2753,7 +2828,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     // filtres : thèmes (plusieurs possibles) et sujets ERP
     ui.ptFilter=ui.ptFilter&&typeof ui.ptFilter==="object"?ui.ptFilter:{};
     const fl=ui.ptFilter[p.id]||{themes:[],erp:false};
-    const known=new Set(all.map(x=>x.theme||""));
+    const known=new Set([...all.map(x=>x.theme||""),...themes]);
     fl.themes=(fl.themes||[]).filter(k=>known.has(k));
     const setF=f=>{ui.ptFilter[p.id]=f;saveUi();render()};
     const allOpen=all.filter(x=>x.status!=="closed");
