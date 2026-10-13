@@ -578,7 +578,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
         <button class="btn" type="button" id="frelink" hidden></button>
         <button class="btn ghost" type="button" id="funlink" hidden>Délier</button>
         <p class="sub">Copie de secours</p>
-        <button class="btn" type="button" id="exp">Exporter (.json)</button>
+        <button class="btn" type="button" id="exp">Sauvegarder une copie (.json)</button>
         <button class="btn" type="button" id="imp">Importer</button>
         <input type="file" id="impf" accept=".json,application/json" hidden>
         <button class="btn" type="button" id="mrg" title="Ajoute les tâches d'un autre fichier sans rien effacer (utile si OneDrive a créé une copie en conflit)">Fusionner un fichier</button>
@@ -889,13 +889,29 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   function normalize(d){return {projects:Array.isArray(d&&d.projects)?d.projects.slice():[],tasks:Array.isArray(d&&d.tasks)?d.tasks.slice():[],requests:Array.isArray(d&&d.requests)?d.requests.slice():[],points:Array.isArray(d&&d.points)?d.points.slice():[],deleted:Array.isArray(d&&d.deleted)?d.deleted.slice():[]}}
 
   // ---------- Sauvegarde fichier ----------
+  // Sauvegarde complète au format local : projets (avec familles et thèmes), tâches (avec commentaires),
+  // demandes client, points ouverts et corbeille. Réimportable en mode local comme en ligne.
+  function backupSnapshot(){
+    const d=JSON.parse(JSON.stringify(state));
+    if(MODE==="cloud"){
+      d.projects.forEach(p=>{
+        p.families=(cloud.families[p.id]||[]).map(f=>({id:f.id,name:f.name}));
+        p.pointThemes=(cloud.ptThemes[p.id]||[]).map(t=>({id:t.id,name:t.name}));
+        const m=cloud.meta[p.id];if(m){p.owner=m.ownerEmail;p.sharedWith=m.members.slice()}
+      });
+      d.tasks.forEach(t=>{const c=cloud.comments[t.id];if(c&&c.length)t.comments=c.map(x=>({id:x.id,author:x.author,text:x.text,at:x.at}))});
+    }
+    return d;
+  }
   function exportData(){
-    const blob=new Blob([JSON.stringify({app:"todo-projets",version:1,exportedAt:new Date().toISOString(),...state},null,2)],{type:"application/json"});
+    const d=backupSnapshot();
+    const blob=new Blob([JSON.stringify({app:"todo-projets",version:3,exportedAt:new Date().toISOString(),mode:MODE,account:MODE==="cloud"?cloud.email:"",...d},null,2)],{type:"application/json"});
     const a=document.createElement("a");
     a.href=URL.createObjectURL(blob);
-    a.download="todo-projets-"+new Date().toISOString().slice(0,10)+".json";
+    a.download="todo-projets-sauvegarde-"+iso(today())+".json";
     document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    setSync(`Sauvegarde téléchargée : ${d.projects.length} projet(s), ${d.tasks.filter(t=>!t.deletedAt).length} tâche(s), ${(d.points||[]).filter(o=>!o.deletedAt).length} point(s) ouvert(s), ${(d.requests||[]).filter(r=>!r.deletedAt).length} demande(s)`);
   }
   function importData(file){
     const r=new FileReader();
@@ -1198,8 +1214,8 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   function renderAccount(){
     const a=$("#acc");
     a.innerHTML=`<p class="sub">Compte en ligne</p><p class="who-me">${esc(cloud.email)}</p>
-      <button class="btn" type="button" data-a="imp">Importer des tâches (.json)</button>
-      <button class="btn" type="button" data-a="exp">Exporter (.json)</button>
+      <button class="btn" type="button" data-a="imp">Restaurer / importer (.json)</button>
+      <button class="btn" type="button" data-a="exp" title="Télécharge une copie complète de vos données (projets, tâches, familles, points ouverts, demandes, commentaires) sur votre ordinateur">Sauvegarder une copie (.json)</button>
       <button class="btn ghost" type="button" data-a="name">Modifier mon nom</button>
       <button class="btn ghost" type="button" data-a="pwd">Changer le mot de passe</button>
       <button class="btn ghost" type="button" data-a="out">Se déconnecter</button>
@@ -1214,14 +1230,34 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
     const r=new FileReader();
     r.onload=()=>{
       let d;try{d=JSON.parse(r.result);if(!Array.isArray(d.projects)||!Array.isArray(d.tasks))throw 0}catch(e){alert("Ce fichier n'est pas un fichier de données To do projets valide.");return}
-      if(!confirm(`Importer ${d.projects.length} projet(s) et ${d.tasks.length} tâche(s) dans votre compte ? Ils s'ajoutent à vos projets en ligne existants (rien n'est remplacé).`))return;
+      const nT=d.tasks.filter(t=>!t.deletedAt).length, nO=(d.points||[]).filter(o=>!o.deletedAt).length, nR=(d.requests||[]).filter(x=>!x.deletedAt).length;
+      if(!confirm(`Importer ${d.projects.length} projet(s), ${nT} tâche(s)${nO?`, ${nO} point(s) ouvert(s)`:""}${nR?`, ${nR} demande(s) client`:""} dans votre compte ?\n\nIls s'ajoutent à vos projets en ligne existants : rien n'est remplacé ni supprimé.`))return;
       const ids={}, nid=()=>(crypto.randomUUID?crypto.randomUUID():uid()+uid());
+      const fams=[], fmap={}, themes=[], coms=[];
+      d.projects.forEach(p=>{
+        (Array.isArray(p.families)?p.families:[]).forEach(f=>{if(f&&f.id&&f.name){fmap[f.id]=nid();fams.push({id:fmap[f.id],pid:p.id,name:String(f.name).slice(0,60)})}});
+        (Array.isArray(p.pointThemes)?p.pointThemes:[]).forEach(t=>{if(t&&t.name)themes.push({pid:p.id,name:String(t.name).slice(0,80)})});
+      });
       d.projects.forEach((p,i)=>{ids[p.id]=nid();state.projects.push({id:ids[p.id],name:String(p.name||"Projet"),color:p.color||COLORS[(state.projects.length+i)%COLORS.length]})});
       const rids={};
       (Array.isArray(d.requests)?d.requests:[]).forEach(r=>{if(!ids[r.projectId]||r.deletedAt||!r.title)return;rids[r.id]=nid();state.requests.push({id:rids[r.id],projectId:ids[r.projectId],title:String(r.title).slice(0,300),description:String(r.description||""),requester:String(r.requester||""),received:/^\d{4}-\d{2}-\d{2}$/.test(r.received||"")?r.received:"",due:/^\d{4}-\d{2}-\d{2}$/.test(r.due||"")?r.due:"",priority:["haute","normale","basse"].includes(r.priority)?r.priority:"normale",status:REQL[r.status]?r.status:"new",scope:["","in","out"].includes(r.scope)?r.scope:"",estimate:r.estimate==null||isNaN(+r.estimate)?null:+r.estimate,quote:QUOTE[r.quote]!==undefined?r.quote:"",createdAt:Number(r.createdAt)||Date.now(),closedAt:r.closedAt||null})});
       (Array.isArray(d.points)?d.points:[]).forEach(o=>{if(!ids[o.projectId]||o.deletedAt||!o.text)return;state.points.push({id:nid(),projectId:ids[o.projectId],text:String(o.text).slice(0,2000),answer:String(o.answer||""),hypothesis:String(o.hypothesis||""),erp:["oui","non"].includes(o.erp)?o.erp:"",theme:String(o.theme||"").slice(0,80),owner:OWNER[o.owner]!==undefined?o.owner:"",ownerName:String(o.ownerName||"").slice(0,120),status:o.status==="closed"?"closed":"open",taskId:null,requestId:null,createdAt:Number(o.createdAt)||Date.now(),closedAt:o.closedAt||null})});
-      d.tasks.forEach(t=>{if(!ids[t.projectId]||t.deletedAt)return;state.tasks.push({id:nid(),projectId:ids[t.projectId],title:String(t.title||""),priority:["haute","normale","basse"].includes(t.priority)?t.priority:"normale",due:/^\d{4}-\d{2}-\d{2}$/.test(t.due||"")?t.due:"",status:["todo","doing","waiting","done"].includes(t.status)?t.status:"todo",waitingFor:String(t.waitingFor||""),note:String(t.note||""),who:String(t.who||""),createdAt:Number(t.createdAt)||Date.now(),doneAt:t.doneAt||null,checklist:Array.isArray(t.checklist)?t.checklist.filter(c=>c&&c.text).map(c=>({id:String(c.id||uid()),text:String(c.text),done:!!c.done})):[],repeat:t.repeat&&t.repeat.unit?{n:+t.repeat.n||1,unit:String(t.repeat.unit)}:null,requestId:rids[t.requestId]||null})});
+      d.tasks.forEach(t=>{if(!ids[t.projectId]||t.deletedAt)return;state.tasks.push({id:nid(),projectId:ids[t.projectId],title:String(t.title||""),priority:["haute","normale","basse"].includes(t.priority)?t.priority:"normale",due:/^\d{4}-\d{2}-\d{2}$/.test(t.due||"")?t.due:"",status:["todo","doing","waiting","done"].includes(t.status)?t.status:"todo",waitingFor:String(t.waitingFor||""),note:String(t.note||""),who:String(t.who||""),createdAt:Number(t.createdAt)||Date.now(),doneAt:t.doneAt||null,checklist:Array.isArray(t.checklist)?t.checklist.filter(c=>c&&c.text).map(c=>({id:String(c.id||uid()),text:String(c.text),done:!!c.done})):[],repeat:t.repeat&&t.repeat.unit?{n:+t.repeat.n||1,unit:String(t.repeat.unit)}:null,requestId:rids[t.requestId]||null,family:fmap[t.family]||""});const nt=state.tasks[state.tasks.length-1];(Array.isArray(t.comments)?t.comments:[]).forEach(c=>{if(c&&c.text)coms.push({task:nt.id,author:c.author,text:String(c.text),at:c.at})})});
       view="all";save();render();
+      // familles, thèmes et commentaires : créés une fois les projets et tâches enregistrés en ligne
+      (async()=>{
+        setSync("Import en cours…");
+        await cloud.flush();
+        const c=cloudClient();let ko=0;
+        if(fams.length){const {error}=await c.from("project_families").insert(fams.map(f=>({id:f.id,project_id:ids[f.pid],name:f.name})));if(error)ko++}
+        if(themes.length){const {error}=await c.from("point_themes").insert(themes.map(t=>({project_id:ids[t.pid],name:t.name})));if(error&&error.code!=="23505")ko++}
+        for(let i=0;i<coms.length;i+=200){
+          const part=coms.slice(i,i+200).map(x=>{const who=x.author&&x.author!==cloud.email&&x.author!=="Moi"?`[${nameOf(x.author)}${x.at?", "+new Date(x.at).toLocaleDateString("fr-FR"):""}] `:"";return {task_id:x.task,body:(who+x.text).slice(0,4000)}});
+          const {error}=await c.from("task_comments").insert(part);if(error)ko++;
+        }
+        await cloud.fetch();
+        setSync(ko?"Import terminé, mais certains éléments (familles, thèmes ou commentaires) n'ont pas pu être recréés.":"Import terminé : projets, tâches, familles, thèmes et commentaires restaurés.");
+      })();
     };
     r.readAsText(file);
   }
