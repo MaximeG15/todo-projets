@@ -56,5 +56,60 @@ window.XlsxLite=(()=>{
       {name:"xl/worksheets/sheet1.xml",data:sheet}
     ]);
   }
-  return {buildXlsx,zipStore};
+  // ---------- Lecture d'un fichier .xlsx (sans bibliothèque) ----------
+  // readXlsx(ArrayBuffer) -> [{name, rows:[[valeur,…],…]}] ; nombres en Number, texte en String
+  async function inflateRaw(u8){
+    const s=new Blob([u8]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return new Uint8Array(await new Response(s).arrayBuffer());
+  }
+  async function unzip(buf){
+    const u8=new Uint8Array(buf), dv=new DataView(buf), td=new TextDecoder();
+    let e=u8.length-22;while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;
+    if(e<0)throw new Error("Ce fichier n'est pas un classeur Excel (.xlsx).");
+    const n=dv.getUint16(e+10,true);let p=dv.getUint32(e+16,true);const files={};
+    for(let i=0;i<n;i++){
+      if(dv.getUint32(p,true)!==0x02014b50)break;
+      const method=dv.getUint16(p+10,true),csize=dv.getUint32(p+20,true),nl=dv.getUint16(p+28,true),xl=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),lho=dv.getUint32(p+42,true);
+      files[td.decode(u8.subarray(p+46,p+46+nl))]={method,csize,lho};p+=46+nl+xl+cl;
+    }
+    return async name=>{
+      const f=files[name];if(!f)return null;
+      const q=f.lho,o=q+30+dv.getUint16(q+26,true)+dv.getUint16(q+28,true),data=u8.subarray(o,o+f.csize);
+      return td.decode(f.method===0?data:await inflateRaw(data));
+    };
+  }
+  const xmlDoc=s=>new DOMParser().parseFromString(s,"application/xml");
+  const tags=(el,n)=>[...el.getElementsByTagNameNS("*",n)];
+  const colIdx=ref=>{let n=0;for(const ch of ref.replace(/[0-9]/g,""))n=n*26+ch.charCodeAt(0)-64;return n-1};
+  async function readXlsx(buf){
+    const get=await unzip(buf);
+    const wb=await get("xl/workbook.xml");if(!wb)throw new Error("Classeur Excel illisible.");
+    const rels={};const rx=await get("xl/_rels/workbook.xml.rels");
+    if(rx)tags(xmlDoc(rx),"Relationship").forEach(r=>rels[r.getAttribute("Id")]=r.getAttribute("Target"));
+    const ss=[];const sx=await get("xl/sharedStrings.xml");
+    if(sx)tags(xmlDoc(sx),"si").forEach(si=>ss.push(tags(si,"t").filter(t=>!t.parentElement||t.parentElement.localName!=="rPh").map(t=>t.textContent).join("")));
+    const out=[];
+    for(const sh of tags(xmlDoc(wb),"sheet")){
+      const rid=sh.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships","id")||sh.getAttribute("r:id");
+      let tgt=rels[rid]||"";tgt=tgt.startsWith("/")?tgt.slice(1):"xl/"+tgt.replace(/^\.\//,"");
+      const x=await get(tgt);if(!x)continue;
+      const rows=[];
+      tags(xmlDoc(x),"row").forEach(r=>{
+        const ri=(+r.getAttribute("r")||rows.length+1)-1, row=rows[ri]=rows[ri]||[];
+        tags(r,"c").forEach((c,k)=>{
+          const t=c.getAttribute("t"),ref=c.getAttribute("r"),ci=ref?colIdx(ref):k;
+          const v=tags(c,"v")[0];let val=null;
+          if(t==="s")val=v?ss[+v.textContent]??"":"";
+          else if(t==="inlineStr")val=tags(c,"t").map(e=>e.textContent).join("");
+          else if(t==="str"||t==="e")val=v?v.textContent:"";
+          else if(t==="b")val=v?v.textContent==="1":null;
+          else if(v)val=Number(v.textContent);
+          row[ci]=val;
+        });
+      });
+      out.push({name:sh.getAttribute("name"),rows:Array.from(rows,r=>r?Array.from(r,v=>v===undefined?null:v):[])});
+    }
+    return out;
+  }
+  return {buildXlsx,zipStore,readXlsx};
 })();

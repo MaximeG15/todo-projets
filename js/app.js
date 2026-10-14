@@ -278,8 +278,8 @@
   const fromT=r=>({id:r.id,projectId:r.project_id,title:r.title,priority:r.priority,due:r.due||"",status:r.waiting&&r.status==="todo"?"waiting":r.status,waitingFor:r.waiting_for||"",deletedAt:r.deleted_at?Number(r.deleted_at):null,note:r.note||"",who:r.who||"",createdAt:Number(r.created_at),doneAt:r.done_at?Number(r.done_at):null,updatedAt:Number(r.updated_at),updatedBy:r.updated_by||"",checklist:Array.isArray(r.checklist)?r.checklist:[],repeat:r.repeat||null,family:r.family||"",requestId:r.request_id||null});
   const fromP=r=>({id:r.id,name:r.name,color:r.color||COLORS[0],archived:!!r.archived});
   const rowR=r=>({id:r.id,project_id:r.projectId,title:r.title,description:r.description||"",requester:r.requester||"",received:r.received||null,due:r.due||null,priority:r.priority||"normale",status:r.status||"new",scope:r.scope||"",estimate:r.estimate==null||r.estimate===""?null:Number(r.estimate),quote:r.quote||"",created_at:r.createdAt||Date.now(),updated_at:r.updatedAt||Date.now(),closed_at:r.closedAt||null,deleted_at:r.deletedAt||null,updated_by:cloud.email});
-  const rowO=o=>({id:o.id,project_id:o.projectId,text:o.text,answer:o.answer||"",hypothesis:o.hypothesis||"",erp:o.erp||"",theme:o.theme||"",owner:o.owner||"",owner_name:o.ownerName||"",status:o.status==="closed"?"closed":"open",task_id:o.taskId||null,request_id:o.requestId||null,created_at:o.createdAt||Date.now(),updated_at:o.updatedAt||Date.now(),closed_at:o.closedAt||null,deleted_at:o.deletedAt||null,updated_by:cloud.email});
-  const fromO=r=>({id:r.id,projectId:r.project_id,text:r.text,answer:r.answer||"",hypothesis:r.hypothesis||"",erp:r.erp||"",theme:r.theme||"",owner:r.owner||"",ownerName:r.owner_name||"",status:r.status,taskId:r.task_id||null,requestId:r.request_id||null,createdAt:Number(r.created_at),updatedAt:Number(r.updated_at),closedAt:r.closed_at?Number(r.closed_at):null,deletedAt:r.deleted_at?Number(r.deleted_at):null,updatedBy:r.updated_by||""});
+  const rowO=o=>({id:o.id,project_id:o.projectId,text:o.text,answer:o.answer||"",hypothesis:o.hypothesis||"",erp:o.erp||"",theme:o.theme||"",owner:o.owner||"",owner_name:o.ownerName||"",status:o.status==="closed"?"closed":"open",task_id:o.taskId||null,request_id:o.requestId||null,created_at:o.createdAt||Date.now(),updated_at:o.updatedAt||Date.now(),closed_at:o.closedAt||null,deleted_at:o.deletedAt||null,updated_by:cloud.email,excel_ref:o.xl||null});
+  const fromO=r=>({id:r.id,projectId:r.project_id,text:r.text,answer:r.answer||"",hypothesis:r.hypothesis||"",erp:r.erp||"",theme:r.theme||"",owner:r.owner||"",ownerName:r.owner_name||"",status:r.status,taskId:r.task_id||null,requestId:r.request_id||null,createdAt:Number(r.created_at),updatedAt:Number(r.updated_at),closedAt:r.closed_at?Number(r.closed_at):null,deletedAt:r.deleted_at?Number(r.deleted_at):null,updatedBy:r.updated_by||"",xl:r.excel_ref||null});
   const fromR=r=>({id:r.id,projectId:r.project_id,title:r.title,description:r.description||"",requester:r.requester||"",received:r.received||"",due:r.due||"",priority:r.priority,status:r.status,scope:r.scope||"",estimate:r.estimate==null?null:Number(r.estimate),quote:r.quote||"",createdAt:Number(r.created_at),updatedAt:Number(r.updated_at),closedAt:r.closed_at?Number(r.closed_at):null,deletedAt:r.deleted_at?Number(r.deleted_at):null,updatedBy:r.updated_by||""});
   const transient=e=>!e||!e.code; // pas de code PostgreSQL = problème réseau
   function cloudStatus(){
@@ -1228,7 +1228,7 @@
       }
       ddMenu("Exporter ▾",[{h:"Documents"},{t:"Récap de la semaine",fn:openRecap},{t:"Plan d'actions (Excel / PDF)",fn:()=>openExport(p,"tasks")},{t:"Points ouverts (Excel / PDF)",fn:()=>openExport(p,"points")}],"ddexp");
       if(p){
-        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[{t:"Renommer le projet",fn:()=>renameProject(p)},{colors:p},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
+        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[{t:"Renommer le projet",fn:()=>renameProject(p)},{colors:p},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},...(xlOn(p.id)?["-",{h:"Lien Excel des points ouverts"},{t:"Mettre à jour depuis Excel…",fn:()=>xlPick(p)},{t:"Désactiver le lien Excel",fn:()=>xlToggle(p,false)}]:[]),"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
         else ddMenu("⋯",[{t:"Quitter le projet",fn:()=>shareRemove(p.id,cloud.email,true),cls:"danger"}],"ddmore");
       }
     }
@@ -2400,6 +2400,103 @@
     };
     ifr.srcdoc=html;
   }
+  // ---------- Lien Excel des points ouverts (mise à jour à sens unique : Excel vers appli) ----------
+  // Fonction cachée, activée par projet avec « /excel » dans la recherche. L'Excel n'est jamais modifié.
+  // Chaque point lié garde (xl) les dernières valeurs lues dans l'Excel : un champ n'est repris que s'il a changé dans l'Excel.
+  const xlOn=pid=>!!(ui.xl&&ui.xl[pid]);
+  function xlToggle(p,on){
+    ui.xl=ui.xl||{};if(on)ui.xl[p.id]=true;else delete ui.xl[p.id];saveUi();render();
+    toast(on?`Lien Excel activé pour « ${p.name} » : menu ⋯ puis « Mettre à jour depuis Excel ».`:`Lien Excel désactivé pour « ${p.name} ».`);
+  }
+  const XL_F=["text","theme","hypothesis","answer","status","owner","erp"];
+  const xlKey=s=>norm(String(s||"")).replace(/[^a-z0-9]+/g," ").trim();
+  const xlWords=s=>new Set(xlKey(s).split(" ").filter(w=>w.length>2));
+  const xlSim=(a,b)=>{const A=xlWords(a),B=xlWords(b);if(!A.size||!B.size)return 0;let n=0;A.forEach(w=>{if(B.has(w))n++});return n/(A.size+B.size-n)};
+  const xlStr=v=>v==null?"":String(v).replace(/\r\n?/g,"\n").replace(/[ \t]+\n/g,"\n").trim();
+  function xlParse(sheets){
+    const H={date:/date/,theme:/sujet|theme|famille/,text:/description|point ouvert|question/,hypothesis:/hypothese/,answer:/retour|reponse|decision/,status:/statut|etat/,owner:/acteur|qui doit|responsable/,erp:/erp/};
+    for(const sh of sheets){
+      for(let hr=0;hr<Math.min(10,sh.rows.length);hr++){
+        const hd=(sh.rows[hr]||[]).map(v=>xlKey(v));
+        const col={};
+        Object.entries(H).forEach(([f,re])=>{const i=hd.findIndex((h,k)=>h&&re.test(h)&&!Object.values(col).includes(k));if(i>=0)col[f]=i});
+        if(col.text==null)continue;
+        const rows=[];
+        sh.rows.slice(hr+1).forEach((r,i)=>{
+          const g=f=>col[f]==null?null:r[col[f]];
+          const text=xlStr(g("text")).slice(0,2000);if(!text)return;
+          const st=xlKey(g("status")), ow=xlKey(g("owner")), er=xlKey(g("erp")), d=g("date");
+          rows.push({line:hr+i+2,date:typeof d==="number"&&d>20000?Math.round((d-25569)*864e5+new Date().getTimezoneOffset()*6e4):null,
+            v:{text,theme:xlStr(g("theme")).slice(0,80),hypothesis:xlStr(g("hypothesis")),answer:xlStr(g("answer")),
+               status:/clotur|leve|ferme|termine|resolu/.test(st)?"closed":"open",
+               owner:!ow?"":/mecalux/.test(ow)?"mecalux":/tiers/.test(ow)?"tiers":"client",
+               erp:/^(oui|yes|o|x)$/.test(er)?"oui":/^(non|no|n)$/.test(er)?"non":""}});
+        });
+        return {sheet:sh.name,rows};
+      }
+    }
+    throw new Error("Aucune colonne « Description » trouvée dans le classeur.");
+  }
+  function xlPick(p){
+    const inp=document.createElement("input");inp.type="file";inp.accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    inp.onchange=()=>{if(inp.files[0])xlSync(p,inp.files[0])};inp.click();
+  }
+  async function xlSync(p,file){
+    let parsed;
+    try{parsed=xlParse(await window.XlsxLite.readXlsx(await file.arrayBuffer()))}
+    catch(e){uiAlert("Lecture impossible : "+(e&&e.message||"fichier Excel illisible.")+"\n\nVérifiez qu'il s'agit bien d'un fichier .xlsx (pas .xls ni .xlsm protégé).");return}
+    const plan=xlPlan(p.id,parsed.rows);
+    const nUp=plan.updates.length, nF=plan.updates.reduce((n,u)=>n+u.fields.length,0);
+    if(!nUp&&!plan.added.length&&!plan.gone.length&&!plan.links.length){if(plan.silent.length){plan.silent.forEach(l=>l.apply());save()}toast(`Points ouverts déjà à jour avec l'Excel (${parsed.rows.length} lignes lues).`);ui.xlLast=ui.xlLast||{};ui.xlLast[p.id]=Date.now();saveUi();return}
+    const LBL={text:"description",theme:"thème",hypothesis:"hypothèse",answer:"réponse",status:"statut",owner:"acteur",erp:"sujet ERP"};
+    const lines=[`Fichier : ${file.name} (onglet « ${parsed.sheet} », ${parsed.rows.length} lignes)`,""];
+    if(nUp)lines.push(`• ${nUp} point${nUp>1?"s":""} mis à jour (${nF} champ${nF>1?"s":""}) :`,...plan.updates.slice(0,6).map(u=>`   – ${short(u.pt.text)} : ${u.fields.map(f=>LBL[f]).join(", ")}`),...(nUp>6?[`   – … et ${nUp-6} autre(s)`]:[]));
+    if(plan.added.length)lines.push(`• ${plan.added.length} nouveau${plan.added.length>1?"x":""} point${plan.added.length>1?"s":""}`);
+    if(plan.links.length)lines.push(`• ${plan.links.length} point${plan.links.length>1?"s":""} existant${plan.links.length>1?"s":""} relié${plan.links.length>1?"s":""} à l'Excel (vos saisies dans l'appli sont conservées, seuls les champs vides sont complétés)`);
+    if(plan.gone.length)lines.push(`• ${plan.gone.length} point${plan.gone.length>1?"s":""} n'existe${plan.gone.length>1?"nt":""} plus dans l'Excel :`,...plan.gone.slice(0,5).map(x=>`   – ${short(x.text)}`),...(plan.gone.length>5?[`   – … et ${plan.gone.length-5} autre(s)`]:[]));
+    if(plan.dupes)lines.push("",`Attention : ${plan.dupes} ligne${plan.dupes>1?"s":""} en double dans l'Excel (même description) ignorée${plan.dupes>1?"s":""}.`);
+    lines.push("","L'Excel n'est pas modifié.");
+    const btns=plan.gone.length?[{v:null,label:"Annuler",cls:"ghost"},{v:"keep",label:"Appliquer, garder les points retirés"},{v:"trash",label:"Appliquer, retirés à la corbeille",cls:"primary",focus:true}]
+      :[{v:null,label:"Annuler",cls:"ghost"},{v:"keep",label:"Appliquer",cls:"primary",focus:true}];
+    const ch=await uiDialog({title:"Mise à jour depuis Excel",msg:lines.join("\n"),buttons:btns});
+    if(ch==null)return;
+    const before=JSON.parse(JSON.stringify((state.points||[]).filter(x=>x.projectId===p.id)));
+    const now=Date.now();
+    plan.updates.forEach(u=>u.apply());plan.links.forEach(l=>l.apply());plan.silent.forEach(l=>l.apply());
+    plan.added.forEach((r,i)=>state.points.push({id:newId(),projectId:p.id,...r.v,ownerName:"",taskId:null,requestId:null,createdAt:r.date||now+i,closedAt:r.v.status==="closed"?now:null,xl:{k:xlKey(r.v.text),v:r.v}}));
+    plan.gone.forEach(x=>{delete x.xl;if(ch==="trash")x.deletedAt=now});
+    ui.xlLast=ui.xlLast||{};ui.xlLast[p.id]=now;saveUi();
+    save();render();
+    toast(`Mise à jour Excel appliquée : ${nUp} modifié${nUp>1?"s":""}, ${plan.added.length} ajouté${plan.added.length>1?"s":""}${plan.gone.length?`, ${plan.gone.length} retiré${plan.gone.length>1?"s":""}${ch==="trash"?" (corbeille)":" (conservé"+(plan.gone.length>1?"s":"")+")"}`:""}`,()=>{
+      state.points=(state.points||[]).filter(x=>x.projectId!==p.id).concat(before);save();render();
+    });
+  }
+  // Rapproche les lignes Excel des points du projet et prépare les changements (sans rien modifier)
+  function xlPlan(pid,rows){
+    const pts=(state.points||[]).filter(x=>x.projectId===pid);
+    const byKey=new Map();let dupes=0;
+    rows.forEach(r=>{const k=xlKey(r.v.text);if(byKey.has(k))dupes++;else byKey.set(k,r)});
+    const free=new Set(byKey.keys()), match=new Map(); // point -> ligne
+    // 1. clé mémorisée, puis 2. texte identique
+    pts.filter(x=>x.xl&&free.has(x.xl.k)).forEach(x=>{match.set(x,byKey.get(x.xl.k));free.delete(x.xl.k)});
+    pts.filter(x=>!match.has(x)&&free.has(xlKey(x.text))).forEach(x=>{const k=xlKey(x.text);match.set(x,byKey.get(k));free.delete(k)});
+    // 3. texte proche (description reformulée d'un côté ou de l'autre)
+    const cand=[];
+    pts.filter(x=>!match.has(x)).forEach(x=>free.forEach(k=>{const r=byKey.get(k),s=Math.max(xlSim(x.xl?x.xl.v.text:x.text,r.v.text),xlSim(x.text,r.v.text))+((x.xl?x.xl.v.theme:x.theme)===r.v.theme?0.05:0);if(s>=0.6)cand.push([s,x,k])}));
+    cand.sort((a,b)=>b[0]-a[0]).forEach(([,x,k])=>{if(!match.has(x)&&free.has(k)){match.set(x,byKey.get(k));free.delete(k)}});
+    const updates=[],links=[];
+    match.forEach((r,x)=>{
+      if(x.deletedAt)return; // à la corbeille : on n'y touche pas
+      const v=r.v, base=x.xl&&x.xl.v;
+      const fields=XL_F.filter(f=>base?(v[f]!==base[f]&&v[f]!==(x[f]||"")):(!(x[f]||"")&&v[f]&&f!=="status"));
+      const setRef=()=>{x.xl={k:xlKey(v.text),v}};
+      const apply=()=>{fields.forEach(f=>{x[f]=v[f];if(f==="status")x.closedAt=v[f]==="closed"?(x.closedAt||Date.now()):null});setRef()};
+      if(fields.length)updates.push({pt:x,fields,apply});
+      if(!base)links.push({pt:x,apply:fields.length?()=>{}:setRef});
+      else if(!fields.length&&(base.text!==v.text||XL_F.some(f=>base[f]!==v[f])))links.push({pt:x,apply:setRef,silent:true});
+    });
+    return {updates,links:links.filter(l=>!l.silent),silent:links.filter(l=>l.silent),added:[...free].map(k=>byKey.get(k)),gone:pts.filter(x=>x.xl&&!x.deletedAt&&!match.has(x)),dupes};
+  }
   // ---------- Demandes client ----------
   const REQ=[["new","Nouvelle"],["analysis","En analyse"],["doing","En cours"],["waiting","En attente client"],["done","Traitée"],["refused","Refusée"]];
   const REQL=Object.fromEntries(REQ);
@@ -2637,7 +2734,16 @@
   document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&(e.key==="k"||e.key==="K")){e.preventDefault();const s=$("#search");s.focus();s.select()}});
   let searchT=null;
   $("#search").addEventListener("input",e=>{clearTimeout(searchT);searchT=setTimeout(()=>{query=e.target.value;editing=null;render()},150)});
-  $("#search").addEventListener("keydown",e=>{if(e.key==="Escape"){e.target.value="";query="";render()}});
+  $("#search").addEventListener("keydown",e=>{
+    if(e.key==="Escape"){e.target.value="";query="";render()}
+    // commande cachée : « /excel » + Entrée dans la recherche, projet ouvert (propriétaire uniquement)
+    if(e.key==="Enter"&&e.target.value.trim().toLowerCase()==="/excel"){
+      e.preventDefault();e.target.value="";query="";
+      const p=proj(view);
+      if(!p||(MODE==="cloud"&&!isOwner(p.id))){render();return}
+      xlToggle(p,!xlOn(p.id));
+    }
+  });
   $("#calsave").onclick=saveCalCfg;
   $("#profform").onsubmit=submitProfile;
   $("#pclose").onclick=()=>$("#profdlg").close&&$("#profdlg").close();

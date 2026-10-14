@@ -468,3 +468,7 @@ alter policy profiles_select on public.profiles using ((user_id = (select auth.u
 alter policy profiles_insert on public.profiles with check (user_id = (select auth.uid()));
 alter policy profiles_update on public.profiles using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 alter policy user_calendar_own on public.user_calendar using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+
+-- ---------- Lien Excel des points ouverts (mise à jour à sens unique Excel vers appli) ----------
+alter table public.open_points add column if not exists excel_ref jsonb;
+comment on column public.open_points.excel_ref is 'Dernières valeurs lues dans le fichier Excel source (mise à jour à sens unique Excel vers appli)';
