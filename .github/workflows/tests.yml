@@ -17,7 +17,7 @@ jobs:
           python-version: "3.12"
       - name: Installer Playwright (Chromium)
         run: |
-          pip install playwright==1.56.0
+          pip install playwright==1.56.0 openpyxl==3.1.5
           python -m playwright install --with-deps chromium
       - name: Vérifier la syntaxe des scripts
         run: |

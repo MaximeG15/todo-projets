@@ -7,7 +7,7 @@ aucun accès à la base réelle, aucune donnée client.
 ## Lancer les tests en local
 
 ```bash
-pip install playwright
+pip install playwright openpyxl
 python -m playwright install chromium
 python tests/run_all.py            # tous les tests
 python tests/run_all.py search     # seulement ceux dont le nom contient « search »
