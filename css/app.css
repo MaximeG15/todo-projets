@@ -799,3 +799,10 @@ body.mtgopen{overflow:hidden}
   .crpage{padding:20px}
   .mtgrow{grid-template-columns:52px minmax(0,1fr) auto}
 }
+/* Points ouverts standard */
+.tplflows{display:flex;flex-direction:column;gap:2px;margin:4px 0}
+.tplflows label{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer}
+.tplflows label:hover{background:var(--soft)}
+.tplflows span{flex:1;font-weight:600}
+.tplflows em{font-style:normal;font-size:13px;color:var(--muted)}
+.tplflows input:disabled~span,.tplflows input:disabled~em{opacity:.55}

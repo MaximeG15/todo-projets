@@ -1061,6 +1061,7 @@
     name=name.trim(); if(!name)return;
     const p={id:uid(),name,color:nextColor()};
     state.projects.push(p); view=p.id; save(); render();
+    if(MODE==="cloud")setTimeout(()=>tplDialog(p,true),400);
   }
   async function renameProject(p){
     const n=await uiPrompt("Nouveau nom du projet",p.name,{ok:"Renommer"}); if(n&&n.trim()){p.name=n.trim();save();render()}
@@ -1336,7 +1337,7 @@
       if(p&&mode==="points"&&xlOn(p.id)&&(MODE!=="cloud"||isOwner(p.id)))b("Mettre à jour depuis Excel",()=>xlPick(p),"");
       ddMenu("Exporter ▾",[{h:"Documents"},{t:"Récap de la semaine",fn:openRecap},{t:"Plan d'actions (Excel / PDF)",fn:()=>openExport(p,"tasks")},{t:"Points ouverts (Excel / PDF)",fn:()=>openExport(p,"points")}],"ddexp");
       if(p){
-        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[{t:"Renommer le projet",fn:()=>renameProject(p)},{colors:p},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},...(xlOn(p.id)?["-",{h:"Lien Excel des points ouverts"},{t:"Mettre à jour depuis Excel…",fn:()=>xlPick(p)},{t:"Désactiver le lien Excel",fn:()=>xlToggle(p,false)},{t:"Supprimer tous les points ouverts…",fn:()=>xlPurge(p),cls:"danger"}]:[]),"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
+        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[{t:"Renommer le projet",fn:()=>renameProject(p)},{colors:p},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},...(MODE==="cloud"?[{t:"Ajouter les points ouverts standard…",fn:()=>tplDialog(p,false)}]:[]),...(xlOn(p.id)?["-",{h:"Lien Excel des points ouverts"},{t:"Mettre à jour depuis Excel…",fn:()=>xlPick(p)},{t:"Désactiver le lien Excel",fn:()=>xlToggle(p,false)},{t:"Supprimer tous les points ouverts…",fn:()=>xlPurge(p),cls:"danger"}]:[]),"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
         else ddMenu("⋯",[{t:"Quitter le projet",fn:()=>shareRemove(p.id,cloud.email,true),cls:"danger"}],"ddmore");
       }
     }
@@ -3276,6 +3277,48 @@
     cg.querySelectorAll("[data-x]").forEach(b=>b.onclick=async()=>{const c=cs.find(x=>x.id===b.dataset.x);if(c&&await uiConfirm(`Retirer « ${c.name} » des contacts du projet ?`,{ok:"Retirer",danger:true})){await ctDel(p.id,c.id);render()}});
     const f=cg.querySelector("form");f.onsubmit=async e=>{e.preventDefault();const r=await ctAdd(p.id,{name:f.querySelector("[data-n]").value,role:f.querySelector("[data-r]").value,email:f.querySelector("[data-e]").value,side:f.querySelector("[data-s]").value});if(r)render()};
     L.appendChild(cg);
+  }
+  // ---------- Points ouverts standard (modèle d'AF, stocké en base : réservé aux utilisateurs connectés) ----------
+  let tplCache=null;
+  async function loadTemplates(){
+    if(MODE!=="cloud")return null;
+    if(tplCache)return tplCache;
+    const {data,error}=await cloudClient().from("point_templates").select("*");
+    if(error)return null;
+    tplCache=(data||[]).filter(t=>t.text).sort((a,b)=>(a.flow_order-b.flow_order)||(a.sort-b.sort));
+    return tplCache;
+  }
+  async function tplDialog(p,isNew){
+    const tpl=await loadTemplates();
+    if(!tpl||!tpl.length){if(!isNew)uiAlert(MODE==="cloud"?"Points standard indisponibles : connexion au serveur impossible.":"Les points ouverts standard ne sont disponibles qu'en mode en ligne.");return}
+    const have=new Set(livePts().filter(o=>o.projectId===p.id).map(o=>norm(o.text)));
+    const flows=[];tpl.forEach(t=>{let f=flows.find(x=>x.name===t.flow);if(!f)flows.push(f={name:t.flow,items:[]});f.items.push(t)});
+    flows.forEach(f=>f.todo=f.items.filter(t=>!have.has(norm(t.text))));
+    if(!flows.some(f=>f.todo.length)){if(!isNew)uiAlert("Tous les points standard sont déjà présents dans ce projet.");return}
+    const picked=await new Promise(res=>{
+      if(typeof window.__testDialog==="function"){Promise.resolve(window.__testDialog({type:"templates",message:p.name,flows:flows.map(f=>f.name)})).then(r=>res(r&&r.ok===false?null:(r&&r.v)||flows.map(f=>f.name)));return}
+      const d=document.createElement("dialog");d.className="uidlg";d.setAttribute("aria-label","Points ouverts standard");
+      d.innerHTML=`<form method="dialog"><h3>${isNew?"Points ouverts de base":"Ajouter les points ouverts standard"}</h3>
+        <p class="uimsg">${isNew?`Ajouter au projet « ${esc(p.name)} » les points ouverts standard de l'analyse fonctionnelle ?`:"Points issus du modèle d'analyse fonctionnelle (standard, hors modules)."} Chaque flux devient un thème ; les points sont à répondre par le client.</p>
+        <div class="tplflows">${flows.map((f,i)=>`<label><input type="checkbox" data-f="${i}" ${f.todo.length?"checked":"disabled"}><span>${esc(f.name)}</span><em>${f.todo.length?`${f.todo.length} point${f.todo.length>1?"s":""}`:"déjà présents"}</em></label>`).join("")}</div>
+        <p class="uimsg" data-n style="font-size:13px;color:var(--muted)"></p>
+        <div class="uibtns"><button type="button" class="btn ghost" data-x>${isNew?"Projet vide":"Annuler"}</button><button type="button" class="btn primary" data-ok>Ajouter les points</button></div></form>`;
+      document.body.appendChild(d);
+      const boxes=[...d.querySelectorAll("[data-f]")];
+      const upd=()=>{const n=boxes.filter(b=>b.checked).reduce((s,b)=>s+flows[+b.dataset.f].todo.length,0);d.querySelector("[data-n]").textContent=`${n} point${n>1?"s":""} ouvert${n>1?"s":""} seront créés.`;d.querySelector("[data-ok]").disabled=!n};
+      boxes.forEach(b=>b.onchange=upd);upd();
+      const close=v=>{try{d.close()}catch(e){}d.remove();res(v)};
+      d.addEventListener("cancel",e=>{e.preventDefault();close(null)});
+      d.querySelector("[data-x]").onclick=()=>close(null);
+      d.querySelector("[data-ok]").onclick=()=>close(boxes.filter(b=>b.checked).map(b=>flows[+b.dataset.f].name));
+      if(d.showModal)d.showModal();else d.setAttribute("open","");
+      setTimeout(()=>d.querySelector("[data-ok]").focus(),0);
+    });
+    if(!picked||!picked.length)return;
+    const now=Date.now();let k=0;
+    flows.filter(f=>picked.includes(f.name)).forEach(f=>f.todo.forEach(t=>state.points.push({id:newId(),projectId:p.id,text:t.text,answer:"",hypothesis:t.hypothesis||"",erp:"",theme:f.name,owner:"client",ownerName:"",status:"open",taskId:null,requestId:null,createdAt:now+(k++),closedAt:null})));
+    save();render();
+    toast(`${k} point${k>1?"s":""} ouvert${k>1?"s":""} standard ajouté${k>1?"s":""} au projet.`);
   }
   // ---------- Demandes client ----------
   const REQ=[["new","Nouvelle"],["analysis","En analyse"],["doing","En cours"],["waiting","En attente client"],["done","Traitée"],["refused","Refusée"]];

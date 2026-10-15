@@ -548,3 +548,17 @@ create policy contacts_all on public.project_contacts for all to authenticated
 grant select, insert, update, delete on public.project_contacts to authenticated;
 revoke all on public.project_contacts from anon;
 -- (publication temps réel et sauvegarde hebdomadaire étendues aux deux tables : voir la migration meetings_and_contacts)
+
+-- Modèles de points ouverts (contenu chargé directement en base, non publié dans ce dépôt)
+create table if not exists public.point_templates (
+  id text primary key,
+  template text not null default 'af-standard',
+  flow text not null,
+  flow_order int not null default 0,
+  sort int not null default 0,
+  text text not null,
+  hypothesis text not null default ''
+);
+alter table public.point_templates enable row level security;
+create policy "point_templates lecture" on public.point_templates for select to authenticated using (true);
+grant select on public.point_templates to authenticated;
