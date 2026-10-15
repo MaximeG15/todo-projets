@@ -502,3 +502,49 @@ begin
 end $$;
 -- chaque dimanche à 3 h (UTC)
 select cron.schedule('todo-projets-sauvegarde-hebdo', '0 3 * * 0', 'select backup.take_snapshot()');
+
+-- ---------- Réunions et comptes rendus, contacts du projet ----------
+create table if not exists public.meetings (
+  id            text primary key default gen_random_uuid()::text,
+  project_id    text not null references public.projects(id) on delete cascade,
+  title         text not null check (length(trim(title)) between 1 and 300),
+  kind          text not null default 'atelier' check (kind in ('atelier','copil','hebdo','autre')),
+  theme         text not null default '' check (length(theme) <= 80),
+  starts_at     bigint,
+  ends_at       bigint,
+  location      text not null default '' check (length(location) <= 500),
+  outlook_key   text,
+  status        text not null default 'draft' check (status in ('draft','validated')),
+  participants  jsonb not null default '[]'::jsonb,
+  agenda        jsonb not null default '[]'::jsonb,
+  items         jsonb not null default '[]'::jsonb,
+  notes         text not null default '' check (length(notes) <= 20000),
+  next_meeting  text not null default '' check (length(next_meeting) <= 300),
+  validated_at  bigint,
+  created_by    text not null default lower(coalesce(auth.jwt() ->> 'email', '')),
+  created_at    bigint not null default (extract(epoch from now()) * 1000)::bigint,
+  updated_at    bigint not null default (extract(epoch from now()) * 1000)::bigint,
+  deleted_at    bigint
+);
+create index if not exists meetings_project_idx on public.meetings(project_id);
+alter table public.meetings enable row level security;
+create policy meetings_all on public.meetings for all to authenticated
+  using (public.can_access(project_id)) with check (public.can_access(project_id));
+grant select, insert, update, delete on public.meetings to authenticated;
+revoke all on public.meetings from anon;
+create table if not exists public.project_contacts (
+  id          text primary key default gen_random_uuid()::text,
+  project_id  text not null references public.projects(id) on delete cascade,
+  name        text not null check (length(trim(name)) between 1 and 120),
+  role        text not null default '' check (length(role) <= 120),
+  side        text not null default 'client' check (side in ('client','mecalux','tiers')),
+  email       text not null default '' check (length(email) <= 200),
+  created_at  bigint not null default (extract(epoch from now()) * 1000)::bigint
+);
+create index if not exists project_contacts_project_idx on public.project_contacts(project_id);
+alter table public.project_contacts enable row level security;
+create policy contacts_all on public.project_contacts for all to authenticated
+  using (public.can_access(project_id)) with check (public.can_access(project_id));
+grant select, insert, update, delete on public.project_contacts to authenticated;
+revoke all on public.project_contacts from anon;
+-- (publication temps réel et sauvegarde hebdomadaire étendues aux deux tables : voir la migration meetings_and_contacts)

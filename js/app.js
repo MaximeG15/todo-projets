@@ -193,6 +193,8 @@
       d.projects.forEach(p=>{
         p.families=(cloud.families[p.id]||[]).map(f=>({id:f.id,name:f.name}));
         p.pointThemes=(cloud.ptThemes[p.id]||[]).map(t=>({id:t.id,name:t.name}));
+        p.meetings=(cloud.meetings[p.id]||[]).map(x=>JSON.parse(JSON.stringify(x)));
+        p.contacts=(cloud.contacts[p.id]||[]).map(x=>({...x}));
         const m=cloud.meta[p.id];if(m){p.owner=m.ownerEmail;p.sharedWith=m.members.slice()}
       });
       d.tasks.forEach(t=>{const c=cloud.comments[t.id];if(c&&c.length)t.comments=c.map(x=>({id:x.id,author:x.author,text:x.text,at:x.at}))});
@@ -240,7 +242,7 @@
   }
 
   // ---------- Mode en ligne (Supabase) ----------
-  const cloud={client:null,user:null,email:"",meta:{},comments:{},profiles:{},families:{},ptThemes:{},dirty:new Map(),seq:0,flushing:false,again:false,retry:null,channel:null,fetchT:null,lastOk:0};
+  const cloud={client:null,user:null,email:"",meta:{},comments:{},profiles:{},families:{},ptThemes:{},meetings:{},contacts:{},dirty:new Map(),seq:0,flushing:false,again:false,retry:null,channel:null,fetchT:null,lastOk:0};
   const cloudReady=()=>!!(CONFIG.supabaseUrl&&CONFIG.supabaseKey&&window.supabase&&window.supabase.createClient);
   // La session est aussi gardée en mémoire : si le navigateur ne la restitue pas à la librairie
   // (stockage bloqué, verrou entre onglets…), on joint nous-mêmes le jeton aux requêtes.
@@ -343,7 +345,15 @@
     if(!this.user)return;
     if(editing||editingReq||editingPt){clearTimeout(this.fetchT);this.fetchT=setTimeout(()=>this.fetch(),3000);return}
     const c=cloudClient();
-    const [P,M,T,C,PR,F,R,O,TH]=await Promise.all([c.from("projects").select("*"),c.from("project_members").select("*"),c.from("tasks").select("*"),c.from("task_comments").select("*"),c.from("profiles").select("*"),c.from("project_families").select("*"),c.from("client_requests").select("*"),c.from("open_points").select("*"),c.from("point_themes").select("*")]);
+    const [P,M,T,C,PR,F,R,O,TH,MT,CT]=await Promise.all([c.from("projects").select("*"),c.from("project_members").select("*"),c.from("tasks").select("*"),c.from("task_comments").select("*"),c.from("profiles").select("*"),c.from("project_families").select("*"),c.from("client_requests").select("*"),c.from("open_points").select("*"),c.from("point_themes").select("*"),c.from("meetings").select("*"),c.from("project_contacts").select("*")]);
+    if(MT&&!MT.error){
+      const mm={};MT.data.filter(r=>!r.deleted_at).map(fromMtg).forEach(x=>{(mm[x.projectId]=mm[x.projectId]||[]).push(x)});
+      const js=JSON.stringify(mm);if(js!==this._lastMt){this._lastMt=js;this.meetings=mm;this._cmChanged=true}
+    }
+    if(CT&&!CT.error){
+      const cm={};CT.data.forEach(r=>{(cm[r.project_id]=cm[r.project_id]||[]).push(fromCt(r))});
+      const js=JSON.stringify(cm);if(js!==this._lastCt){this._lastCt=js;this.contacts=cm;this._cmChanged=true}
+    }
     if(TH&&!TH.error){
       const tm={};TH.data.slice().sort((a,b)=>Number(a.created_at)-Number(b.created_at)).forEach(r=>{(tm[r.project_id]=tm[r.project_id]||[]).push({id:r.id,name:r.name})});
       const js=JSON.stringify(tm);if(js!==this._lastPt){this._lastPt=js;this.ptThemes=tm;this._cmChanged=true}
@@ -442,6 +452,16 @@
         const tm=this.ptThemes||(this.ptThemes={});
         if(ev==="DELETE"){if(id)rmList(tm,id)}else upList(tm,nw.project_id,nw);
         this._lastPt=JSON.stringify(tm);side=true;
+      } else if(table==="meetings"){
+        const mm=this.meetings||(this.meetings={});
+        Object.keys(mm).forEach(k=>{mm[k]=mm[k].filter(x=>x.id!==id)});
+        if(ev!=="DELETE"&&nw.project_id&&!nw.deleted_at)(mm[nw.project_id]=mm[nw.project_id]||[]).push(fromMtg(nw));
+        this._lastMt=JSON.stringify(mm);side=true;
+      } else if(table==="project_contacts"){
+        const cm=this.contacts||(this.contacts={});
+        Object.keys(cm).forEach(k=>{cm[k]=cm[k].filter(x=>x.id!==id)});
+        if(ev!=="DELETE"&&nw.project_id)(cm[nw.project_id]=cm[nw.project_id]||[]).push(fromCt(nw));
+        this._lastCt=JSON.stringify(cm);side=true;
       } else if(table==="profiles"&&ev!=="DELETE"&&nw.email){
         this.profiles[String(nw.email).toLowerCase()]={first:nw.first_name,last:nw.last_name};
         this._lastPr=JSON.stringify(this.profiles);$("#whoami").textContent=nameOf(this.email);side=true;
@@ -461,7 +481,7 @@
     const c=cloudClient();
     if(this.channel)c.removeChannel(this.channel);
     let ch=c.channel("todo-"+this.user.id);
-    ["tasks","client_requests","open_points","task_comments","project_families","point_themes","profiles"].forEach(t=>{ch=ch.on("postgres_changes",{event:"*",schema:"public",table:t},pl=>this.onRow(t,pl))});
+    ["tasks","client_requests","open_points","task_comments","project_families","point_themes","profiles","meetings","project_contacts"].forEach(t=>{ch=ch.on("postgres_changes",{event:"*",schema:"public",table:t},pl=>this.onRow(t,pl))});
     ["projects","project_members"].forEach(t=>{ch=ch.on("postgres_changes",{event:"*",schema:"public",table:t},()=>this.schedule())});
     this._rtDown=false;
     this.channel=ch.subscribe(st=>{
@@ -631,6 +651,13 @@
         const c=cloudClient();let ko=0;
         if(fams.length){const {error}=await c.from("project_families").insert(fams.map(f=>({id:f.id,project_id:ids[f.pid],name:f.name})));if(error)ko++}
         if(themes.length){const {error}=await c.from("point_themes").insert(themes.map(t=>({project_id:ids[t.pid],name:t.name})));if(error&&error.code!=="23505")ko++}
+        const cts=[],mts=[];
+        d.projects.forEach(p=>{
+          (Array.isArray(p.contacts)?p.contacts:[]).forEach(x=>{if(x&&x.name)cts.push({project_id:ids[p.id],name:String(x.name).slice(0,120),role:String(x.role||"").slice(0,120),side:SIDE[x.side]?x.side:"client",email:String(x.email||"").slice(0,200)})});
+          (Array.isArray(p.meetings)?p.meetings:[]).forEach(x=>{if(x&&x.title&&!x.deletedAt)mts.push({...rowMtg({...x,projectId:ids[p.id]}),id:nid(),outlook_key:x.outlookKey||null})});
+        });
+        if(cts.length){const {error}=await c.from("project_contacts").insert(cts);if(error)ko++}
+        if(mts.length){const {error}=await c.from("meetings").insert(mts);if(error)ko++}
         for(let i=0;i<coms.length;i+=200){
           const part=coms.slice(i,i+200).map(x=>{const who=x.author&&x.author!==cloud.email&&x.author!=="Moi"?`[${nameOf(x.author)}${x.at?", "+new Date(x.at).toLocaleDateString("fr-FR"):""}] `:"";return {task_id:x.task,body:(who+x.text).slice(0,4000)}});
           const {error}=await c.from("task_comments").insert(part);if(error)ko++;
@@ -824,7 +851,7 @@
         if(e.end)len=toUtc(e.end.w,e.end.tz)-toUtc(e.start.w,e.start.tz);
         else if(e.duration)len=durMs(e.duration);
         else len=e.start.allDay?864e5:0;
-        return {title:e.title||"(sans titre)",location:e.location||"",allDay:!!e.start.allDay,start:t,end:t+Math.max(0,len),busy:e.busy||""};
+        return {uid:e.uid||"",title:e.title||"(sans titre)",location:e.location||"",allDay:!!e.start.allDay,start:t,end:t+Math.max(0,len),busy:e.busy||""};
       };
       for(const e of evs){
         if(e.status==="CANCELLED")continue;
@@ -998,8 +1025,11 @@
   function meetEl(m,dayStart){
     const el=document.createElement("div");el.className="meet"+(m.busy==="FREE"?" free":"");
     const time=m.allDay?"Journée":(m.start<dayStart?"Suite":`${hm(m.start)} – ${hm(m.end)}`);
-    el.innerHTML=`<span class="mt">${time}</span><span class="mn">${esc(m.title)}</span>${m.location?`<span class="ml">${esc(m.location)}</span>`:""}`;
-    el.title=`${m.title}${m.location?" · "+m.location:""}`;
+    const cr=mtgForOutlook(m);
+    el.innerHTML=`<span class="mt">${time}${cr?` <span class="crb" title="Compte rendu ${cr.status==="validated"?"validé":"en brouillon"}">CR</span>`:""}</span><span class="mn">${esc(m.title)}</span>${m.location?`<span class="ml">${esc(m.location)}</span>`:""}`;
+    el.title=`${m.title}${m.location?" · "+m.location:""} — cliquez pour ${cr?"ouvrir":"créer"} le compte rendu`;
+    el.setAttribute("role","button");el.tabIndex=0;el.classList.add("clk");
+    el.onclick=()=>mtgFromOutlook(m);el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();mtgFromOutlook(m)}};
     return el;
   }
   async function openCalCfg(){
@@ -1131,8 +1161,8 @@
     if(view!=="all"&&!proj(view))view="all";
     if(ui.mode==="kanban")ui.mode="list"; // ancien mode Kanban (retiré)
     if(ui.taskMode==="kanban")ui.taskMode="list";
-    if(!["list","agenda","dash","trash","requests","points"].includes(ui.mode))ui.mode="list";
-    if(ui.mode==="points"&&view==="all")ui.mode="list";
+    if(!["list","agenda","dash","trash","requests","points","meetings"].includes(ui.mode))ui.mode="list";
+    if((ui.mode==="points"||ui.mode==="meetings")&&view==="all")ui.mode="list";
     if(["list","agenda"].includes(ui.mode))ui.taskMode=ui.mode;
     if(ui.mode==="trash"||ui.mode==="dash")view="all";
     const mode=ui.mode;
@@ -1215,7 +1245,7 @@
       const nT=alive.filter(t=>t.projectId===p.id&&t.status!=="done").length, nR=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)).length;
       tabs.hidden=false;
       const nO=livePts().filter(o=>o.projectId===p.id&&o.status!=="closed").length;
-      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points ouverts <span>${nO}</span></button><button type="button" role="tab" aria-selected="${mode==="requests"}" data-tab="requests">Demandes client <span>${nR}</span></button>`;
+      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"&&mode!=="meetings"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points ouverts <span>${nO}</span></button><button type="button" role="tab" aria-selected="${mode==="requests"}" data-tab="requests">Demandes client <span>${nR}</span></button><button type="button" role="tab" aria-selected="${mode==="meetings"}" data-tab="meetings">Réunions <span>${mtgList(p.id).length}</span></button>`;
       tabs.querySelectorAll("[data-tab]").forEach(x=>x.onclick=()=>{const k=x.dataset.tab;ui.mode=k==="tasks"?(ui.taskMode||"list"):k;if(ui.mode!=="list")ui.scope="all";saveUi();editing=null;editingReq=null;editingPt=null;render()});
     } else {tabs.hidden=true;tabs.innerHTML=""}
     if(!weekStart)weekStart=mondayOf(new Date());
@@ -1240,6 +1270,10 @@
       const ps=livePts().filter(o=>o.projectId===p.id), no=ps.filter(o=>o.status!=="closed");
       const byO=k=>no.filter(o=>o.owner===k).length;
       sub=`${no.length} point${no.length>1?"s":""} ouvert${no.length>1?"s":""}`+(ps.length-no.length?`, ${ps.length-no.length} levé${ps.length-no.length>1?"s":""}`:"")+([["client","côté client"],["mecalux","côté Mecalux"],["tiers","côté tiers"]].filter(([k])=>byO(k)).map(([k,l])=>` · ${byO(k)} ${l}`).join(""));
+    } else if(mode==="meetings"){
+      title=`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`;
+      const ms=mtgList(p.id), nd=ms.filter(x=>x.status==="draft").length;
+      sub=`${ms.length} compte${ms.length>1?"s":""} rendu${ms.length>1?"s":""} de réunion`+(nd?`, dont ${nd} brouillon${nd>1?"s":""}`:"");
     } else if(mode==="trash"){
       title="Corbeille";
       sub=nTrash?`${nTrash} élément${nTrash>1?"s":""} supprimé${nTrash>1?"s":""}`:"La corbeille est vide";
@@ -1377,6 +1411,7 @@
       L.innerHTML=`<div class="empty">Commencez par créer un projet (« + Nouveau projet » dans la colonne de gauche), puis ajoutez vos tâches ici.</div>`;return;
     }
     if(mode==="requests"&&!query.trim()){renderRequests(L,p);return}
+    if(mode==="meetings"&&p&&!query.trim()){renderMeetings(L,p);return}
     if(mode==="points"&&p&&!query.trim()){renderPoints(L,p);return}
     const base=alive.filter(t=>(!p||t.projectId===p.id)&&(!ui.who||mode==="dash"||(ui.who==="__me"?isMyTask(t):ui.who==="__none"?!(t.who||"").trim():whoName(t)===ui.who)));
     if(query.trim()){
@@ -2782,6 +2817,428 @@
       links.push(x);refs.push(ref);
     });
     return {updates,conflicts,links,refs,silent,added:[...free],gone:pts.filter(x=>x.xl&&!x.deletedAt&&!match.has(x)),dupes};
+  }
+  // ---------- Réunions et comptes rendus ----------
+  // Une réunion (atelier, COPIL, point hebdo) appartient à un projet. On prépare l'ordre du jour, on relève en séance
+  // décisions, actions, points levés et nouveaux points, puis on VALIDE : c'est seulement à ce moment que les tâches et
+  // les points sont créés ou mis à jour dans le projet. Le PDF n'est produit que sur demande.
+  const MTG_KIND={atelier:"Atelier",copil:"COPIL",hebdo:"Point hebdomadaire",autre:"Réunion"};
+  const SIDE={client:"Client",mecalux:"Mecalux",tiers:"Tiers"};
+  const rowMtg=m=>({id:m.id,project_id:m.projectId,title:m.title,kind:m.kind,theme:m.theme||"",starts_at:m.startsAt||null,ends_at:m.endsAt||null,location:m.location||"",outlook_key:m.outlookKey||null,status:m.status,participants:m.participants||[],agenda:m.agenda||[],items:m.items||[],notes:m.notes||"",next_meeting:m.nextMeeting||"",validated_at:m.validatedAt||null,updated_at:m.updatedAt||Date.now(),deleted_at:m.deletedAt||null});
+  const fromMtg=r=>({id:r.id,projectId:r.project_id,title:r.title,kind:r.kind,theme:r.theme||"",startsAt:r.starts_at?Number(r.starts_at):null,endsAt:r.ends_at?Number(r.ends_at):null,location:r.location||"",outlookKey:r.outlook_key||"",status:r.status,participants:Array.isArray(r.participants)?r.participants:[],agenda:Array.isArray(r.agenda)?r.agenda:[],items:Array.isArray(r.items)?r.items:[],notes:r.notes||"",nextMeeting:r.next_meeting||"",validatedAt:r.validated_at?Number(r.validated_at):null,createdBy:r.created_by||"",createdAt:Number(r.created_at)||0,updatedAt:Number(r.updated_at)||0,deletedAt:r.deleted_at?Number(r.deleted_at):null});
+  const fromCt=r=>({id:r.id,name:r.name,role:r.role||"",side:r.side||"client",email:r.email||""});
+  function mtgList(pid){
+    const l=MODE==="cloud"?(cloud.meetings[pid]||[]):((proj(pid)||{}).meetings||[]);
+    return l.filter(m=>!m.deletedAt).sort((a,b)=>(b.startsAt||b.createdAt||0)-(a.startsAt||a.createdAt||0));
+  }
+  const mtgAll=()=>state.projects.flatMap(p=>mtgList(p.id));
+  const ctList=pid=>(MODE==="cloud"?(cloud.contacts[pid]||[]):((proj(pid)||{}).contacts||[])).slice().sort((a,b)=>a.name.localeCompare(b.name,"fr"));
+  const mtgSaveT={};
+  function mtgPut(m,now){
+    m.updatedAt=Date.now();
+    if(MODE==="cloud"){
+      const l=cloud.meetings[m.projectId]=(cloud.meetings[m.projectId]||[]).filter(x=>x.id!==m.id);l.push(JSON.parse(JSON.stringify(m)));
+      clearTimeout(mtgSaveT[m.id]);
+      const send=async()=>{
+        const {error}=await cloudClient().from("meetings").upsert(rowMtg(m));
+        if(error){setSync(transient(error)?"Compte rendu : enregistrement en attente de connexion…":"Compte rendu non enregistré : "+error.message);mtgSaveT[m.id]=setTimeout(send,15000)}
+      };
+      if(now)send();else mtgSaveT[m.id]=setTimeout(send,700);
+    } else {
+      const p=proj(m.projectId);if(!p)return;
+      p.meetings=(p.meetings||[]).filter(x=>x.id!==m.id);p.meetings.push(JSON.parse(JSON.stringify(m)));save();
+    }
+  }
+  async function ctAdd(pid,c){
+    const x={id:newId(),name:c.name.trim().slice(0,120),role:(c.role||"").trim().slice(0,120),side:SIDE[c.side]?c.side:"client",email:(c.email||"").trim().slice(0,200)};
+    if(!x.name)return null;
+    if(MODE==="cloud"){
+      const {error}=await cloudClient().from("project_contacts").insert({id:x.id,project_id:pid,name:x.name,role:x.role,side:x.side,email:x.email});
+      if(error){uiAlert(transient(error)?"Contact non enregistré : connexion au serveur impossible.":"Contact refusé : "+error.message);return null}
+      (cloud.contacts[pid]=cloud.contacts[pid]||[]).push(x);
+    } else {const p=proj(pid);p.contacts=[...(p.contacts||[]),x];save()}
+    return x;
+  }
+  async function ctDel(pid,id){
+    if(MODE==="cloud"){const {error}=await cloudClient().from("project_contacts").delete().eq("id",id);if(error){uiAlert("Suppression impossible : "+error.message);return}cloud.contacts[pid]=(cloud.contacts[pid]||[]).filter(x=>x.id!==id)}
+    else{const p=proj(pid);p.contacts=(p.contacts||[]).filter(x=>x.id!==id);save()}
+  }
+  const mtgDate=m=>m.startsAt?new Date(m.startsAt):new Date(m.createdAt||Date.now());
+  const mtgDay=m=>mtgDate(m).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  const mtgWhen=m=>cap(mtgDay(m))+(m.startsAt?` · ${hm(m.startsAt)}${m.endsAt&&m.endsAt>m.startsAt?" – "+hm(m.endsAt):""}`:"")+(m.location?` · ${m.location}`:"");
+  const mtgLabel=m=>`${m.title} du ${mtgDate(m).toLocaleDateString("fr-FR")}`;
+  const ptNumOf=x=>{const n=ptLabel(x);return n?"N° "+n:""};
+  // Personnes proposées : contacts du projet, membres du projet (Mecalux), personnes déjà notées dans la réunion
+  function mtgPeople(m){
+    const out=[],seen=new Set(),add=(name,side,extra)=>{const k=norm(name);if(!name||seen.has(k))return;seen.add(k);out.push({name,side,...extra})};
+    (m.participants||[]).forEach(p=>add(p.name,p.side));
+    ctList(m.projectId).forEach(c=>add(c.name,c.side,{role:c.role}));
+    memberEmails(m.projectId).forEach(e=>add(nameOf(e),"mecalux",{email:e}));
+    return out;
+  }
+  function defaultParticipants(pid){
+    const l=[];
+    if(MODE==="cloud"&&cloud.email)l.push({name:nameOf(cloud.email),side:"mecalux",present:true,email:cloud.email});
+    return l;
+  }
+  // Ordre du jour proposé selon le type de réunion
+  function proposeAgenda(m){
+    const pid=m.projectId, out=[];
+    const prev=mtgList(pid).filter(x=>x.id!==m.id&&x.status==="validated"&&(x.startsAt||x.createdAt)<=(m.startsAt||Date.now())).sort((a,b)=>(b.startsAt||b.createdAt)-(a.startsAt||a.createdAt))[0];
+    if(prev)(prev.items||[]).filter(i=>i.type==="action"&&i.createdId).forEach(i=>{const t=live().find(x=>x.id===i.createdId);if(t&&t.status!=="done")out.push({key:"t:"+t.id,kind:"task",ref:t.id,title:t.title,label:"Action du "+mtgDate(prev).toLocaleDateString("fr-FR"),checked:true})});
+    const pts=livePts().filter(o=>o.projectId===pid&&o.status!=="closed");
+    const byNum=(a,b)=>{const na=parseFloat(ptLabel(a))||1e9,nb=parseFloat(ptLabel(b))||1e9;return na-nb||(a.createdAt||0)-(b.createdAt||0)};
+    const tks=live().filter(t=>t.projectId===pid&&t.status!=="done");
+    const addT=(t,label,checked)=>{if(!out.some(o=>o.key==="t:"+t.id))out.push({key:"t:"+t.id,kind:"task",ref:t.id,title:t.title,label,checked})};
+    if(m.kind==="atelier"){
+      (m.theme?pts.filter(o=>(o.theme||"")===m.theme):pts.filter(o=>o.owner==="client")).sort(byNum).forEach(o=>out.push({key:"o:"+o.id,kind:"point",ref:o.id,title:o.text.split("\n")[0].slice(0,200),label:[ptNumOf(o)||"Point ouvert",o.theme].filter(Boolean).join(" · "),checked:!!m.theme}));
+    } else if(m.kind==="copil"){
+      tks.filter(isLate).forEach(t=>addT(t,"Tâche en retard",true));
+      tks.filter(t=>t.status==="waiting").forEach(t=>addT(t,"En attente"+(t.waitingFor?" de "+t.waitingFor:""),true));
+      liveReq().filter(r=>r.projectId===pid&&reqOpen(r)).forEach(r=>out.push({key:"r:"+r.id,kind:"request",ref:r.id,title:r.title,label:"Demande client",checked:true}));
+      const nc=pts.filter(o=>o.owner==="client").length;
+      if(nc)out.push({key:"f:ptcli",kind:"free",ref:"",title:`Points ouverts en attente du client (${nc})`,label:"Sujet",checked:true});
+    } else if(m.kind==="hebdo"){
+      const lim=iso(addDays(today(),7));
+      tks.filter(t=>isLate(t)||(t.due&&t.due<=lim)).forEach(t=>addT(t,isLate(t)?"Tâche en retard":"Échéance "+shortDay(t.due).toLowerCase(),true));
+    }
+    return out;
+  }
+  const subjOf=(m,a)=>{
+    if(!a)return null;
+    if(a.kind==="point")return {a,o:(state.points||[]).find(x=>x.id===a.ref)};
+    if(a.kind==="task")return {a,t:state.tasks.find(x=>x.id===a.ref)};
+    if(a.kind==="request")return {a,r:(state.requests||[]).find(x=>x.id===a.ref)};
+    return {a};
+  };
+  // ---------- Création depuis l'agenda (réunion Outlook) ----------
+  const outlookKey=ev=>(ev.uid||ev.title)+"|"+ev.start;
+  const mtgForOutlook=ev=>mtgAll().find(x=>x.outlookKey===outlookKey(ev));
+  function guessProject(title){
+    const t=norm(title);
+    const ps=state.projects.filter(p=>!p.archived);
+    return ps.find(p=>t.includes(norm(p.name)))||ps.find(p=>norm(p.name).split(/[^a-z0-9]+/).some(w=>w.length>=4&&t.includes(w)))||null;
+  }
+  async function mtgFromOutlook(ev){
+    const ex=mtgForOutlook(ev);if(ex){mtgOpen(ex);return}
+    const ps=state.projects.filter(p=>!p.archived);if(!ps.length){uiAlert("Créez d'abord un projet.");return}
+    const g=guessProject(ev.title);
+    const r=await mtgNewDialog({title:ev.title,startsAt:ev.allDay?null:ev.start,endsAt:ev.allDay?null:ev.end,location:ev.location,outlookKey:outlookKey(ev),projectId:(g||ps[0]).id,guessed:!!g});
+    if(r)mtgOpen(r,"prep");
+  }
+  // Boîte de création : projet, type, thème (pour un atelier) ; réunion manuelle : intitulé, date et heure en plus
+  function mtgNewDialog(o){
+    return new Promise(res=>{
+      const d=document.createElement("dialog");d.className="uidlg";d.setAttribute("aria-label","Nouveau compte rendu");
+      const manual=!o.outlookKey;
+      const ps=state.projects.filter(p=>!p.archived||p.id===o.projectId);
+      d.innerHTML=`<form method="dialog"><h3>${manual?"Nouvelle réunion":"Compte rendu de réunion"}</h3>
+        ${manual?"":`<p class="uimsg"><b>${esc(o.title)}</b><br>${esc(mtgWhen({startsAt:o.startsAt,endsAt:o.endsAt,location:o.location,createdAt:o.startsAt}))}</p>`}
+        ${manual?`<label class="uifld"><span>Intitulé</span><input type="text" data-k="title" maxlength="300" placeholder="Ex. : Atelier Réception"></label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label class="uifld"><span>Date</span><input type="date" data-k="date" value="${iso(today())}"></label><label class="uifld"><span>Heure</span><input type="time" data-k="time" value="09:00"></label></div>`:""}
+        <label class="uifld"><span>Projet${o.guessed?" (reconnu dans l'intitulé)":""}</span><select data-k="pid">${ps.map(p=>`<option value="${esc(p.id)}"${p.id===o.projectId?" selected":""}>${esc(p.name)}</option>`).join("")}</select></label>
+        <label class="uifld"><span>Type</span><select data-k="kind">${Object.entries(MTG_KIND).map(([k,l])=>`<option value="${k}">${l}</option>`).join("")}</select></label>
+        <label class="uifld" data-th><span>Thème de l'atelier</span><select data-k="theme"></select></label>
+        <p class="uimsg" data-hint style="font-size:13px;color:var(--muted)"></p>
+        <p class="uierr" role="alert"></p>
+        <div class="uibtns"><button type="button" class="btn ghost" data-x>Annuler</button><button type="button" class="btn primary" data-ok>Créer le compte rendu</button></div></form>`;
+      document.body.appendChild(d);
+      const q=k=>d.querySelector(`[data-k=${k}]`);
+      if(/copil|comit/i.test(o.title||""))q("kind").value="copil";else if(/hebdo|weekly|point d.?(é|e)quipe/i.test(o.title||""))q("kind").value="hebdo";
+      let thPid=null;
+      const fillTh=()=>{
+        const pid=q("pid").value, ths=ptThemes(pid), t=norm(o.title||(q("title")&&q("title").value)||"");
+        if(thPid!==pid){
+          const guess=ths.find(x=>t.includes(norm(x)))||"";
+          q("theme").innerHTML=`<option value="">Aucun thème (points à répondre par le client)</option>`+ths.map(x=>`<option${x===guess?" selected":""}>${esc(x)}</option>`).join("");
+          thPid=pid;
+        }
+        d.querySelector("[data-th]").hidden=q("kind").value!=="atelier";
+        const m={projectId:pid,kind:q("kind").value,theme:q("theme").value,startsAt:o.startsAt||Date.now()};
+        const c=proposeAgenda(m).filter(x=>x.checked).length;
+        d.querySelector("[data-hint]").textContent=`Ordre du jour proposé : ${c} sujet${c>1?"s":""} (modifiable avant la réunion).`;
+      };
+      ["pid","kind","theme"].forEach(k=>q(k).addEventListener("change",fillTh));fillTh();
+      const close=v=>{try{d.close()}catch(e){}d.remove();res(v)};
+      d.addEventListener("cancel",e=>{e.preventDefault();close(null)});
+      d.querySelector("[data-x]").onclick=()=>close(null);
+      d.querySelector("[data-ok]").onclick=()=>{
+        let title=o.title, startsAt=o.startsAt||null, endsAt=o.endsAt||null;
+        if(manual){
+          title=q("title").value.trim();if(!title){d.querySelector(".uierr").textContent="Indiquez l'intitulé de la réunion.";return}
+          const dt=q("date").value, tm=q("time").value||"09:00";
+          if(dt){const [y,mo,da]=dt.split("-").map(Number),[h,mi]=tm.split(":").map(Number);startsAt=new Date(y,mo-1,da,h,mi).getTime();endsAt=null}
+        }
+        const m={id:newId(),projectId:q("pid").value,title:title.slice(0,300),kind:q("kind").value,theme:q("kind").value==="atelier"?q("theme").value:"",startsAt,endsAt,location:o.location||"",outlookKey:o.outlookKey||"",status:"draft",participants:defaultParticipants(q("pid").value),agenda:[],items:[],notes:"",nextMeeting:"",createdAt:Date.now()};
+        m.agenda=proposeAgenda(m).filter(x=>x.checked).map(({key,kind,ref,title,label})=>({key,kind,ref,title,label,done:false}));
+        m.agenda.push({key:"f:"+uid(),kind:"free",ref:"",title:"Divers",label:"Sujet",done:false});
+        mtgPut(m,true);close(m);
+      };
+      if(d.showModal)d.showModal();else d.setAttribute("open","");
+      setTimeout(()=>(manual?q("title"):d.querySelector("[data-ok]")).focus(),0);
+    });
+  }
+  // ---------- Écran de réunion (préparation, séance, compte rendu) ----------
+  let mtgCur=null, mtgPhase="run", mtgIdx=0, mtgForm=null;
+  function mtgOpen(m,phase){
+    mtgCur=JSON.parse(JSON.stringify(m));
+    mtgPhase=phase||(m.status==="validated"?"review":(m.items||[]).length?"run":"prep");
+    mtgIdx=Math.max(0,(mtgCur.agenda||[]).findIndex(a=>!a.done));mtgForm=null;
+    renderMtg();
+  }
+  function mtgClose(){if(mtgCur&&mtgCur.status==="draft")mtgPut(mtgCur,true);mtgCur=null;renderMtg();render()}
+  const mtgEdit=()=>mtgCur&&mtgCur.status==="draft";
+  function mtgSet(fn,now){if(!mtgEdit())return;fn(mtgCur);mtgPut(mtgCur,now);renderMtg()}
+  function mtgItemText(i){
+    if(i.type==="close"){const o=(state.points||[]).find(x=>x.id===i.ref);return (o?(ptNumOf(o)?ptNumOf(o)+" – ":"")+short(o.text):"Point")+(i.text?" : "+i.text:"")}
+    if(i.type==="taskdone"){const t=state.tasks.find(x=>x.id===i.ref);return "Tâche terminée : "+(t?t.title:"")}
+    if(i.type==="action")return i.text+(i.who?" – "+nameOf(i.who):"")+(i.due?" – pour le "+fmtD(i.due):"");
+    if(i.type==="newpoint")return i.text+(i.owner?" – à répondre par : "+(OWNER[i.owner]||i.owner):"");
+    return i.text;
+  }
+  const ITYPE={decision:["Décision","#4B2E8F","#ECE6F7"],action:["Action","#6B5200","#FFF4CC"],close:["Point levé","#1F5C43","#DDF0E5"],newpoint:["Nouveau point","#1D4E78","#DCEAF7"],taskdone:["Tâche terminée","#1F5C43","#DDF0E5"]};
+  function renderMtg(){
+    let v=$("#mtgview");
+    if(!mtgCur){if(v)v.remove();document.body.classList.remove("mtgopen");return}
+    if(!v){v=document.createElement("div");v.id="mtgview";v.setAttribute("role","dialog");v.setAttribute("aria-modal","true");document.body.appendChild(v)}
+    document.body.classList.add("mtgopen");
+    const m=mtgCur,p=proj(m.projectId)||{name:"",color:"#999"},ed=mtgEdit();
+    v.className="mtgv"+(ui.mtgPresent&&mtgPhase==="run"?" present":"");
+    v.setAttribute("aria-label",m.title);
+    const ph=(k,l)=>`<button type="button" data-ph="${k}" aria-pressed="${mtgPhase===k}">${l}</button>`;
+    v.innerHTML=`<header class="mtgh"><span class="dot" style="background:${esc(p.color)}"></span>
+      <div class="mtgt"><b>${esc(m.title)}</b><span>${esc(p.name)} · ${esc(MTG_KIND[m.kind]||"Réunion")}${m.theme?" · "+esc(m.theme):""} · ${esc(mtgWhen(m))}</span></div>
+      ${m.status==="validated"?`<span class="mtgok">Validé le ${new Date(m.validatedAt).toLocaleDateString("fr-FR")}</span>`:`<span class="mtgdraft">Brouillon</span>`}
+      <div class="seg mtgph" role="group" aria-label="Étape">${ph("prep","Préparation")}${ph("run","Réunion")}${ph("review","Compte rendu")}</div>
+      ${mtgPhase==="run"?`<button type="button" class="btn ghost mtgpres" aria-pressed="${!!ui.mtgPresent}" title="Affichage pour projeter devant le client : notes et relevé masqués, texte agrandi">Mode présentation</button>`:""}
+      <button type="button" class="dclose" data-close aria-label="Fermer la réunion">✕</button></header>
+      <div class="mtgbody" id="mtgbody"></div>`;
+    v.querySelectorAll("[data-ph]").forEach(b=>b.onclick=()=>{mtgPhase=b.dataset.ph;mtgForm=null;renderMtg()});
+    v.querySelector("[data-close]").onclick=mtgClose;
+    const pr=v.querySelector(".mtgpres");if(pr)pr.onclick=()=>{ui.mtgPresent=!ui.mtgPresent;saveUi();renderMtg()};
+    const B=v.querySelector("#mtgbody");
+    if(mtgPhase==="prep")mtgPrep(B,m,ed);else if(mtgPhase==="review")mtgReview(B,m,ed);else mtgRun(B,m,ed);
+  }
+  function peoplePanel(m,ed){
+    const box=document.createElement("section");box.className="mtgcard";
+    const ppl=mtgPeople(m), cur=new Map((m.participants||[]).map(x=>[norm(x.name),x]));
+    box.innerHTML=`<h3>Participants</h3>${ppl.length?`<div class="mtgppl">${ppl.map((x,i)=>{const c=cur.get(norm(x.name));return `<label><input type="checkbox" data-i="${i}" ${c&&c.present?"checked":""} ${ed?"":"disabled"}><span>${esc(x.name)}${x.role?` <small>${esc(x.role)}</small>`:""}</span><em>${esc(SIDE[x.side]||"")}</em></label>`}).join("")}</div>`:`<p class="muted">Aucun contact pour ce projet.</p>`}
+      ${ed?`<form class="mtgadd" autocomplete="off"><input type="text" placeholder="Nom ou fonction" aria-label="Nom ou fonction" maxlength="120"><select aria-label="Côté">${Object.entries(SIDE).map(([k,l])=>`<option value="${k}">${l}</option>`).join("")}</select><button class="btn" type="submit">Ajouter</button>
+      <label class="mtgkeep"><input type="checkbox" checked> Garder dans les contacts du projet</label></form>`:""}`;
+    box.querySelectorAll("[data-i]").forEach(cb=>cb.onchange=()=>mtgSet(mm=>{
+      const x=ppl[+cb.dataset.i],l=mm.participants||(mm.participants=[]),f=l.find(y=>norm(y.name)===norm(x.name));
+      if(f)f.present=cb.checked;else l.push({name:x.name,side:x.side,present:cb.checked,...(x.email?{email:x.email}:{})});
+    }));
+    const f=box.querySelector(".mtgadd");
+    if(f)f.onsubmit=async e=>{e.preventDefault();const name=f.querySelector("input[type=text]").value.trim(),side=f.querySelector("select").value;if(!name)return;
+      if(f.querySelector(".mtgkeep input").checked&&!ctList(m.projectId).some(c=>norm(c.name)===norm(name)))await ctAdd(m.projectId,{name,side});
+      mtgSet(mm=>{(mm.participants=mm.participants||[]).push({name,side,present:true})})};
+    return box;
+  }
+  function mtgPrep(B,m,ed){
+    const cands=proposeAgenda(m), keys=new Set((m.agenda||[]).map(a=>a.key));
+    cands.filter(c=>!keys.has(c.key)).forEach(c=>c.checked=false);
+    const shown=[...(m.agenda||[]).map(a=>({...a,checked:true})),...cands.filter(c=>!keys.has(c.key))];
+    const left=document.createElement("section");left.className="mtgcard mtgprep";
+    const other=livePts().filter(o=>o.projectId===m.projectId&&o.status!=="closed"&&!keys.has("o:"+o.id)&&!cands.some(c=>c.key==="o:"+o.id));
+    left.innerHTML=`<h3>Ordre du jour <span class="muted">${(m.agenda||[]).length} sujet${(m.agenda||[]).length>1?"s":""} retenu${(m.agenda||[]).length>1?"s":""}</span></h3>
+      <p class="muted">Cochez les sujets à aborder. Les sujets proposés dépendent du type de réunion${m.kind==="atelier"?(m.theme?` (points ouverts « ${esc(m.theme)} »)`:" (points à répondre par le client)"):""} et des actions encore ouvertes du compte rendu précédent.</p>
+      <div class="mtgcands">${shown.map((c,i)=>`<label><input type="checkbox" data-c="${i}" ${c.checked?"checked":""} ${ed?"":"disabled"}><span><small>${esc(c.label||"")}</small>${esc(c.title)}</span></label>`).join("")||`<p class="muted">Aucun sujet proposé : ajoutez-les ci-dessous.</p>`}</div>
+      ${ed?`<div class="mtgaddrow">${other.length?`<select aria-label="Ajouter un point ouvert"><option value="">Ajouter un point ouvert…</option>${other.map(o=>`<option value="${esc(o.id)}">${esc((ptNumOf(o)?ptNumOf(o)+" – ":"")+short(o.text))}</option>`).join("")}</select>`:""}
+        <form autocomplete="off"><input type="text" placeholder="Sujet libre (ex. : planning de la recette)" aria-label="Sujet libre" maxlength="200"><button class="btn" type="submit">Ajouter</button></form></div>`:""}`;
+    left.querySelectorAll("[data-c]").forEach(cb=>cb.onchange=()=>mtgSet(mm=>{
+      const c=shown[+cb.dataset.c];
+      if(cb.checked){if(!mm.agenda.some(a=>a.key===c.key))mm.agenda.push({key:c.key,kind:c.kind,ref:c.ref,title:c.title,label:c.label,done:false})}
+      else mm.agenda=mm.agenda.filter(a=>a.key!==c.key);
+    }));
+    const sel=left.querySelector(".mtgaddrow select");
+    if(sel)sel.onchange=()=>{const o=other.find(x=>x.id===sel.value);if(o)mtgSet(mm=>mm.agenda.push({key:"o:"+o.id,kind:"point",ref:o.id,title:o.text.split("\n")[0].slice(0,200),label:[ptNumOf(o)||"Point ouvert",o.theme].filter(Boolean).join(" · "),done:false}))};
+    const fr=left.querySelector(".mtgaddrow form");
+    if(fr)fr.onsubmit=e=>{e.preventDefault();const t=fr.querySelector("input").value.trim();if(t)mtgSet(mm=>mm.agenda.push({key:"f:"+uid(),kind:"free",ref:"",title:t.slice(0,200),label:"Sujet",done:false}))};
+    const right=document.createElement("div");right.className="mtgside";
+    right.appendChild(peoplePanel(m,ed));
+    const go=document.createElement("div");go.className="mtggo";
+    go.innerHTML=ed?`<button type="button" class="btn primary">Démarrer la réunion</button>`:"";
+    const gb=go.querySelector("button");if(gb)gb.onclick=()=>{mtgPhase="run";mtgIdx=0;renderMtg()};
+    right.appendChild(go);
+    B.className="mtgbody prep";B.append(left,right);
+  }
+  function mtgRun(B,m,ed){
+    const ag=m.agenda||[];
+    if(!ag.length){B.className="mtgbody";B.innerHTML=`<div class="empty">L'ordre du jour est vide. Passez par « Préparation » pour choisir les sujets.</div>`;return}
+    mtgIdx=Math.min(Math.max(0,mtgIdx),ag.length-1);
+    const a=ag[mtgIdx], s=subjOf(m,a), items=(m.items||[]).map((it,i)=>({...it,i})).filter(it=>it.subj===a.key);
+    const left=document.createElement("aside");left.className="mtgcard mtgag";
+    const nd=ag.filter(x=>x.done).length;
+    left.innerHTML=`<h3>Ordre du jour <span class="muted">${nd} traité${nd>1?"s":""} sur ${ag.length}</span></h3><ol>${ag.map((x,i)=>`<li><button type="button" data-g="${i}" class="${i===mtgIdx?"cur":""}${x.done?" done":""}"><span class="st" aria-hidden="true">${x.done?"✓":i===mtgIdx?"●":""}</span><span><small>${esc(x.label||"")}</small>${esc(x.title)}</span></button></li>`).join("")}</ol>`;
+    left.querySelectorAll("[data-g]").forEach(b=>b.onclick=()=>{mtgIdx=+b.dataset.g;mtgForm=null;renderMtg()});
+    const mid=document.createElement("section");mid.className="mtgmid";
+    let head="",body="";
+    if(s.o){const o=s.o;head=`<div class="mtgk">${esc([ptNumOf(o)||"Point ouvert",o.theme,o.erp==="oui"?"Sujet ERP":""].filter(Boolean).join(" · "))}${o.owner?` <span class="tag who">${esc(OWNER[o.owner])} doit répondre</span>`:""}${o.status==="closed"?` <span class="tag">Levé</span>`:""}</div><h2>${esc(o.text)}</h2>`;
+      body=(o.hypothesis||o.answer)?`<div class="mtgcom">${o.hypothesis?`<div class="c-mec"><b>Commentaire Mecalux</b>${esc(o.hypothesis)}</div>`:""}${o.answer?`<div class="c-cli"><b>Réponse client</b>${esc(o.answer)}</div>`:""}</div>`:""}
+    else if(s.t){const t=s.t;head=`<div class="mtgk">${esc(a.label||"Tâche")}</div><h2>${esc(t.title)}</h2>`;body=`<p class="muted">${esc([STATUS[t.status],t.due?"échéance "+shortDay(t.due).toLowerCase():"sans échéance",t.who?"responsable : "+whoName(t):""].filter(Boolean).join(" · "))}</p>`}
+    else if(s.r){const r=s.r;head=`<div class="mtgk">Demande client</div><h2>${esc(r.title)}</h2>`;body=r.description?`<p class="muted" style="white-space:pre-line">${esc(r.description)}</p>`:""}
+    else head=`<div class="mtgk">${esc(a.label||"Sujet")}</div><h2>${esc(a.title)}</h2>`;
+    const acts=[];
+    if(s.o&&s.o.status!=="closed")acts.push(["close","Lever le point","avec la réponse obtenue"]);
+    if(s.t&&s.t.status!=="done")acts.push(["taskdone","Tâche terminée","marquée faite à la validation"]);
+    acts.push(["decision","Décision","ajoutée au relevé"],["action","Action","deviendra une tâche"],["newpoint","Nouveau point","deviendra un point ouvert"]);
+    const ppl=mtgPeople(m);
+    mid.innerHTML=`<div class="mtgsubj">${head}${body}</div>
+      ${ed?`<div class="mtgacts">${acts.map(([k,l,d])=>`<button type="button" data-act="${k}" class="a-${k}${mtgForm===k?" on":""}"><b>${l}</b><span>${d}</span></button>`).join("")}</div>`:""}
+      <div class="mtgform"></div>
+      <div class="mtgitems">${items.length?`<h4>Relevé sur ce sujet</h4>`+items.map(it=>{const t=ITYPE[it.type]||["Note","#3A4B55","#EEF2F5"];return `<div class="mtgit"><span class="ity" style="color:${t[1]};background:${t[2]}">${t[0]}</span><span class="itx">${esc(mtgItemText(it))}</span>${ed?`<button type="button" data-del="${it.i}" aria-label="Retirer">✕</button>`:""}</div>`}).join(""):""}</div>
+      <div class="mtgnav"><button type="button" class="btn" data-nav="-1" ${mtgIdx===0?"disabled":""}>‹ Sujet précédent</button>
+        ${ed?`<label class="mtgdone"><input type="checkbox" ${a.done?"checked":""}> Sujet traité</label>`:""}
+        ${mtgIdx<ag.length-1?`<button type="button" class="btn" data-nav="1">Sujet suivant ›</button>`:`<button type="button" class="btn primary" data-end>Terminer et voir le compte rendu</button>`}</div>`;
+    mid.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>{const k=b.dataset.act;
+      if(k==="taskdone"){mtgSet(mm=>{(mm.items=mm.items||[]).push({id:uid(),type:"taskdone",subj:a.key,ref:a.ref});mm.agenda[mtgIdx].done=true});return}
+      mtgForm=mtgForm===k?null:k;renderMtg()});
+    mid.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>mtgSet(mm=>{mm.items.splice(+b.dataset.del,1)}));
+    mid.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>{mtgIdx+=+b.dataset.nav;mtgForm=null;renderMtg()});
+    const en=mid.querySelector("[data-end]");if(en)en.onclick=()=>{mtgPhase="review";renderMtg()};
+    const dn=mid.querySelector(".mtgdone input");if(dn)dn.onchange=()=>mtgSet(mm=>{mm.agenda[mtgIdx].done=dn.checked});
+    // formulaire de saisie de l'élément choisi
+    const F=mid.querySelector(".mtgform");
+    if(ed&&mtgForm){
+      const whoOpts=`<option value="">—</option>`+ppl.map(x=>`<option value="${esc(x.email||x.name)}">${esc(x.name)} (${esc(SIDE[x.side]||"")})</option>`).join("");
+      const lbl={close:"Réponse ou décision obtenue",decision:"Décision prise",action:"Action à mener",newpoint:"Nouvelle question à trancher"}[mtgForm];
+      F.innerHTML=`<form autocomplete="off" class="f-${mtgForm}"><label class="uifld wide"><span>${lbl}</span><textarea rows="2" maxlength="2000" required></textarea></label>
+        ${mtgForm==="action"?`<label class="uifld"><span>Qui</span><select data-w>${whoOpts}</select></label><label class="uifld"><span>Pour le</span><input type="date" data-d></label>`:""}
+        ${mtgForm==="newpoint"?`<label class="uifld"><span>Qui doit répondre</span><select data-o><option value="client">Client</option><option value="mecalux">Mecalux</option><option value="tiers">Tiers</option><option value="">Non défini</option></select></label>`:""}
+        <div class="fbtns"><button type="button" class="btn ghost" data-cancel>Annuler</button><button type="submit" class="btn primary">Ajouter</button></div></form>`;
+      const fm=F.querySelector("form"),ta=fm.querySelector("textarea");
+      setTimeout(()=>ta.focus(),0);
+      ta.addEventListener("keydown",e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();fm.requestSubmit()}});
+      fm.querySelector("[data-cancel]").onclick=()=>{mtgForm=null;renderMtg()};
+      fm.onsubmit=e=>{e.preventDefault();const text=ta.value.trim();if(!text&&mtgForm!=="close")return;
+        const it={id:uid(),type:mtgForm,subj:a.key,text};
+        if(mtgForm==="close")it.ref=a.ref;
+        if(mtgForm==="action"){it.who=fm.querySelector("[data-w]").value;it.due=fm.querySelector("[data-d]").value}
+        if(mtgForm==="newpoint"){it.owner=fm.querySelector("[data-o]").value;it.theme=(s.o&&s.o.theme)||m.theme||""}
+        mtgForm=null;
+        mtgSet(mm=>{(mm.items=mm.items||[]).push(it);mm.agenda[mtgIdx].done=true});
+      };
+    }
+    const right=document.createElement("div");right.className="mtgside";
+    right.appendChild(peoplePanel(m,ed));
+    const tot=document.createElement("section");tot.className="mtgcard";
+    const cnt=k=>(m.items||[]).filter(i=>i.type===k).length;
+    tot.innerHTML=`<h3>Relevé de la réunion</h3><div class="mtgtot">${[["close","point(s) levé(s)"],["decision","décision(s)"],["action","action(s)"],["newpoint","nouveau(x) point(s)"]].map(([k,l])=>`<div><b>${cnt(k)}</b> ${l}</div>`).join("")}</div>`;
+    right.appendChild(tot);
+    const nt=document.createElement("label");nt.className="mtgcard mtgnotes";
+    nt.innerHTML=`<h3>Notes libres</h3><textarea placeholder="Notes de séance (reprises dans le compte rendu si vous le souhaitez)…" ${ed?"":"readonly"}></textarea>`;
+    const ntA=nt.querySelector("textarea");ntA.value=m.notes||"";
+    ntA.oninput=()=>{if(!mtgEdit())return;mtgCur.notes=ntA.value;mtgPut(mtgCur)};
+    right.appendChild(nt);
+    B.className="mtgbody run";B.append(left,mid,right);
+  }
+  // Contenu du compte rendu (aperçu et PDF)
+  function crSections(m,opt){
+    const it=m.items||[], present=(m.participants||[]).filter(x=>x.present), absent=(m.participants||[]).filter(x=>!x.present);
+    const by=k=>it.filter(i=>i.type===k);
+    const closedIds=new Set(by("close").map(i=>i.ref));
+    const S=[];
+    if(opt.decisions&&by("decision").length)S.push(["Décisions",`<ul>${by("decision").map(i=>`<li>${esc(i.text)}</li>`).join("")}</ul>`]);
+    if(opt.closed&&by("close").length)S.push(["Points levés",`<table><thead><tr><th class="n">N°</th><th>Point</th><th>Réponse / décision</th></tr></thead><tbody>${by("close").map(i=>{const o=(state.points||[]).find(x=>x.id===i.ref)||{};return `<tr><td class="n">${esc(o.id?ptLabel(o):"")}</td><td>${esc(o.text||"")}</td><td class="pre">${esc(i.text||"")}</td></tr>`}).join("")}</tbody></table>`]);
+    if(opt.done&&by("taskdone").length)S.push(["Tâches terminées",`<ul>${by("taskdone").map(i=>{const t=state.tasks.find(x=>x.id===i.ref);return `<li>${esc(t?t.title:"")}</li>`}).join("")}</ul>`]);
+    if(opt.actions&&by("action").length)S.push(["Actions",`<table><thead><tr><th>Action</th><th class="w">Qui</th><th class="d">Pour le</th></tr></thead><tbody>${by("action").map(i=>`<tr><td>${esc(i.text)}</td><td>${esc(i.who?nameOf(i.who):"")}</td><td>${esc(i.due?parseD(i.due).toLocaleDateString("fr-FR"):"")}</td></tr>`).join("")}</tbody></table>`]);
+    if(opt.newpoints&&by("newpoint").length)S.push(["Nouveaux points ouverts",`<ul>${by("newpoint").map(i=>`<li>${esc(i.text)}${i.owner?` <span class="mut">– à répondre par : ${esc(OWNER[i.owner]||"")}</span>`:""}</li>`).join("")}</ul>`]);
+    if(opt.open){
+      const rest=livePts().filter(o=>o.projectId===m.projectId&&o.status!=="closed"&&!closedIds.has(o.id)&&(m.kind==="atelier"&&m.theme?o.theme===m.theme:(m.agenda||[]).some(a=>a.ref===o.id)));
+      if(rest.length)S.push(["Points restant ouverts",`<table><thead><tr><th class="n">N°</th><th>Point</th><th class="w">Doit répondre</th></tr></thead><tbody>${rest.map(o=>`<tr><td class="n">${esc(ptLabel(o))}</td><td>${esc(o.text)}</td><td>${esc(o.owner?OWNER[o.owner]:"")}</td></tr>`).join("")}</tbody></table>`]);
+    }
+    if(opt.notes&&(m.notes||"").trim())S.push(["Notes",`<p class="pre">${esc(m.notes.trim())}</p>`]);
+    if((m.nextMeeting||"").trim())S.push(["Prochaine réunion",`<p>${esc(m.nextMeeting.trim())}</p>`]);
+    const p=proj(m.projectId)||{name:""};
+    const head=`<header><div class="k">Compte rendu${m.kind!=="autre"?" – "+esc(MTG_KIND[m.kind]):""}</div><h1>${esc(p.name)} – ${esc(m.title)}</h1><div class="when">${esc(mtgWhen(m))}</div></header>
+      <dl>${present.length?`<dt>Présents</dt><dd>${esc(present.map(x=>x.name+(x.side?" ("+(SIDE[x.side]||"")+")":"")).join(", "))}</dd>`:""}${absent.length?`<dt>Absents</dt><dd>${esc(absent.map(x=>x.name).join(", "))}</dd>`:""}</dl>`;
+    return head+(S.length?S.map(([t,h],i)=>`<section><h2>${i+1}. ${t}</h2>${h}</section>`).join(""):`<p class="mut">Aucun élément relevé pour le moment.</p>`)
+      +`<footer>Compte rendu établi${MODE==="cloud"&&cloud.email?" par "+esc(nameOf(cloud.email)):""} le ${new Date().toLocaleDateString("fr-FR")}</footer>`;
+  }
+  const CR_CSS=`.crdoc{font:10.5pt/1.45 Arial,Helvetica,sans-serif;color:#16232B}
+    .crdoc header{border-bottom:2px solid #16232B;padding-bottom:8px;margin-bottom:10px}.crdoc .k{font-size:8.5pt;letter-spacing:.08em;text-transform:uppercase;color:#51646F}
+    .crdoc h1{font-size:17pt;margin:2px 0}.crdoc .when{color:#3A4B55}.crdoc dl{display:grid;grid-template-columns:70px 1fr;gap:3px 8px;margin:0 0 6px}.crdoc dt{color:#51646F}.crdoc dd{margin:0}
+    .crdoc h2{font-size:11pt;text-transform:uppercase;letter-spacing:.04em;color:#1F4A66;margin:14px 0 4px}.crdoc ul{margin:0;padding-left:18px}.crdoc table{width:100%;border-collapse:collapse}
+    .crdoc th{text-align:left;font-size:8.5pt;text-transform:uppercase;color:#51646F;padding:3px 6px 3px 0;border-bottom:1px solid #C7D1D8}.crdoc td{padding:5px 6px 5px 0;border-bottom:1px solid #E6EBEE;vertical-align:top}
+    .crdoc .n{width:42px;white-space:nowrap}.crdoc .w{width:28%}.crdoc .d{width:14%}.crdoc .pre{white-space:pre-wrap}.crdoc .mut{color:#51646F}
+    .crdoc footer{margin-top:18px;font-size:8.5pt;color:#51646F;border-top:1px solid #E6EBEE;padding-top:6px}`;
+  const crOpt=()=>Object.assign({decisions:true,closed:true,done:true,actions:true,newpoints:true,open:false,notes:true},ui.crOpt||{});
+  function mtgPdf(m){
+    const p=proj(m.projectId)||{name:"projet"};
+    const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(mtgLabel(m))}</title><style>@page{size:A4;margin:16mm 15mm}body{margin:0}${CR_CSS}</style></head><body><div class="crdoc">${crSections(m,crOpt())}</div></body></html>`;
+    printHtml(html,`compte-rendu-${slug(p.name)}-${slug(m.title)}-${iso(mtgDate(m))}`);
+  }
+  function mtgReview(B,m,ed){
+    const it=m.items||[], o=crOpt();
+    const n=k=>it.filter(i=>i.type===k).length;
+    const left=document.createElement("aside");left.className="mtgcard mtgrev";
+    const ck=(k,l,c)=>`<label><input type="checkbox" data-o="${k}" ${o[k]?"checked":""}> ${l}${c!=null?` <span class="muted">(${c})</span>`:""}</label>`;
+    left.innerHTML=`<h3>Compte rendu</h3>
+      <div class="mtgtot"><div><b>${n("close")}</b> point(s) levé(s)</div><div><b>${n("decision")}</b> décision(s)</div><div><b>${n("action")}</b> action(s)</div><div><b>${n("newpoint")}</b> nouveau(x) point(s)</div></div>
+      <fieldset><legend>Contenu</legend>${ck("decisions","Décisions",n("decision"))}${ck("closed","Points levés et réponses",n("close"))}${ck("done","Tâches terminées",n("taskdone"))}${ck("actions","Actions",n("action"))}${ck("newpoints","Nouveaux points ouverts",n("newpoint"))}${ck("open","Points restant ouverts",null)}${ck("notes","Notes libres",null)}</fieldset>
+      <label class="uifld"><span>Prochaine réunion</span><input type="text" data-next maxlength="300" placeholder="Ex. : atelier Expédition, vendredi 16 octobre à 14:00" ${ed?"":"readonly"}></label>
+      ${ed?`<p class="muted">Rien n'est encore modifié dans le projet. À la validation, les actions deviennent des tâches, les nouveaux points sont créés et les points levés sont mis à jour.</p>
+        <button type="button" class="btn primary" data-val>Valider et appliquer au projet</button>`:`<p class="muted">Compte rendu validé le ${new Date(m.validatedAt).toLocaleDateString("fr-FR")} : les tâches et les points ont été créés dans le projet.</p>`}
+      <button type="button" class="btn" data-pdf>Télécharger en PDF</button>
+      <button type="button" class="btn ghost dangerlink" data-rm>Supprimer ce compte rendu</button>`;
+    const nx=left.querySelector("[data-next]");nx.value=m.nextMeeting||"";
+    nx.oninput=()=>{if(!mtgEdit())return;mtgCur.nextMeeting=nx.value;mtgPut(mtgCur);paint()};
+    left.querySelectorAll("[data-o]").forEach(cb=>cb.onchange=()=>{ui.crOpt={...crOpt(),[cb.dataset.o]:cb.checked};saveUi();paint()});
+    left.querySelector("[data-pdf]").onclick=()=>mtgPdf(mtgCur);
+    const vb=left.querySelector("[data-val]");if(vb)vb.onclick=()=>mtgValidate();
+    left.querySelector("[data-rm]").onclick=async()=>{
+      if(!await uiConfirm(`Supprimer le compte rendu « ${mtgLabel(m)} » ?${m.status==="validated"?"\n\nLes tâches et points déjà créés dans le projet sont conservés.":""}`,{ok:"Supprimer",danger:true}))return;
+      mtgCur.deletedAt=Date.now();mtgPut(mtgCur,true);mtgCur=null;renderMtg();render();toast("Compte rendu supprimé.");
+    };
+    const right=document.createElement("div");right.className="mtgprev";
+    const doc=document.createElement("article");doc.className="crdoc crpage";right.appendChild(doc);
+    const paint=()=>{doc.innerHTML=crSections(mtgCur,crOpt())};paint();
+    let st=$("#crcss");if(!st){st=document.createElement("style");st.id="crcss";st.textContent=CR_CSS;document.head.appendChild(st)}
+    B.className="mtgbody review";B.append(left,right);
+  }
+  async function mtgValidate(){
+    const m=mtgCur;if(!m||m.status!=="draft")return;
+    const it=m.items||[], n=k=>it.filter(i=>i.type===k).length;
+    if(!await uiConfirm(`Valider le compte rendu et l'appliquer au projet ?\n\n• ${n("action")} action(s) deviendront des tâches\n• ${n("newpoint")} nouveau(x) point(s) ouvert(s) seront créés\n• ${n("close")} point(s) seront levés\n• ${n("taskdone")} tâche(s) seront marquées terminées\n\nLe compte rendu ne sera plus modifiable.`,{ok:"Valider"}))return;
+    const now=Date.now(), src=`Issu de : ${mtgLabel(m)}`;
+    it.forEach((i,k)=>{
+      if(i.type==="action"){const id=newId();state.tasks.push({id,projectId:m.projectId,title:i.text.split("\n")[0].slice(0,300),priority:"normale",due:i.due||"",status:"todo",note:(i.text.includes("\n")?i.text+"\n\n":"")+src,who:resolveWho(i.who||"",m.projectId),createdAt:now+k,checklist:[],repeat:null});i.createdId=id}
+      if(i.type==="newpoint"){const id=newId();state.points.push({id,projectId:m.projectId,text:i.text.slice(0,2000),answer:"",hypothesis:"",erp:"",theme:(i.theme||"").slice(0,80),owner:i.owner||"",ownerName:"",status:"open",taskId:null,requestId:null,createdAt:now+k,closedAt:null});i.createdId=id}
+      if(i.type==="close"){const o=(state.points||[]).find(x=>x.id===i.ref);if(o){if(i.text)o.answer=o.answer?o.answer+"\n"+i.text:i.text;o.status="closed";o.closedAt=now}}
+      if(i.type==="taskdone"){const t=state.tasks.find(x=>x.id===i.ref);if(t)applyStatus(t,"done")}
+    });
+    m.status="validated";m.validatedAt=now;
+    save();mtgPut(m,true);renderMtg();render();
+    toast("Compte rendu validé : tâches et points mis à jour dans le projet.");
+  }
+  // ---------- Onglet Réunions d'un projet ----------
+  function renderMeetings(L,p){
+    const top=document.createElement("div");top.className="mtgtop";
+    top.innerHTML=`<button type="button" class="btn primary" data-new>Nouvelle réunion</button><span class="muted">Astuce : dans l'agenda de la semaine, cliquez sur une réunion Outlook pour créer son compte rendu.</span>`;
+    top.querySelector("[data-new]").onclick=async()=>{const r=await mtgNewDialog({projectId:p.id});if(r)mtgOpen(r,"prep")};
+    L.appendChild(top);
+    const ms=mtgList(p.id);
+    const g=document.createElement("section");g.className="group";
+    g.innerHTML=`<h2>Comptes rendus <span>${ms.length}</span></h2>`;
+    if(!ms.length)g.insertAdjacentHTML("beforeend",`<div class="empty">Aucune réunion pour ce projet. Créez-en une, ou partez d'une réunion Outlook dans l'agenda.</div>`);
+    else{
+      const ul=document.createElement("ul");ul.className="tasks";
+      ms.forEach(m=>{const li=document.createElement("li");li.className="task mtgrow";li.dataset.m=m.id;
+        const c=k=>(m.items||[]).filter(i=>i.type===k).length;
+        li.innerHTML=`<span class="mtgdate">${esc(mtgDate(m).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"}))}</span><div><div class="ttl">${esc(m.title)}</div><div class="meta"><span class="tag">${esc(MTG_KIND[m.kind]||"Réunion")}${m.theme?" · "+esc(m.theme):""}</span><span class="tag ${m.status==="validated"?"done-t":"wait"}">${m.status==="validated"?"Validé":"Brouillon"}</span>${c("decision")?`<span class="tag">${c("decision")} décision(s)</span>`:""}${c("action")?`<span class="tag">${c("action")} action(s)</span>`:""}${c("close")?`<span class="tag">${c("close")} point(s) levé(s)</span>`:""}</div></div><div class="acts"><button type="button" class="sbtn">Ouvrir</button></div>`;
+        li.onclick=()=>mtgOpen(m);ul.appendChild(li)});
+      g.appendChild(ul);
+    }
+    L.appendChild(g);
+    // contacts du projet
+    const cs=ctList(p.id);
+    const cg=document.createElement("section");cg.className="group";
+    cg.innerHTML=`<h2>Contacts du projet <span>${cs.length}</span></h2><div class="mtgcts">${cs.map(c=>`<div class="mtgct"><b>${esc(c.name)}</b>${c.role?` <span class="muted">${esc(c.role)}</span>`:""}<em>${esc(SIDE[c.side]||"")}</em>${c.email?`<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`:""}<button type="button" data-x="${esc(c.id)}" aria-label="Retirer ${esc(c.name)}">✕</button></div>`).join("")||`<p class="muted">Ajoutez les interlocuteurs du client : ils seront proposés comme participants des réunions.</p>`}</div>
+      <form class="mtgctadd" autocomplete="off"><input type="text" data-n placeholder="Nom" aria-label="Nom du contact" maxlength="120" required><input type="text" data-r placeholder="Fonction (facultatif)" aria-label="Fonction" maxlength="120"><input type="email" data-e placeholder="E-mail (facultatif)" aria-label="E-mail" maxlength="200"><select data-s aria-label="Côté">${Object.entries(SIDE).map(([k,l])=>`<option value="${k}">${l}</option>`).join("")}</select><button class="btn" type="submit">Ajouter</button></form>`;
+    cg.querySelectorAll("[data-x]").forEach(b=>b.onclick=async()=>{const c=cs.find(x=>x.id===b.dataset.x);if(c&&await uiConfirm(`Retirer « ${c.name} » des contacts du projet ?`,{ok:"Retirer",danger:true})){await ctDel(p.id,c.id);render()}});
+    const f=cg.querySelector("form");f.onsubmit=async e=>{e.preventDefault();const r=await ctAdd(p.id,{name:f.querySelector("[data-n]").value,role:f.querySelector("[data-r]").value,email:f.querySelector("[data-e]").value,side:f.querySelector("[data-s]").value});if(r)render()};
+    L.appendChild(cg);
   }
   // ---------- Demandes client ----------
   const REQ=[["new","Nouvelle"],["analysis","En analyse"],["doing","En cours"],["waiting","En attente client"],["done","Traitée"],["refused","Refusée"]];

@@ -17,7 +17,7 @@ with sync_playwright() as pw:
     pg.add_init_script("localStorage.setItem('todo-mode','cloud');localStorage.setItem('todo-projets-ui',JSON.stringify({mode:'list',scope:'all'}))")
     pg.goto(APP);pg.wait_for_timeout(800)
     tabs=pg.evaluate("[...new Set(window.__rt.map(h=>h.table))]")
-    ok(len(tabs)==9,"9 tables écoutées %s"%tabs)
+    ok(len(tabs)==11,"11 tables écoutées %s"%tabs)
     sel=lambda:pg.evaluate("window.__log.filter(l=>l[0]==='select').length")
     n0=sel()
     emit=lambda t,pl:pg.evaluate("([t,pl])=>{if(t!=='tasks'&&pl.eventType!=='DELETE')(window.__db[t]=window.__db[t]||[]).push(pl.new);window.__emit(t,pl)}",[t,pl])

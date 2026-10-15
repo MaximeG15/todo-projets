@@ -655,3 +655,144 @@ body.hasdrawer .trashbtn,body.hasdrawer .fab{display:none}
   .menu button.mobonly{display:block}
 }
 .menu .mobonly{display:none}
+
+/* =====================================================================
+   Réunions et comptes rendus
+   ===================================================================== */
+.meet.clk{cursor:pointer}
+.meet.clk:hover{outline:2px solid #1D4E78;outline-offset:-1px}
+.meet .crb{font-size:10px;font-weight:700;color:#1F5C43;background:#DDF0E5;border-radius:3px;padding:0 4px;margin-left:4px}
+.mtgtop{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.mtgrow{cursor:pointer;grid-template-columns:64px minmax(0,1fr) auto}
+.mtgrow:hover{background:var(--soft)}
+.mtgdate{font:700 17px/1 "Barlow Condensed","Arial Narrow",sans-serif;color:var(--muted);text-transform:capitalize}
+.tag.done-t{background:#E3F2EA;color:#1F5C43;font-weight:600}
+.mtgcts{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.mtgcts > p{margin:0;padding:12px 16px}
+.mtgct{display:flex;align-items:center;gap:10px;padding:9px 16px;border-top:1px solid var(--line2);flex-wrap:wrap}
+.mtgct:first-child{border-top:0}
+.mtgct b{font-weight:600}
+.mtgct em{font-style:normal;font-size:12px;background:var(--chip);color:var(--chipink);border-radius:4px;padding:1px 7px}
+.mtgct a{font-size:13px}
+.mtgct button{margin-left:auto;border:0;background:none;color:var(--muted);cursor:pointer;width:32px;height:32px;border-radius:6px}
+.mtgct button:hover{background:var(--chip);color:var(--late)}
+.mtgctadd{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.mtgctadd input{flex:1 1 160px;min-width:0}
+
+/* Écran de réunion */
+body.mtgopen{overflow:hidden}
+.mtgv{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;color:var(--ink)}
+.mtgh{display:flex;align-items:center;gap:14px;padding:12px 22px;background:#16232B;color:#E8EEF2;flex-wrap:wrap}
+.mtgh .dot{width:12px;height:12px}
+.mtgt{display:flex;flex-direction:column;min-width:0;flex:1 1 300px}
+.mtgt b{font:700 22px/1.1 "Barlow Condensed","Arial Narrow",sans-serif}
+.mtgt span{font-size:13px;color:#AFC0CB}
+.mtgdraft,.mtgok{font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px}
+.mtgdraft{background:#3A3110;color:#F2D27A}
+.mtgok{background:#1F3D30;color:#8FD1B0}
+.mtgph{background:#22374A;border-radius:8px;padding:3px;display:flex;gap:2px;border:0}
+.mtgph button{border:0;background:none;color:#E8EEF2;padding:7px 12px;border-radius:6px;cursor:pointer;font-size:14px}
+.mtgph button[aria-pressed="true"]{background:#F2B705;color:#16232B;font-weight:600}
+.mtgh .mtgpres{color:#E8EEF2;background:transparent;border:1px solid #4A6577}
+.mtgh .mtgpres[aria-pressed="true"]{background:#E8EEF2;color:#16232B}
+.mtgh .dclose{width:38px;height:38px;border:0;border-radius:8px;background:#22374A;color:#E8EEF2;cursor:pointer;font-size:16px}
+.mtgbody{flex:1;min-height:0;display:grid;gap:18px;padding:18px 22px;overflow:auto}
+.mtgbody.run{grid-template-columns:300px minmax(0,1fr) 300px}
+.mtgbody.prep{grid-template-columns:minmax(0,1fr) 340px;align-items:start}
+.mtgbody.review{grid-template-columns:340px minmax(0,1fr);align-items:start}
+.mtgcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.mtgcard h3{margin:0;font:700 19px/1.2 "Barlow Condensed","Arial Narrow",sans-serif;display:flex;align-items:baseline;gap:8px}
+.mtgcard h3 .muted{font:400 13px "Barlow",sans-serif}
+.mtgcard .muted,.mtgv .muted{color:var(--muted);font-size:13px;margin:0}
+.mtgside{display:flex;flex-direction:column;gap:14px;min-width:0}
+.mtgppl{display:flex;flex-direction:column;gap:6px}
+.mtgppl label{display:flex;align-items:center;gap:8px;font-size:14px}
+.mtgppl label span{flex:1;min-width:0}
+.mtgppl small{color:var(--muted)}
+.mtgppl em{font-style:normal;font-size:12px;color:var(--muted)}
+.mtgadd{display:flex;flex-wrap:wrap;gap:6px}
+.mtgadd input[type=text]{flex:1 1 120px;min-width:0}
+.mtgkeep{flex:1 1 100%;font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.mtgcands{display:flex;flex-direction:column;border:1px solid var(--line2);border-radius:8px;max-height:56vh;overflow:auto}
+.mtgcands label{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-top:1px solid var(--line2);font-size:14px;cursor:pointer}
+.mtgcands label:first-child{border-top:0}
+.mtgcands label span{display:flex;flex-direction:column}
+.mtgcands small{color:var(--muted);font-size:12px}
+.mtgaddrow{display:flex;flex-wrap:wrap;gap:8px}
+.mtgaddrow select{flex:1 1 260px;min-width:0}
+.mtgaddrow form{display:flex;gap:8px;flex:1 1 260px}
+.mtgaddrow form input{flex:1;min-width:0}
+.mtggo .btn{width:100%;height:46px;font-size:16px}
+.mtgag ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.mtgag li button{width:100%;display:flex;gap:10px;align-items:flex-start;text-align:left;border:0;border-top:1px solid var(--line2);background:none;padding:9px 6px;cursor:pointer;font-size:14px;color:var(--ink)}
+.mtgag li:first-child button{border-top:0}
+.mtgag li button span:last-child{display:flex;flex-direction:column;min-width:0}
+.mtgag li button small{color:var(--muted);font-size:12px}
+.mtgag .st{width:22px;height:22px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--chip);color:var(--muted)}
+.mtgag button.done{color:var(--muted)}
+.mtgag button.done .st{background:var(--ok);color:#fff}
+.mtgag button.cur{background:var(--signalsoft);box-shadow:inset 3px 0 0 var(--signal)}
+.mtgag button.cur .st{background:var(--signal);color:#16232B}
+.mtgmid{display:flex;flex-direction:column;gap:14px;min-width:0}
+.mtgsubj{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;display:flex;flex-direction:column;gap:12px}
+.mtgk{font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mtgsubj h2{margin:0;font:600 23px/1.3 "Barlow",sans-serif;white-space:pre-line}
+.mtgcom{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.mtgcom > div{padding:10px 12px;border-radius:8px;font-size:14px;line-height:1.45;white-space:pre-line}
+.mtgcom b{display:block;font-size:13px;margin-bottom:2px}
+.c-mec{background:#EEF5FB;color:#16232B}.c-mec b{color:#1D4E78}
+.c-cli{background:#FFF4CC;color:#16232B}.c-cli b{color:#6B5200}
+.mtgacts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.mtgacts button{min-height:70px;border-radius:10px;border:1px solid var(--field);background:var(--panel);color:var(--ink);display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;padding:8px 14px;cursor:pointer;text-align:left}
+.mtgacts button b{font-size:16px}
+.mtgacts button span{font-size:12.5px;color:var(--muted)}
+.mtgacts .a-close,.mtgacts .a-taskdone{background:#2F7D5B;border-color:#2F7D5B;color:#fff}
+.mtgacts .a-close span,.mtgacts .a-taskdone span{color:#DDF0E5}
+.mtgacts .a-action{background:var(--signalsoft);border:2px solid var(--signal)}
+.mtgacts button.on{outline:3px solid var(--signal);outline-offset:2px}
+.mtgform form{background:var(--panel);border:2px solid var(--signal);border-radius:12px;padding:14px 16px;display:grid;grid-template-columns:minmax(0,1fr) 200px 160px;gap:10px;align-items:end}
+.mtgform form.f-close,.mtgform form.f-decision{grid-template-columns:minmax(0,1fr)}
+.mtgform form.f-newpoint{grid-template-columns:minmax(0,1fr) 200px}
+.mtgform .uifld{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.mtgform .uifld textarea,.mtgform .uifld select,.mtgform .uifld input{text-transform:none;letter-spacing:0;font-weight:400;font-size:15px;color:var(--ink);width:100%}
+.mtgform .uifld.wide{grid-column:1/-1}
+.mtgform .fbtns{grid-column:1/-1;display:flex;justify-content:flex-end;gap:8px}
+.mtgitems{display:flex;flex-direction:column;gap:6px}
+.mtgitems h4{margin:0;font-size:13px;color:var(--chipink)}
+.mtgit{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.mtgit .ity{font-size:12px;font-weight:700;border-radius:4px;padding:2px 8px;flex:none}
+.mtgit .itx{flex:1;min-width:0;font-size:14px;white-space:pre-line}
+.mtgit button{border:0;background:none;color:var(--muted);cursor:pointer;width:30px;height:30px;border-radius:6px}
+.mtgit button:hover{background:var(--chip);color:var(--late)}
+.mtgnav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:auto;flex-wrap:wrap}
+.mtgdone{display:flex;gap:8px;align-items:center;font-size:14px}
+.mtgtot{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mtgtot div{padding:8px 10px;border-radius:8px;background:var(--soft);font-size:13px;color:var(--muted)}
+.mtgtot b{font:700 22px/1 "Barlow Condensed","Arial Narrow",sans-serif;color:var(--ink)}
+.mtgnotes{flex:1}
+.mtgnotes textarea{flex:1;min-height:140px}
+.mtgrev fieldset{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.mtgrev legend{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px}
+.mtgrev label{display:flex;gap:8px;align-items:center;font-size:14px}
+.mtgrev .uifld{flex-direction:column;align-items:stretch;gap:4px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.mtgrev .uifld input{text-transform:none;font-weight:400;font-size:15px;color:var(--ink);letter-spacing:0}
+.mtgrev .btn{width:100%}
+.mtgrev .dangerlink{color:var(--late)}
+.mtgprev{display:flex;justify-content:center}
+.crpage{width:min(760px,100%);background:#fff;color:#16232B;box-shadow:0 8px 28px rgba(22,35,43,.16);padding:40px 48px;border-radius:4px}
+/* Mode présentation : pour projeter devant le client */
+.mtgv.present .mtgbody.run{grid-template-columns:280px minmax(0,1fr)}
+.mtgv.present .mtgside{display:none}
+.mtgv.present .mtgsubj h2{font-size:30px}
+.mtgv.present .mtgcom > div{font-size:17px}
+@media (max-width:1100px){
+  .mtgbody.run{grid-template-columns:240px minmax(0,1fr)}
+  .mtgbody.run .mtgside{grid-column:1/-1}
+}
+@media (max-width:760px){
+  .mtgh{padding:10px 12px;gap:8px}
+  .mtgbody,.mtgbody.run,.mtgbody.prep,.mtgbody.review{grid-template-columns:minmax(0,1fr);padding:12px}
+  .mtgform form,.mtgform form.f-newpoint{grid-template-columns:minmax(0,1fr)}
+  .crpage{padding:20px}
+  .mtgrow{grid-template-columns:52px minmax(0,1fr) auto}
+}
