@@ -510,3 +510,22 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   .task.req .acts{grid-column:2;justify-content:flex-start}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ---------- Sélection multiple ---------- */
+.selmode .task > .chk,.selmode .task .acts{display:none}
+.selmode .task{cursor:pointer;user-select:none}
+.selmode .task .selbox{width:18px;height:18px;margin:3px 0 0;accent-color:var(--nav);cursor:pointer}
+.selmode .task.sel{background:var(--chip);box-shadow:inset 3px 0 0 var(--signal)}
+.selmode .task .reqtag,.selmode .task .tag{pointer-events:none}
+#selbar{position:fixed;left:50%;transform:translateX(-50%);width:max-content;bottom:16px;z-index:60;display:flex;align-items:center;gap:12px;flex-wrap:wrap;max-width:min(1100px,calc(100vw - 24px));padding:10px 12px;background:var(--panel);color:var(--ink);border:1px solid var(--field);border-radius:10px;box-shadow:0 10px 30px rgba(22,35,43,.25)}
+#selbar .sbl{display:flex;align-items:center;gap:10px;white-space:nowrap}
+#selbar .sbl{flex:none}
+#selbar .sbacts{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 420px;align-items:center;min-width:0}
+#selbar select{padding:6px 8px;font:inherit;font-size:13px;color:var(--ink);max-width:190px}
+#selbar .dangerlink{color:var(--late)}
+
+body.hasselbar #fab{display:none}
+.tag.who.me{background:var(--signal);color:#16232B}
+@media (max-width:640px){#selbar{left:8px;right:8px;width:auto;transform:none;bottom:8px;max-width:none;gap:8px}#selbar .sbacts{flex-basis:100%}#selbar select{max-width:none;flex:1 1 45%}#selbar .btn.primary{width:100%}}
+body.hasselbar .toast{bottom:calc(var(--selbarh,70px) + 28px)}
+body.hasselbar{padding-bottom:calc(var(--selbarh,70px) + 40px)}

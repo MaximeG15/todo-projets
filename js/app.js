@@ -892,6 +892,20 @@
     return p?`${p.first} ${p.last}`:v;
   }
   const whoName=t=>nameOf((t.who||"").trim());
+  // Attribution : un nom ou une adresse correspondant à un membre du projet est enregistré sous son e-mail
+  const memberEmails=pid=>{
+    if(MODE!=="cloud")return [];
+    const s=new Set([cloud.email]),add=m=>{if(!m)return;if(m.ownerEmail)s.add(String(m.ownerEmail).toLowerCase());(m.members||[]).forEach(e=>s.add(String(e).toLowerCase()))};
+    if(pid)add(cloud.meta[pid]);else Object.values(cloud.meta).forEach(add);
+    return [...s].filter(Boolean);
+  };
+  function resolveWho(txt,pid){
+    txt=String(txt||"").trim();if(!txt||MODE!=="cloud")return txt;
+    const n=norm(txt);
+    for(const e of [...memberEmails(pid),...memberEmails()])if(n===norm(e)||n===norm(nameOf(e)))return e;
+    return txt;
+  }
+  const isMyTask=t=>MODE==="cloud"&&!!cloud.email&&!!(t.who||"").trim()&&(String(t.who).trim().toLowerCase()===cloud.email||norm(whoName(t))===norm(nameOf(cloud.email)));
   async function saveProfile(first,last){
     const {error}=await cloudClient().from("profiles").upsert({user_id:cloud.user.id,first_name:first,last_name:last,updated_at:Date.now()});
     if(error)return error;
@@ -1023,7 +1037,7 @@
     const title=$("#qt").value.trim(); const pid=$("#qp").value;
     if(!title)return;
     if(!pid){uiAlert("Créez d'abord un projet.");return}
-    state.tasks.push({id:uid(),projectId:pid,title,priority:$("#qprio").value,due:$("#qd").value||"",status:"todo",note:"",who:$("#qw").value.trim(),createdAt:Date.now(),checklist:[],repeat:null});
+    state.tasks.push({id:uid(),projectId:pid,title,priority:$("#qprio").value,due:$("#qd").value||"",status:"todo",note:"",who:resolveWho($("#qw").value,pid),createdAt:Date.now(),checklist:[],repeat:null});
     $("#qt").value="";$("#qd").value="";$("#qprio").value="normale";
     save(); render(); $("#qt").focus();
   }
@@ -1104,6 +1118,11 @@
     if(["list","agenda"].includes(ui.mode))ui.taskMode=ui.mode;
     if(ui.mode==="trash"||ui.mode==="dash")view="all";
     const mode=ui.mode;
+    // sélection multiple : quittée en changeant de vue
+    const sctx=view+"|"+mode+"|"+(query.trim()?"q":"");
+    if(selMode&&(sctx!==selCtx||!((selMode==="t"&&mode==="list")||(selMode==="o"&&mode==="points"))||query.trim())){selMode=null;selIds.clear()}
+    selCtx=sctx;$("#lists").classList.toggle("selmode",!!selMode);
+    Promise.resolve().then(selBar);
     const alive=live();
     const open=alive.filter(t=>t.status!=="done"&&!isArch(t.projectId));
     const nToday=open.filter(t=>isLate(t)||isToday(t)||needsRelance(t)).length;
@@ -1120,7 +1139,8 @@
     const go=(mode,scope)=>()=>{query="";$("#search").value="";ui.mode=mode;ui.scope=scope;saveUi();view="all";editing=null;shareOpen=false;weekStart=null;closeMenu();render()};
     vb("today","Aujourd'hui",nToday,view==="all"&&mode==="list"&&ui.scope==="today",go("list","today"));
     vb("agenda","Agenda de la semaine",nWeek,view==="all"&&mode==="agenda",go("agenda","all"));
-    vb("all","Toutes les tâches",open.length,view==="all"&&mode==="list"&&ui.scope==="all",go("list","all"));
+    vb("all","Toutes les tâches",open.length,view==="all"&&mode==="list"&&ui.scope==="all"&&ui.who!=="__me",()=>{if(ui.who==="__me")ui.who="";go("list","all")()});
+    if(MODE==="cloud")vb("mine","Mes tâches",open.filter(isMyTask).length,view==="all"&&mode==="list"&&ui.scope==="all"&&ui.who==="__me",()=>{ui.who="__me";go("list","all")()});
     vb("req","Demandes client",nReq||"",view==="all"&&mode==="requests",go("requests","all"));
     vb("dash","Tableau de bord","",mode==="dash",go("dash","all"));
     const tb=$("#trashbtn");
@@ -1195,7 +1215,7 @@
       title="Corbeille";
       sub=nTrash?`${nTrash} élément${nTrash>1?"s":""} supprimé${nTrash>1?"s":""}`:"La corbeille est vide";
     } else {
-      title=p?`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`:(ui.scope==="today"?"Aujourd'hui":"Toutes les tâches");
+      title=p?`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`:(ui.scope==="today"?"Aujourd'hui":ui.who==="__me"?"Mes tâches":"Toutes les tâches");
       const poolOpen=alive.filter(t=>t.status!=="done"&&(p?t.projectId===p.id:!isArch(t.projectId)));
       const pToday=poolOpen.filter(t=>isToday(t)).length, pLate=poolOpen.filter(isLate).length, pWait=poolOpen.filter(t=>t.status==="waiting").length;
       sub=`${cap(longDay(today()))} · ${poolOpen.length} tâche${poolOpen.length>1?"s":""} ouverte${poolOpen.length>1?"s":""}`+(pToday?`, ${pToday} pour aujourd'hui`:"")+(pLate?`, ${pLate} en retard`:"")+(pWait?`, ${pWait} en attente`:"");
@@ -1239,7 +1259,8 @@
     const sugg=new Set(people);
     if(MODE==="cloud"){if(cloud.email)sugg.add(nameOf(cloud.email));Object.values(cloud.meta).forEach(m=>{sugg.add(nameOf(m.ownerEmail));m.members.forEach(e=>sugg.add(nameOf(e)))})}
     $("#people").innerHTML=[...sugg].filter(Boolean).map(n=>`<option value="${esc(n)}">`).join("");
-    if(ui.who&&ui.who!=="__none"&&!people.includes(ui.who))ui.who="";
+    if(ui.who&&ui.who!=="__none"&&ui.who!=="__me"&&!people.includes(ui.who))ui.who="";
+    if(ui.who==="__me"&&MODE!=="cloud")ui.who="";
     const taskView=mode==="list"||agenda;
     if(taskView&&!query.trim()){
       const seg=document.createElement("div");seg.className="seg";seg.setAttribute("role","group");seg.setAttribute("aria-label","Affichage");
@@ -1269,12 +1290,17 @@
         mb.title=MODE==="cloud"?"Afficher ou masquer vos réunions Outlook dans l'agenda":"Disponible en mode en ligne";
         if(MODE==="cloud"&&ui.showMeetings)b("Réglages du calendrier",openCalCfg,"",vr);
       }
-      if(people.length){
+      if(people.length||MODE==="cloud"){
         const w=document.createElement("label");w.className="whobox";
-        w.innerHTML=`Responsable <select id="whosel" aria-label="Filtrer par responsable"><option value="">Tout le monde</option>${people.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")}<option value="__none">Non attribuées</option></select>`;
+        w.innerHTML=`Responsable <select id="whosel" aria-label="Filtrer par responsable"><option value="">Tout le monde</option>${MODE==="cloud"?`<option value="__me">Mes tâches</option>`:""}${people.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")}<option value="__none">Non attribuées</option></select>`;
         const sel=w.querySelector("select");sel.value=ui.who||"";sel.onchange=e=>{ui.who=e.target.value;saveUi();render()};
         vr.appendChild(w);
       }
+    }
+    if(!query.trim()&&((mode==="list"&&!agenda)||(mode==="points"&&p))){
+      const k=mode==="points"?"o":"t";
+      const sb=b(selMode?"Annuler la sélection":"Sélectionner",()=>selMode?selEnd():selStart(k),"selbtn",vr);
+      sb.setAttribute("aria-pressed",!!selMode);sb.title="Sélectionner plusieurs éléments pour les modifier en une fois";
     }
     vbar.append(vl,vr);vbar.hidden=!vl.children.length&&!vr.children.length;
     renderShare(p);
@@ -1293,7 +1319,7 @@
     }
     if(mode==="requests"&&!query.trim()){renderRequests(L,p);return}
     if(mode==="points"&&p&&!query.trim()){renderPoints(L,p);return}
-    const base=alive.filter(t=>(!p||t.projectId===p.id)&&(!ui.who||mode==="dash"||(ui.who==="__none"?!(t.who||"").trim():whoName(t)===ui.who)));
+    const base=alive.filter(t=>(!p||t.projectId===p.id)&&(!ui.who||mode==="dash"||(ui.who==="__me"?isMyTask(t):ui.who==="__none"?!(t.who||"").trim():whoName(t)===ui.who)));
     if(query.trim()){
       // Recherche dans les tâches, les points ouverts et les demandes client
       const found=base.filter(matches);
@@ -1620,7 +1646,7 @@
     if(t.repeat&&t.repeat.unit)tags.push(`<span class="tag" title="Tâche récurrente"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l3 3-3 3"></path><path d="M4 11V9a4 4 0 0 1 4-4h12"></path><path d="M7 22l-3-3 3-3"></path><path d="M20 13v2a4 4 0 0 1-4 4H4"></path></svg>${repLabel(t.repeat)}</span>`);
     if(t.priority==="haute")tags.push(`<span class="tag hi">Priorité haute</span>`);
     if(t.priority==="basse")tags.push(`<span class="tag">Priorité basse</span>`);
-    if(t.who)tags.push(`<span class="tag who">${hl(whoName(t))}</span>`);
+    if(t.who)tags.push(`<span class="tag who${isMyTask(t)?" me":""}" title="Responsable">${hl(whoName(t))}</span>`);
     const rq=reqOf(t); if(rq)tags.push(`<button type="button" class="tag reqtag" data-a="req" title="Ouvrir la demande client">Demande : ${esc(short(rq.title))}</button>`);
     if(nCom)tags.push(`<button type="button" class="tag" data-a="edit" title="Voir les commentaires" style="border:0;cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg>${nCom} commentaire${nCom>1?"s":""}</button>`);
     li.innerHTML=`<input type="checkbox" class="chk" ${t.status==="done"?"checked":""} aria-label="Marquer comme terminée">
@@ -1653,7 +1679,7 @@
         <select aria-label="Projet">${state.projects.map(x=>`<option value="${x.id}" ${x.id===t.projectId?"selected":""}>${esc(x.name)}</option>`).join("")}</select>
         <select aria-label="Priorité">${["haute","normale","basse"].map(v=>`<option value="${v}" ${v===t.priority?"selected":""}>Priorité ${v}</option>`).join("")}</select>
         <input type="date" value="${esc(t.due)}" aria-label="Échéance">
-        <input type="text" value="${esc(t.who||"")}" placeholder="Responsable" aria-label="Responsable" list="people">
+        <input type="text" value="${esc(whoName(t))}" placeholder="Responsable" aria-label="Responsable" list="people">
         <select aria-label="Répétition">${REPEATS.map(([k,l])=>`<option value="${k}" ${k===repKey(t.repeat)?"selected":""}>${l}</option>`).join("")}</select>
         <select aria-label="Statut">${Object.entries(STATUS).map(([k,l])=>`<option value="${k}" ${k===(t.status||"todo")?"selected":""}>${l}</option>`).join("")}</select>
         <input type="text" value="${esc(t.waitingFor||"")}" placeholder="En attente de (client, collègue, validation…)" aria-label="En attente de" maxlength="120">
@@ -1705,7 +1731,7 @@
       f.querySelector("[data-k=ok]").onclick=()=>{
         const cur=state.tasks.find(x=>x.id===t.id);
         if(!cur){editing=null;render();uiAlert("Cette tâche a été supprimée entre-temps (peut-être par un collègue).");return}
-        if(ti.value.trim())cur.title=ti.value.trim();cur.projectId=sp.value;cur.priority=spr.value;cur.due=dd.value;cur.who=wh.value.trim();cur.note=ta.value.trim();
+        if(ti.value.trim())cur.title=ti.value.trim();cur.projectId=sp.value;cur.priority=spr.value;cur.due=dd.value;{const nv=wh.value.trim();cur.who=nv===whoName(cur)?(cur.who||""):resolveWho(nv,sp.value)}cur.note=ta.value.trim();
         cur.family=fs.value&&fs.value!=="__new"?fs.value:"";
         if(sIn.value.trim())draft.push({id:uid(),text:sIn.value.trim(),done:false});
         cur.checklist=draft.filter(c=>c.text.trim()).map(c=>({id:c.id,text:c.text.trim(),done:!!c.done}));
@@ -1722,8 +1748,120 @@
       li.appendChild(f);
       setTimeout(()=>ti.focus(),0);
     }
+    if(selMode==="t")selDecorate(li,t.id);
     return li;
   }
+  // ---------- Sélection multiple (tâches de la liste, points ouverts d'un projet) ----------
+  let selMode=null, selCtx="", selLast=null; // selMode : null | "t" | "o"
+  const selIds=new Set();
+  const selRowsSel=()=>selMode==="t"?"#lists li.task:not(.pt):not(.req)[data-id]":"#lists li.pt[data-o]";
+  const selRowId=li=>li.dataset.id||li.dataset.o;
+  function selStart(k){selMode=k;selIds.clear();selLast=null;editing=null;editingPt=null;render()}
+  function selEnd(){selMode=null;selIds.clear();render()}
+  function selDecorate(li,id){
+    const on=selIds.has(id);li.classList.toggle("sel",on);
+    const cb=document.createElement("input");cb.type="checkbox";cb.className="selbox";cb.checked=on;cb.setAttribute("aria-label","Sélectionner");
+    li.prepend(cb);
+    li.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();selToggle(id,e.shiftKey)},true);
+  }
+  function selToggle(id,range){
+    const rows=[...document.querySelectorAll(selRowsSel())], ids=rows.map(selRowId);
+    if(range&&selLast&&ids.includes(selLast)&&ids.includes(id)){
+      const [a,b]=[ids.indexOf(selLast),ids.indexOf(id)].sort((x,y)=>x-y);
+      ids.slice(a,b+1).forEach(x=>selIds.add(x));
+    } else if(selIds.has(id))selIds.delete(id);else selIds.add(id);
+    selLast=id;selPaint();
+  }
+  function selPaint(){
+    document.querySelectorAll(selRowsSel()).forEach(li=>{const on=selIds.has(selRowId(li));li.classList.toggle("sel",on);const cb=li.querySelector(":scope > .selbox");if(cb)cb.checked=on});
+    selBar();
+  }
+  function selItems(){return selMode==="t"?state.tasks.filter(t=>selIds.has(t.id)&&!t.deletedAt):(state.points||[]).filter(x=>selIds.has(x.id)&&!x.deletedAt)}
+  // modification groupée des points, annulable
+  function ptBulk(msg,items,fn){
+    const copies=items.map(x=>JSON.parse(JSON.stringify(x)));
+    items.forEach(fn);save();render();
+    toast(msg,()=>{copies.forEach(c=>{const i=state.points.findIndex(y=>y.id===c.id);if(i>=0)state.points[i]=c});save();render()});
+  }
+  const DUE_OPTS=()=>{const t=today(),wd=t.getDay(),mon=addDays(t,((8-wd)%7)||7);return [["today","Aujourd'hui",iso(t)],["tom","Demain",iso(addDays(t,1))],["mon","Lundi prochain",iso(mon)],["pick","Choisir une date…",null],["none","Retirer l'échéance",""]]};
+  function selBar(){
+    let bar=$("#selbar");
+    if(!selMode){if(bar)bar.remove();document.body.classList.remove("hasselbar");return}
+    if(!bar){bar=document.createElement("div");bar.id="selbar";bar.setAttribute("role","toolbar");bar.setAttribute("aria-label","Actions sur la sélection");document.body.appendChild(bar)}
+    document.body.classList.add("hasselbar");
+    const items=selItems(), n=items.length, T=selMode==="t";
+    [...selIds].forEach(id=>{if(!items.some(x=>x.id===id))selIds.delete(id)});
+    const pids=[...new Set(items.map(x=>x.projectId))], one=pids.length===1?pids[0]:null;
+    const opt=(v,l)=>`<option value="${esc(v)}">${esc(l)}</option>`;
+    const sel=(k,label,opts)=>`<select data-sk="${k}" aria-label="${esc(label)}">${opt("",label+"…")}${opts}</select>`;
+    let acts="";
+    if(n&&T){
+      const ppl=new Map();
+      memberEmails(one).forEach(e=>ppl.set(e,nameOf(e)));
+      live().forEach(t=>{const w=(t.who||"").trim();if(w&&!ppl.has(w)&&![...ppl.values()].includes(whoName(t)))ppl.set(w,whoName(t))});
+      acts+=sel("st","Statut",Object.entries(STATUS).map(([k,l])=>opt(k,l)).join(""));
+      acts+=sel("due","Échéance",DUE_OPTS().map(([k,l])=>opt(k,l)).join(""));
+      acts+=sel("who","Responsable",(MODE==="cloud"?opt(cloud.email,"Moi ("+nameOf(cloud.email)+")"):"")+[...ppl].filter(([e])=>e!==cloud.email).sort((a,b)=>a[1].localeCompare(b[1],"fr")).map(([e,l])=>opt(e,l)).join("")+opt("__other","Autre personne…")+opt("__none","Non attribuée"));
+      acts+=sel("prio","Priorité",["haute","normale","basse"].map(v=>opt(v,"Priorité "+v)).join(""));
+      if(one)acts+=sel("fam","Famille",getFamilies(one).map(f=>opt(f.id,f.name)).join("")+opt("__none","Sans famille"));
+      const ps=state.projects.filter(x=>!x.archived&&(MODE!=="cloud"||cloud.meta[x.id]));
+      if(ps.length>1)acts+=sel("proj","Déplacer vers",ps.map(x=>opt(x.id,x.name)).join(""));
+    }
+    if(n&&!T){
+      acts+=sel("pst","Statut",opt("closed","Levé")+opt("open","Ouvert"));
+      if(one)acts+=sel("th","Thème",ptThemes(one).map(k=>opt(k,k)).join("")+opt("__none","Sans thème"));
+      acts+=sel("ow","Qui doit répondre",Object.entries(OWNER).filter(([k])=>k).map(([k,l])=>opt(k,l)).join("")+opt("__none","Non défini"));
+      acts+=sel("erp","Sujet ERP",opt("oui","Oui")+opt("non","Non")+opt("__none","Non précisé"));
+    }
+    if(n)acts+=`<button type="button" class="btn ghost dangerlink" data-sa="trash">Mettre à la corbeille</button>`;
+    const fem=T?"e":"";
+    bar.innerHTML=`<div class="sbl"><b>${n} sélectionné${fem}${n>1?"s":""}</b><button type="button" class="pflink" data-sa="all">Tout sélectionner</button>${n?`<button type="button" class="pflink" data-sa="none">Désélectionner</button>`:""}</div>
+      <div class="sbacts">${acts||`<span class="muted">Cliquez sur les ${T?"tâches":"points"} à modifier (Maj + clic pour une plage).</span>`}</div>
+      <button type="button" class="btn primary" data-sa="end">Terminer</button>`;
+    bar.querySelector("[data-sa=all]").onclick=()=>{document.querySelectorAll(selRowsSel()).forEach(li=>selIds.add(selRowId(li)));selPaint()};
+    const nb=bar.querySelector("[data-sa=none]");if(nb)nb.onclick=()=>{selIds.clear();selPaint()};
+    bar.querySelector("[data-sa=end]").onclick=selEnd;
+    const tr=bar.querySelector("[data-sa=trash]");
+    if(tr)tr.onclick=()=>{
+      const at=Date.now(),its=selItems();selIds.clear();
+      if(T)undoable(`${its.length} tâche${its.length>1?"s":""} mise${its.length>1?"s":""} à la corbeille`,its,()=>its.forEach(t=>{t.deletedAt=at}));
+      else ptBulk(`${its.length} point${its.length>1?"s":""} mis à la corbeille`,its,x=>{x.deletedAt=at});
+    };
+    bar.querySelectorAll("select[data-sk]").forEach(s=>s.onchange=()=>{const v=s.value;s.value="";if(v)selApply(s.dataset.sk,v)});
+    document.body.style.setProperty("--selbarh",bar.offsetHeight+"px");
+  }
+  async function selApply(k,v){
+    const its=selItems();if(!its.length)return;
+    const n=its.length,pl=n>1?"s":"",lbl=selMode==="t"?`${n} tâche${pl}`:`${n} point${pl}`;
+    if(selMode==="t"){
+      if(k==="st"){
+        let wf="";if(v==="waiting"){wf=await uiPrompt("En attente de qui ou de quoi ? (facultatif)","",{ok:"Mettre en attente"});if(wf===null)return}
+        undoable(`${lbl} : ${STATUS[v].toLowerCase()}`,its,()=>its.forEach(t=>{applyStatus(t,v);if(v==="waiting")t.waitingFor=wf.trim()}));
+      }
+      if(k==="due"){
+        let d=(DUE_OPTS().find(o=>o[0]===v)||[])[2];
+        if(v==="pick"){const r=await uiForm("Nouvelle échéance",[{k:"d",label:`Échéance pour ${lbl}`,type:"date"}],x=>x.d?"":"Choisissez une date.",{ok:"Appliquer"});if(!r)return;d=r.d}
+        undoable(`${lbl} : ${d?"échéance au "+fmtD(d):"échéance retirée"}`,its,()=>its.forEach(t=>{t.due=d}));
+      }
+      if(k==="who"){
+        let w=v==="__none"?"":v;
+        if(v==="__other"){const r=await uiPrompt("Nom ou e-mail du responsable","",{ok:"Attribuer"});if(r===null||!r.trim())return;w=r}
+        undoable(`${lbl} : ${w?"attribuée"+pl+" à "+nameOf(resolveWho(w,its[0].projectId)):"sans responsable"}`,its,()=>its.forEach(t=>{t.who=resolveWho(w,t.projectId)}));
+      }
+      if(k==="prio")undoable(`${lbl} : priorité ${v}`,its,()=>its.forEach(t=>{t.priority=v}));
+      if(k==="fam")undoable(`${lbl} : ${v==="__none"?"sans famille":"famille « "+((getFamilies(its[0].projectId).find(f=>f.id===v)||{}).name||"")+" »"}`,its,()=>its.forEach(t=>{t.family=v==="__none"?"":v}));
+      if(k==="proj"){
+        const to=proj(v);if(!to)return;
+        undoable(`${lbl} déplacée${pl} vers « ${to.name} »`,its,()=>its.forEach(t=>{if(t.projectId!==v){t.projectId=v;t.family=""}}));
+      }
+    } else {
+      if(k==="pst")ptBulk(`${lbl} : ${v==="closed"?"levé"+pl:"rouvert"+pl}`,its,x=>{if(x.status!==v){x.status=v;x.closedAt=v==="closed"?Date.now():null}});
+      if(k==="th")ptBulk(`${lbl} : ${v==="__none"?"sans thème":"thème « "+v+" »"}`,its,x=>{x.theme=v==="__none"?"":v});
+      if(k==="ow")ptBulk(`${lbl} : ${v==="__none"?"interlocuteur non défini":"à répondre par "+OWNER[v]}`,its,x=>{x.owner=v==="__none"?"":v});
+      if(k==="erp")ptBulk(`${lbl} : ${v==="oui"?"sujet ERP":v==="non"?"hors ERP":"sujet ERP non précisé"}`,its,x=>{x.erp=v==="__none"?"":v});
+    }
+  }
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&selMode&&!document.querySelector("dialog[open]"))selEnd()});
   // ---------- Statuts ----------
   // Change le statut (sans enregistrer). Renvoie la prochaine occurrence si une tâche récurrente est terminée.
   function applyStatus(t,st){
@@ -2274,6 +2412,7 @@
       li.appendChild(f);
       setTimeout(()=>g("text").focus(),0);
     }
+    if(selMode==="o")selDecorate(li,x.id);
     return li;
   }
   function renderPoints(L,p){
