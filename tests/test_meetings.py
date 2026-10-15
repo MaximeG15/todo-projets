@@ -8,7 +8,7 @@ def ok(c,m):
     if not c: errs.append(m)
 P=[{"id":"o%d"%i,"projectId":"p","text":t,"answer":"","hypothesis":"Hypothèse %d"%i if i==1 else "","erp":"","theme":th,"owner":"client","ownerName":"","status":"open","createdAt":i,"xl":{"ver":2,"n":str(40+i),"k":"","v":{}}} for i,(t,th) in enumerate([("Format des étiquettes de réception ?","Réception"),("Scan du numéro de série en réception ?","Réception"),("Profils d'expédition ?","Expédition")])]
 T=[{"id":"t1","projectId":"p","title":"Tâche existante","priority":"normale","due":"2020-01-01","status":"todo","createdAt":1}]
-data={"projects":[{"id":"p","name":"Projet Alpha","color":"#E0703A","pointThemes":[{"id":"a","name":"Réception"},{"id":"b","name":"Expédition"}]}],"tasks":T,"requests":[],"points":P,"deleted":[]}
+data={"projects":[{"id":"p","name":"Projet Alpha","color":"#E0703A","pointThemes":[{"id":"a","name":"Réception"},{"id":"b","name":"Expédition"}]},{"id":"q","name":"Projet Beta","color":"#2F7D5B"}],"tasks":T,"requests":[],"points":P,"deleted":[]}
 with sync_playwright() as pw:
     b=pw.chromium.launch();pg=b.new_page(viewport={"width":1440,"height":950})
     pg.on("pageerror",lambda e:errs.append("JS: "+str(e)))
@@ -74,7 +74,18 @@ with sync_playwright() as pw:
     pg.locator("[data-new]").click();dlg=pg.locator("dialog.uidlg")
     dlg.locator("[data-k=title]").fill("COPIL");dlg.locator("[data-k=kind]").select_option("copil");dlg.locator("[data-ok]").click();pg.wait_for_timeout(300)
     ok("Envoyer la maquette" in pg.locator("#mtgview .mtgcands").inner_text(),"réunion suivante : actions ouvertes reprises")
-    pg.locator("#mtgview [data-close]").click()
+    # changement de projet en préparation
+    pg.locator("#mtgview .mtgproj select").select_option("q");pg.wait_for_timeout(300)
+    s=st();mb=[x for x in s["projects"][1].get("meetings",[]) if x["title"]=="COPIL"]
+    ok(mb and not any(x["title"]=="COPIL" for x in s["projects"][0]["meetings"]),"préparation : compte rendu réaffecté à un autre projet")
+    ok("Envoyer la maquette" not in pg.locator("#mtgview .mtgcands").inner_text() and "Projet Beta" in pg.locator("#mtgview .mtgt").inner_text(),"ordre du jour recalculé pour le nouveau projet")
+    # suppression depuis l'écran de réunion
+    pg.locator("#mtgview [data-del]").click();pg.wait_for_timeout(300)
+    ok(pg.locator("#mtgview").count()==0 and st()["projects"][1]["meetings"][0].get("deletedAt"),"compte rendu supprimé (corbeille logique)")
+    # suppression depuis la liste (compte rendu validé) : les tâches créées restent
+    pg.locator(".mtgrow [data-del]").first.click();pg.wait_for_timeout(300)
+    s=st()
+    ok(pg.locator(".mtgrow").count()==0 and any(x["title"]=="Envoyer la maquette d'étiquette" for x in s["tasks"]),"suppression depuis la liste, tâches conservées")
     b.close()
     # mode en ligne : réunion Outlook dans l'agenda
     b=pw.chromium.launch();pg=b.new_page(viewport={"width":1440,"height":950})
@@ -96,6 +107,9 @@ with sync_playwright() as pw:
     ok(rows and rows[0]["outlook_key"].startswith("evt-1|") and rows[0]["location"]=="Microsoft Teams","compte rendu enregistré en ligne avec la réunion Outlook")
     pg.locator("#mtgview [data-close]").click();pg.wait_for_timeout(300)
     ok(pg.locator(".meet .crb").count()==1,"agenda : repère CR sur la réunion")
+    pg.locator(".meet.clk",has_text="Atelier Réception").click();pg.wait_for_timeout(300)
+    pg.locator("#mtgview [data-del]").click();pg.wait_for_timeout(1200)
+    ok((pg.evaluate("window.__db.meetings")[0].get("deleted_at")) and pg.locator(".meet .crb").count()==0,"en ligne : suppression enregistrée")
     b.close()
 print("ERREURS :",errs or "aucune")
 sys.exit(1 if errs else 0)

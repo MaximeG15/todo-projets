@@ -2837,7 +2837,8 @@
   function mtgPut(m,now){
     m.updatedAt=Date.now();
     if(MODE==="cloud"){
-      const l=cloud.meetings[m.projectId]=(cloud.meetings[m.projectId]||[]).filter(x=>x.id!==m.id);l.push(JSON.parse(JSON.stringify(m)));
+      Object.keys(cloud.meetings).forEach(k=>{cloud.meetings[k]=cloud.meetings[k].filter(x=>x.id!==m.id)});
+      (cloud.meetings[m.projectId]=cloud.meetings[m.projectId]||[]).push(JSON.parse(JSON.stringify(m)));
       clearTimeout(mtgSaveT[m.id]);
       const send=async()=>{
         const {error}=await cloudClient().from("meetings").upsert(rowMtg(m));
@@ -2846,8 +2847,34 @@
       if(now)send();else mtgSaveT[m.id]=setTimeout(send,700);
     } else {
       const p=proj(m.projectId);if(!p)return;
-      p.meetings=(p.meetings||[]).filter(x=>x.id!==m.id);p.meetings.push(JSON.parse(JSON.stringify(m)));save();
+      state.projects.forEach(q=>{if(q.meetings)q.meetings=q.meetings.filter(x=>x.id!==m.id)});
+      p.meetings=(p.meetings||[]);p.meetings.push(JSON.parse(JSON.stringify(m)));save();
     }
+  }
+  // Suppression d'un compte rendu (corbeille logique, annulable) ; les tâches et points déjà créés restent dans le projet
+  async function mtgDelete(m){
+    const valid=m.status==="validated";
+    if(!await uiConfirm(`Supprimer le compte rendu « ${m.title} » du ${mtgDate(m).toLocaleDateString("fr-FR")} ?`+(valid?"\n\nLes tâches et points ouverts créés à sa validation restent dans le projet.":""),{ok:"Supprimer",danger:true}))return false;
+    const x=JSON.parse(JSON.stringify(m));x.deletedAt=Date.now();mtgPut(x,true);
+    if(mtgCur&&mtgCur.id===m.id){mtgCur=null;renderMtg()}
+    render();
+    toast("Compte rendu supprimé.",()=>{const y=JSON.parse(JSON.stringify(x));y.deletedAt=null;mtgPut(y,true);render()});
+    return true;
+  }
+  // Changement de projet en préparation : l'ordre du jour est recalculé pour le nouveau projet
+  async function mtgMove(pid){
+    const m=mtgCur;if(!m||m.status!=="draft"||pid===m.projectId)return;
+    const p=proj(pid);if(!p)return;
+    const refs=(m.items||[]).filter(i=>i.type==="close"||i.type==="taskdone").length;
+    if(!await uiConfirm(`Affecter ce compte rendu au projet « ${p.name} » ?\n\nL'ordre du jour sera recalculé avec les points et tâches de ce projet. Les sujets libres sont conservés.`+(refs?`\n${refs} élément(s) déjà notés (points levés, tâches terminées) concernent l'ancien projet et seront retirés.`:""),{ok:"Changer de projet"})){renderMtg();return}
+    mtgSet(mm=>{
+      mm.projectId=pid;
+      const t=norm(mm.title||"");mm.theme=mm.kind==="atelier"?(ptThemes(pid).find(x=>t.includes(norm(x)))||""):"";
+      mm.items=(mm.items||[]).filter(i=>i.type!=="close"&&i.type!=="taskdone");
+      const free=(mm.agenda||[]).filter(a=>a.kind==="free");
+      mm.agenda=[...proposeAgenda(mm).filter(x=>x.checked).map(({key,kind,ref,title,label})=>({key,kind,ref,title,label,done:false})),...free];
+    },true);
+    render();
   }
   async function ctAdd(pid,c){
     const x={id:newId(),name:c.name.trim().slice(0,120),role:(c.role||"").trim().slice(0,120),side:SIDE[c.side]?c.side:"client",email:(c.email||"").trim().slice(0,200)};
@@ -3011,10 +3038,12 @@
       ${m.status==="validated"?`<span class="mtgok">Validé le ${new Date(m.validatedAt).toLocaleDateString("fr-FR")}</span>`:`<span class="mtgdraft">Brouillon</span>`}
       <div class="seg mtgph" role="group" aria-label="Étape">${ph("prep","Préparation")}${ph("run","Réunion")}${ph("review","Compte rendu")}</div>
       ${mtgPhase==="run"?`<button type="button" class="btn ghost mtgpres" aria-pressed="${!!ui.mtgPresent}" title="Affichage pour projeter devant le client : notes et relevé masqués, texte agrandi">Mode présentation</button>`:""}
+      <button type="button" class="btn ghost mtgdel" data-del title="Supprimer ce compte rendu">Supprimer</button>
       <button type="button" class="dclose" data-close aria-label="Fermer la réunion">✕</button></header>
       <div class="mtgbody" id="mtgbody"></div>`;
     v.querySelectorAll("[data-ph]").forEach(b=>b.onclick=()=>{mtgPhase=b.dataset.ph;mtgForm=null;renderMtg()});
     v.querySelector("[data-close]").onclick=mtgClose;
+    v.querySelector("[data-del]").onclick=()=>mtgDelete(mtgCur);
     const pr=v.querySelector(".mtgpres");if(pr)pr.onclick=()=>{ui.mtgPresent=!ui.mtgPresent;saveUi();renderMtg()};
     const B=v.querySelector("#mtgbody");
     if(mtgPhase==="prep")mtgPrep(B,m,ed);else if(mtgPhase==="review")mtgReview(B,m,ed);else mtgRun(B,m,ed);
@@ -3056,6 +3085,13 @@
     const fr=left.querySelector(".mtgaddrow form");
     if(fr)fr.onsubmit=e=>{e.preventDefault();const t=fr.querySelector("input").value.trim();if(t)mtgSet(mm=>mm.agenda.push({key:"f:"+uid(),kind:"free",ref:"",title:t.slice(0,200),label:"Sujet",done:false}))};
     const right=document.createElement("div");right.className="mtgside";
+    if(ed){
+      const pc=document.createElement("section");pc.className="mtgcard mtgproj";
+      const ps=state.projects.filter(p=>!p.archived||p.id===m.projectId);
+      pc.innerHTML=`<h3>Projet</h3><select aria-label="Projet du compte rendu">${ps.map(p=>`<option value="${esc(p.id)}"${p.id===m.projectId?" selected":""}>${esc(p.name)}</option>`).join("")}</select>`;
+      pc.querySelector("select").onchange=e=>mtgMove(e.target.value);
+      right.appendChild(pc);
+    }
     right.appendChild(peoplePanel(m,ed));
     const go=document.createElement("div");go.className="mtggo";
     go.innerHTML=ed?`<button type="button" class="btn primary">Démarrer la réunion</button>`:"";
@@ -3226,7 +3262,8 @@
       const ul=document.createElement("ul");ul.className="tasks";
       ms.forEach(m=>{const li=document.createElement("li");li.className="task mtgrow";li.dataset.m=m.id;
         const c=k=>(m.items||[]).filter(i=>i.type===k).length;
-        li.innerHTML=`<span class="mtgdate">${esc(mtgDate(m).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"}))}</span><div><div class="ttl">${esc(m.title)}</div><div class="meta"><span class="tag">${esc(MTG_KIND[m.kind]||"Réunion")}${m.theme?" · "+esc(m.theme):""}</span><span class="tag ${m.status==="validated"?"done-t":"wait"}">${m.status==="validated"?"Validé":"Brouillon"}</span>${c("decision")?`<span class="tag">${c("decision")} décision(s)</span>`:""}${c("action")?`<span class="tag">${c("action")} action(s)</span>`:""}${c("close")?`<span class="tag">${c("close")} point(s) levé(s)</span>`:""}</div></div><div class="acts"><button type="button" class="sbtn">Ouvrir</button></div>`;
+        li.innerHTML=`<span class="mtgdate">${esc(mtgDate(m).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"}))}</span><div><div class="ttl">${esc(m.title)}</div><div class="meta"><span class="tag">${esc(MTG_KIND[m.kind]||"Réunion")}${m.theme?" · "+esc(m.theme):""}</span><span class="tag ${m.status==="validated"?"done-t":"wait"}">${m.status==="validated"?"Validé":"Brouillon"}</span>${c("decision")?`<span class="tag">${c("decision")} décision(s)</span>`:""}${c("action")?`<span class="tag">${c("action")} action(s)</span>`:""}${c("close")?`<span class="tag">${c("close")} point(s) levé(s)</span>`:""}</div></div><div class="acts"><button type="button" class="sbtn">Ouvrir</button><button type="button" class="sbtn" data-del aria-label="Supprimer le compte rendu ${esc(m.title)}" title="Supprimer">✕</button></div>`;
+        li.querySelector("[data-del]").onclick=e=>{e.stopPropagation();mtgDelete(m)};
         li.onclick=()=>mtgOpen(m);ul.appendChild(li)});
       g.appendChild(ul);
     }
