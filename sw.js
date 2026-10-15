@@ -1,7 +1,7 @@
 // To do projets : fonctionnement hors connexion de l'application installée.
 // Les données en ligne (Supabase) ne passent jamais par ce cache.
-const CACHE = "todo-projets-v45";
-const CORE = ["./", "./index.html", "./css/app.css", "./js/config.js", "./js/xlsx.js", "./js/app.js", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
+const CACHE = "todo-projets-v46";
+const CORE = ["./", "./index.html", "./css/app.css", "./js/config.js", "./js/xlsx.js", "./js/app.js", "./manifest.webmanifest", "./icons/icon-192-v2.png", "./icons/icon-512-v2.png"];
 const LIB = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@";
 
 self.addEventListener("install", e => {
