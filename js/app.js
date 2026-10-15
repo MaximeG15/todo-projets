@@ -1228,7 +1228,7 @@
       }
       ddMenu("Exporter ▾",[{h:"Documents"},{t:"Récap de la semaine",fn:openRecap},{t:"Plan d'actions (Excel / PDF)",fn:()=>openExport(p,"tasks")},{t:"Points ouverts (Excel / PDF)",fn:()=>openExport(p,"points")}],"ddexp");
       if(p){
-        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[{t:"Renommer le projet",fn:()=>renameProject(p)},{colors:p},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},...(xlOn(p.id)?["-",{h:"Lien Excel des points ouverts"},{t:"Mettre à jour depuis Excel…",fn:()=>xlPick(p)},{t:"Désactiver le lien Excel",fn:()=>xlToggle(p,false)}]:[]),"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
+        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[{t:"Renommer le projet",fn:()=>renameProject(p)},{colors:p},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},...(xlOn(p.id)?["-",{h:"Lien Excel des points ouverts"},{t:"Mettre à jour depuis Excel…",fn:()=>xlPick(p)},{t:"Désactiver le lien Excel",fn:()=>xlToggle(p,false)},{t:"Supprimer tous les points ouverts…",fn:()=>xlPurge(p),cls:"danger"}]:[]),"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
         else ddMenu("⋯",[{t:"Quitter le projet",fn:()=>shareRemove(p.id,cloud.email,true),cls:"danger"}],"ddmore");
       }
     }
@@ -2443,6 +2443,15 @@
       }
     }
     throw new Error("Aucune colonne « Description » trouvée dans le classeur.");
+  }
+  // Repartir de zéro avant un nouvel import : suppression définitive de tous les points du projet (corbeille comprise)
+  async function xlPurge(p){
+    const n=(state.points||[]).filter(x=>x.projectId===p.id).length;
+    if(!n){toast("Aucun point ouvert sur ce projet.");return}
+    if(!await uiConfirm(`Supprimer définitivement les ${n} points ouverts de « ${p.name} » (corbeille comprise) ?\n\nIls ne pourront pas être restaurés depuis l'appli. Vous pourrez ensuite les réimporter avec « Mettre à jour depuis Excel ».`,{ok:`Supprimer les ${n} points`,danger:true}))return;
+    state.points=(state.points||[]).filter(x=>x.projectId!==p.id);
+    if(editingPt)editingPt=null;
+    save();render();toast(`${n} points ouverts supprimés.`);
   }
   function xlPick(p){
     const inp=document.createElement("input");inp.type="file";inp.accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
