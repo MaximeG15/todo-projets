@@ -19,7 +19,7 @@ with sync_playwright() as pw:
     n=lambda: pg.locator(".pt").count()
     ok(n()==75,"sans filtre : 75 points ouverts")
     pg.locator('.chip[data-t="Réception"]').click()
-    heads=pg.eval_on_selector_all(".g-pt h2","e=>e.map(x=>x.firstChild.textContent.trim())")
+    heads=pg.eval_on_selector_all(".g-pt h2","e=>e.map(x=>(x.querySelector('.ft')||x.firstChild).textContent.trim())")
     ok(n()==11 and heads==["Réception"],"filtre Réception : 11 points")
     pg.locator('.chip[data-t="Expédition"]').click()
     ok(n()==25,"Réception + Expédition : 25 points (%d)"%n())

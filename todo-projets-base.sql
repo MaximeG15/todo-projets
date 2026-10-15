@@ -472,3 +472,33 @@ alter policy user_calendar_own on public.user_calendar using (user_id = (select 
 -- ---------- Lien Excel des points ouverts (mise à jour à sens unique Excel vers appli) ----------
 alter table public.open_points add column if not exists excel_ref jsonb;
 comment on column public.open_points.excel_ref is 'Dernières valeurs lues dans le fichier Excel source (mise à jour à sens unique Excel vers appli)';
+
+-- ---------- Sauvegarde automatique hebdomadaire (copie complète en base, schéma non exposé) ----------
+create extension if not exists pg_cron;
+create schema if not exists backup;
+revoke all on schema backup from public, anon, authenticated;
+create table if not exists backup.snapshots (
+  id        bigserial primary key,
+  taken_at  timestamptz not null default now(),
+  data      jsonb not null
+);
+create or replace function backup.take_snapshot() returns bigint
+language plpgsql security definer set search_path = '' as $$
+declare new_id bigint;
+begin
+  insert into backup.snapshots(data) select jsonb_build_object(
+    'projects',        (select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) from public.projects t),
+    'project_members', (select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) from public.project_members t),
+    'tasks',           (select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) from public.tasks t),
+    'task_comments',   (select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) from public.task_comments t),
+    'task_history',    (select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) from public.task_history t),
+    'profiles',        (select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) from public.profiles t),
+    'project_families',(select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) from public.project_families t),
+    'client_requests', (select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) from public.client_requests t),
+    'open_points',     (select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) from public.open_points t),
+    'point_themes',    (select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) from public.point_themes t)
+  ) returning id into new_id;
+  return new_id;
+end $$;
+-- chaque dimanche à 3 h (UTC)
+select cron.schedule('todo-projets-sauvegarde-hebdo', '0 3 * * 0', 'select backup.take_snapshot()');

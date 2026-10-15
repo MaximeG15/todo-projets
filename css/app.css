@@ -529,3 +529,28 @@ body.hasselbar #fab{display:none}
 @media (max-width:640px){#selbar{left:8px;right:8px;width:auto;transform:none;bottom:8px;max-width:none;gap:8px}#selbar .sbacts{flex-basis:100%}#selbar select{max-width:none;flex:1 1 45%}#selbar .btn.primary{width:100%}}
 body.hasselbar .toast{bottom:calc(var(--selbarh,70px) + 28px)}
 body.hasselbar{padding-bottom:calc(var(--selbarh,70px) + 40px)}
+
+/* ---------- Points : thèmes repliables, vue tableau ---------- */
+.foldbar{display:flex;gap:14px;justify-content:flex-end;margin:-6px 0 -4px}
+.g-pt h2{display:flex;align-items:center;gap:10px}
+.g-pt .foldbtn{display:inline-flex;align-items:center;gap:8px;border:0;background:none;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left}
+.g-pt .foldbtn svg{flex:none;transition:transform .15s;transform:rotate(90deg);color:var(--muted)}
+.g-pt .foldbtn[aria-expanded="false"] svg{transform:rotate(0deg)}
+.g-pt .foldbtn > span:last-child{font-size:14px;color:var(--muted);font-weight:500}
+.g-pt.folded{margin-bottom:-8px}
+.pttable{table-layout:auto}
+.pttable td{vertical-align:top}
+.pttable tbody tr{cursor:pointer}
+.pttable tbody tr:hover td,.pttable tbody tr:focus td{background:var(--chip)}
+.pttable td.ptc{min-width:200px;max-width:420px}
+.pttable .clamp{white-space:pre-line;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.pttable td.num{width:44px;color:var(--muted);font-variant-numeric:tabular-nums}
+/* ---------- Mobile : barre d'ajout repliée derrière le bouton + ---------- */
+@media (max-width:760px){
+  body:not(.addopen) #quick,body:not(.addopen) #addslot > form{display:none}
+  .fab svg{transition:transform .15s}
+  body.addopen .fab svg{transform:rotate(45deg)}
+}
+.fab{z-index:20}
+.g-pt h2 .foldbtn{font-weight:inherit;font-size:inherit}
+.g-pt h2 .foldbtn .ft{font-size:inherit;color:var(--ink);font-weight:inherit;margin:0}

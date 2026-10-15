@@ -1297,6 +1297,11 @@
         vr.appendChild(w);
       }
     }
+    if(!query.trim()&&mode==="points"&&p&&livePts().some(x=>x.projectId===p.id)){
+      const seg=document.createElement("div");seg.className="seg";seg.setAttribute("role","group");seg.setAttribute("aria-label","Affichage des points");
+      [["list","Détail"],["table","Tableau"]].forEach(([m,l])=>{const x=document.createElement("button");x.type="button";x.textContent=l;x.setAttribute("aria-pressed",(ui.ptView||"list")===m&&!(m==="table"&&selMode));x.onclick=()=>{ui.ptView=m;saveUi();if(m==="table"){selMode=null;selIds.clear();editingPt=null}render()};seg.appendChild(x)});
+      vl.appendChild(seg);
+    }
     if(!query.trim()&&((mode==="list"&&!agenda)||(mode==="points"&&p))){
       const k=mode==="points"?"o":"t";
       const sb=b(selMode?"Annuler la sélection":"Sélectionner",()=>selMode?selEnd():selStart(k),"selbtn",vr);
@@ -1339,7 +1344,7 @@
       if(fp.length){
         const g=document.createElement("section");g.className="group g-pt";
         g.innerHTML=`<h2>Points ouverts <span>${fp.length}</span></h2>`;
-        const ul=document.createElement("ul");ul.className="tasks";fp.forEach(x=>ul.appendChild(ptRow(x,ptNum(x),!p)));g.appendChild(ul);L.appendChild(g);
+        const ul=document.createElement("ul");ul.className="tasks";fp.forEach(x=>ul.appendChild(ptRow(x,ptLabel(x),!p)));g.appendChild(ul);L.appendChild(g);
       }
       if(fr.length){
         const g=document.createElement("section");g.className="group g-req";
@@ -1756,7 +1761,7 @@
   const selIds=new Set();
   const selRowsSel=()=>selMode==="t"?"#lists li.task:not(.pt):not(.req)[data-id]":"#lists li.pt[data-o]";
   const selRowId=li=>li.dataset.id||li.dataset.o;
-  function selStart(k){selMode=k;selIds.clear();selLast=null;editing=null;editingPt=null;render()}
+  function selStart(k){if(k==="o"&&ui.ptView==="table"){ui.ptView="list";saveUi()}selMode=k;selIds.clear();selLast=null;editing=null;editingPt=null;render()}
   function selEnd(){selMode=null;selIds.clear();render()}
   function selDecorate(li,id){
     const on=selIds.has(id);li.classList.toggle("sel",on);
@@ -2349,6 +2354,9 @@
     const n=await uiPrompt("Nouveau nom du thème",old,{ok:"Renommer"});if(n===null)return;
     renameThemeTo(pid,old,n);
   }
+  // Numéro affiché : celui de l'Excel pour les points liés ; numérotation interne sinon (vide pour un point hors Excel d'un projet lié)
+  const ptLinkedProj=pid=>(state.points||[]).some(x=>x.projectId===pid&&!x.deletedAt&&x.xl&&x.xl.n);
+  function ptLabel(x,n){if(x.xl&&x.xl.n)return String(x.xl.n);return ptLinkedProj(x.projectId)?"":String(n||ptNum(x))}
   function ptNum(x){const l=livePts().filter(y=>y.projectId===x.projectId).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));return l.findIndex(y=>y.id===x.id)+1}
   function ptRow(x,num,showProj){
     const li=document.createElement("li");
@@ -2359,6 +2367,7 @@
     if(showProj&&pp)tags.push(`<span class="tag"><span class="dot" style="background:${pp.color}"></span>${esc(pp.name)}</span>`);
     if(showProj&&x.theme)tags.push(`<span class="tag fam">${hl(x.theme)}</span>`);
     if(ow)tags.push(`<span class="tag who" title="Qui doit répondre">${hl(ow)}</span>`);
+    if(!(x.xl&&x.xl.n)&&ptLinkedProj(x.projectId))tags.push(`<span class="tag" title="Point créé dans l'appli, absent du fichier Excel">Hors Excel</span>`);
     if(x.erp==="oui")tags.push(`<span class="tag erp" title="Sujet ERP">Sujet ERP</span>`);
     if(x.erp==="non")tags.push(`<span class="tag" title="Sujet ERP">Hors ERP</span>`);
     const t=x.taskId?live().find(y=>y.id===x.taskId):null, r=x.requestId?liveReq().find(y=>y.id===x.requestId):null;
@@ -2366,7 +2375,7 @@
     if(r)tags.push(`<button type="button" class="tag reqtag" data-l="r" title="Ouvrir la demande liée">Demande : ${esc(short(r.title))}</button>`);
     if(x.status==="closed"&&x.closedAt)tags.push(`<span class="tag">Levé le ${fmtWhen(x.closedAt).split(" à ")[0]}</span>`);
     li.innerHTML=`<input type="checkbox" class="chk" ${x.status==="closed"?"checked":""} aria-label="Point levé">
-      <div><div class="ttl ptxt"><span class="pnum">${num}.</span> ${hl(x.text)}</div>${tags.length?`<div class="meta">${tags.join("")}</div>`:""}
+      <div><div class="ttl ptxt"><span class="pnum">${num?esc(num)+".":"•"}</span> ${hl(x.text)}</div>${tags.length?`<div class="meta">${tags.join("")}</div>`:""}
       ${x.hypothesis&&editingPt!==x.id?`<div class="phyp"><b>Hypothèse Mecalux :</b> ${hl(x.hypothesis)}</div>`:""}
       ${x.answer&&editingPt!==x.id?`<div class="pans"><b>Réponse :</b> ${hl(x.answer)}</div>`:""}</div>
       <div class="acts"><details class="more"><summary aria-label="Plus d'actions">${ICON_MORE}</summary>
@@ -2463,18 +2472,44 @@
     if(fl.themes.length||fl.erp)L.insertAdjacentHTML("beforeend",`<p class="hint">${open.length} point${open.length>1?"s":""} ouvert${open.length>1?"s":""} affiché${open.length>1?"s":""} sur ${allOpen.length}${fl.themes.length?` · thème${fl.themes.length>1?"s":""} : ${fl.themes.map(k=>esc(k||"Sans thème")).join(", ")}`:""}${fl.erp?" · sujets ERP":""}</p>`);
     if(!open.length)L.insertAdjacentHTML("beforeend",`<div class="empty">${fl.themes.length||fl.erp?"Aucun point ouvert ne correspond aux filtres.":"Tous les points sont levés."}</div>`);
     const groups=new Map();open.forEach(x=>{const k=x.theme||"";if(!groups.has(k))groups.set(k,[]);groups.get(k).push(x)});
-    [...groups.keys()].sort((a,b)=>a===""?1:b===""?-1:a.localeCompare(b,"fr",{sensitivity:"base"})).forEach(k=>{
-      const g=document.createElement("section");g.className="group g-pt";
-      g.innerHTML=`<h2>${k?esc(k):"Sans thème"} <span>${groups.get(k).length}</span>${k?`<button type="button" class="pflink thren">Renommer</button>`:""}</h2>`;
+    // thèmes repliables (mémorisés par projet) et vue tableau compacte
+    ui.ptFold=ui.ptFold&&typeof ui.ptFold==="object"?ui.ptFold:{};
+    const fold=new Set(ui.ptFold[p.id]||[]);
+    const setFold=f=>{ui.ptFold[p.id]=[...f];saveUi();render()};
+    const tableView=ui.ptView==="table"&&!selMode;
+    const sorted=[...groups.keys()].sort((a,b)=>a===""?1:b===""?-1:a.localeCompare(b,"fr",{sensitivity:"base"}));
+    if(sorted.length>1){
+      const fb=document.createElement("div");fb.className="foldbar";
+      fb.innerHTML=`<button type="button" class="pflink" data-f="close">Tout replier</button><button type="button" class="pflink" data-f="open">Tout déplier</button>`;
+      fb.querySelector("[data-f=close]").onclick=()=>setFold(new Set([...fold,...sorted]));
+      fb.querySelector("[data-f=open]").onclick=()=>setFold(new Set([...fold].filter(k=>!sorted.includes(k))));
+      L.appendChild(fb);
+    }
+    const items=(host,list)=>{
+      if(tableView){
+        const w=document.createElement("div");w.className="tscroll";
+        w.innerHTML=`<table class="dtable pttable"><thead><tr><th class="num">N°</th><th>Point ouvert</th><th>Qui doit répondre</th><th>ERP</th><th>Commentaire Mecalux</th><th>Réponse client</th><th>Statut</th></tr></thead><tbody>${list.map(x=>{const n=ptLabel(x,num.get(x.id));return `<tr data-o="${esc(x.id)}" tabindex="0" title="Ouvrir le détail"><td class="num">${esc(n)}</td><td class="ptc"><div class="clamp">${hl(x.text)}</div></td><td>${esc(ownerTxt(x))}</td><td>${x.erp==="oui"?"Oui":x.erp==="non"?"Non":""}</td><td class="ptc"><div class="clamp">${hl(x.hypothesis||"")}</div></td><td class="ptc"><div class="clamp">${hl(x.answer||"")}</div></td><td>${x.status==="closed"?"Levé":"Ouvert"}</td></tr>`}).join("")}</tbody></table>`;
+        w.querySelectorAll("tr[data-o]").forEach(tr=>{const go=()=>{ui.ptView="list";saveUi();editingPt=tr.dataset.o;render();const el=document.querySelector(`.pt[data-o="${tr.dataset.o}"]`);if(el)el.scrollIntoView({block:"center"})};tr.onclick=go;tr.onkeydown=e=>{if(e.key==="Enter")go()}});
+        host.appendChild(w);
+      } else {
+        const ul=document.createElement("ul");ul.className="tasks";list.forEach(x=>ul.appendChild(ptRow(x,ptLabel(x,num.get(x.id)))));host.appendChild(ul);
+      }
+    };
+    sorted.forEach(k=>{
+      const list=groups.get(k), folded=fold.has(k)&&!list.some(x=>x.id===editingPt);
+      const g=document.createElement("section");g.className="group g-pt"+(folded?" folded":"");
+      g.innerHTML=`<h2><button type="button" class="foldbtn" aria-expanded="${!folded}" title="${folded?"Déplier":"Replier"} ce thème">${ICON_CHEV}<span class="ft">${k?esc(k):"Sans thème"}</span> <span>${list.length}</span></button>${k&&!folded?`<button type="button" class="pflink thren">Renommer</button>`:""}</h2>`;
+      g.querySelector(".foldbtn").onclick=()=>{const f=new Set(fold);if(f.has(k))f.delete(k);else f.add(k);setFold(f)};
       const rb=g.querySelector(".thren");if(rb)rb.onclick=()=>renameTheme(p.id,k);
-      const ul=document.createElement("ul");ul.className="tasks";groups.get(k).forEach(x=>ul.appendChild(ptRow(x,num.get(x.id))));g.appendChild(ul);L.appendChild(g);
+      if(!folded)items(g,list);
+      L.appendChild(g);
     });
     if(closed.length){
       const btn=document.createElement("button");btn.type="button";btn.className="showdone";btn.setAttribute("aria-expanded",!!ui.showClosedPts);
       btn.innerHTML=`${ICON_CHEV}${ui.showClosedPts?"Masquer":"Afficher"} ${closed.length>1?`les ${closed.length} points levés`:"le point levé"}`;
       btn.onclick=()=>{ui.showClosedPts=!ui.showClosedPts;saveUi();render()};
       L.appendChild(btn);
-      if(ui.showClosedPts){const g=document.createElement("section");g.className="group g-pt";g.innerHTML=`<h2>Points levés <span>${closed.length}</span></h2>`;const ul=document.createElement("ul");ul.className="tasks";closed.forEach(x=>ul.appendChild(ptRow(x,num.get(x.id))));g.appendChild(ul);L.appendChild(g)}
+      if(ui.showClosedPts){const g=document.createElement("section");g.className="group g-pt";g.innerHTML=`<h2>Points levés <span>${closed.length}</span></h2>`;items(g,closed);L.appendChild(g)}
     }
   }
   // Export des points ouverts (Excel / PDF) à transmettre au client
@@ -2483,7 +2518,7 @@
       const all=livePts().filter(x=>x.projectId===p.id).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
       const num=new Map(all.map((x,i)=>[x.id,i+1]));
       const rows=all.filter(x=>x.status!=="closed"||o.closed).sort((a,b)=>((a.theme||"￿").localeCompare(b.theme||"￿","fr",{sensitivity:"base"}))||((a.status==="closed")-(b.status==="closed"))||(num.get(a.id)-num.get(b.id)));
-      return {p,rows:rows.map(x=>({x,n:num.get(x.id),theme:x.theme||"Sans thème",owner:ownerTxt(x),st:x.status==="closed"?"Levé":"Ouvert"}))};
+      return {p,rows:rows.map(x=>({x,n:ptLabel(x,num.get(x.id)),theme:x.theme||"Sans thème",owner:ownerTxt(x),st:x.status==="closed"?"Levé":"Ouvert"}))};
     });
   }
   const ptBase=ps=>`points-ouverts-${ps.length>1?"projets":slug(ps[0].name)}-${iso(today())}`;
@@ -2493,7 +2528,7 @@
     const cols=[multi&&["Projet",22],["N°",6],["Date d'ouverture",13],["Thème",20],["Point ouvert",60],["Hypothèse Mecalux",45],o.ans&&["Réponse / décision",45],["Statut",10],o.owner&&["Qui doit répondre",22],["Sujet ERP ?",10]].filter(Boolean);
     const rows=[[{v:ptTitle(ps),s:1}],[{v:`Situation au ${new Date().toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}`,s:2}],[],cols.map(c=>({v:c[0],s:3}))];
     sets.forEach(st=>st.rows.forEach(r=>{
-      const v={"Projet":st.p.name,"N°":r.n,"Date d'ouverture":r.x.createdAt?new Date(r.x.createdAt):"","Thème":r.theme,"Point ouvert":r.x.text,"Hypothèse Mecalux":r.x.hypothesis||"","Qui doit répondre":r.owner,"Statut":r.st,"Réponse / décision":r.x.answer||"","Sujet ERP ?":r.x.erp==="oui"?"OUI":r.x.erp==="non"?"NON":""};
+      const v={"Projet":st.p.name,"N°":r.n===""?"":(isFinite(+r.n)?+r.n:r.n),"Date d'ouverture":r.x.createdAt?new Date(r.x.createdAt):"","Thème":r.theme,"Point ouvert":r.x.text,"Hypothèse Mecalux":r.x.hypothesis||"","Qui doit répondre":r.owner,"Statut":r.st,"Réponse / décision":r.x.answer||"","Sujet ERP ?":r.x.erp==="oui"?"OUI":r.x.erp==="non"?"NON":""};
       rows.push(cols.map(c=>({v:v[c[0]],s:c[0]==="Statut"?(r.st==="Levé"?9:6):c[0]==="Date d'ouverture"?5:4})));
     }));
     const blob=buildXlsx("Points ouverts",rows,cols.map(c=>c[1]),4);
@@ -2507,7 +2542,7 @@
     const body=sets.map(s=>{
       const nOpen=s.rows.filter(r=>r.st==="Ouvert").length, nClosed=s.rows.length-nOpen;
       const byTheme=new Map();s.rows.forEach(r=>{if(!byTheme.has(r.theme))byTheme.set(r.theme,[]);byTheme.get(r.theme).push(r)});
-      const tables=[...byTheme].map(([th,rs])=>`<h3>${esc(th)}</h3><table><thead><tr><th class="n">N°</th><th class="pc">Point ouvert</th>${o.owner?"<th class=\"ow\">Qui doit répondre</th>":""}<th class="st">Statut</th>${o.ans?"<th>Réponse / décision</th>":""}</tr></thead><tbody>${rs.map(r=>`<tr><td class="n">${r.n}</td><td class="pre">${esc(r.x.text)}${r.x.hypothesis?`<div class="hyp"><b>Hypothèse Mecalux :</b> ${esc(r.x.hypothesis)}</div>`:""}${r.x.erp==="oui"?`<div class="erp">Sujet ERP</div>`:""}</td>${o.owner?`<td>${esc(r.owner)}</td>`:""}<td class="st ${r.st==="Levé"?"done":"open"}">${r.st}</td>${o.ans?`<td class="pre">${esc(r.x.answer||"")}</td>`:""}</tr>`).join("")}</tbody></table>`).join("");
+      const tables=[...byTheme].map(([th,rs])=>`<h3>${esc(th)}</h3><table><thead><tr><th class="n">N°</th><th class="pc">Point ouvert</th>${o.owner?"<th class=\"ow\">Qui doit répondre</th>":""}<th class="st">Statut</th>${o.ans?"<th>Réponse / décision</th>":""}</tr></thead><tbody>${rs.map(r=>`<tr><td class="n">${esc(r.n)}</td><td class="pre">${esc(r.x.text)}${r.x.hypothesis?`<div class="hyp"><b>Hypothèse Mecalux :</b> ${esc(r.x.hypothesis)}</div>`:""}${r.x.erp==="oui"?`<div class="erp">Sujet ERP</div>`:""}</td>${o.owner?`<td>${esc(r.owner)}</td>`:""}<td class="st ${r.st==="Levé"?"done":"open"}">${r.st}</td>${o.ans?`<td class="pre">${esc(r.x.answer||"")}</td>`:""}</tr>`).join("")}</tbody></table>`).join("");
       return `<section><h2 style="border-color:${s.p.color}">${esc(s.p.name)}</h2><p class="sub">${nOpen} point${nOpen>1?"s":""} ouvert${nOpen>1?"s":""}${nClosed?` · ${nClosed} levé${nClosed>1?"s":""}`:""}</p>${s.rows.length?tables:`<p class="mut">Aucun point ouvert.</p>`}</section>`;
     }).join("");
     const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(ptBase(ps))}</title><style>
@@ -2939,7 +2974,15 @@
   $("#calremove").onclick=removeCal;
   $("#calurl").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();saveCalCfg()}});
   $("#menubtn").onclick=()=>{const o=$("#side").classList.toggle("open");$("#menubtn").setAttribute("aria-expanded",o)};
-  $("#fab").onclick=()=>{window.scrollTo({top:0,behavior:"smooth"});setTimeout(()=>$("#qt").focus(),250)};
+  // Mobile : la barre d'ajout est repliée ; le bouton + l'ouvre (et la referme)
+  $("#fab").onclick=()=>{
+    const open=!document.body.classList.contains("addopen");
+    document.body.classList.toggle("addopen",open);
+    $("#fab").setAttribute("aria-expanded",open);$("#fab").setAttribute("aria-label",open?"Fermer la saisie":"Ajouter");
+    if(!open)return;
+    window.scrollTo({top:0,behavior:"smooth"});
+    setTimeout(()=>{const q=$("#quick");const el=q&&!q.hidden?$("#qt"):document.querySelector("#addslot input[type=text]");if(el)el.focus()},250);
+  };
   $("#gsignup").onsubmit=signup;
   $("#tosignup").onclick=e=>{e.preventDefault();showGate("signup")};
   $("#gsignupbtn").onclick=()=>{if(cloudReady())showGate("signup")};

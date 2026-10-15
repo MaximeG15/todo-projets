@@ -45,7 +45,7 @@ with sync_playwright() as pw:
     answers.append("Interface Sage X3");pg.locator('#ptadd [data-q="theme"]').select_option("__new");pg.wait_for_timeout(100);pg.locator('#ptadd [data-q="owner"]').select_option("tiers")
     pg.locator('#ptadd [data-q="text"]').fill("Format du fichier d'articles ?");pg.keyboard.press("Enter")
     ok(len(pts())==5,"ajout un par un")
-    heads=pg.eval_on_selector_all(".g-pt h2","e=>e.map(x=>x.firstChild.textContent.trim())")
+    heads=pg.eval_on_selector_all(".g-pt h2","e=>e.map(x=>(x.querySelector('.ft')||x.firstChild).textContent.trim())")
     ok(heads==["Interface Sage X3","Réception"],"regroupement par thème %s"%heads)
     ok("1." in pg.locator(".g-pt").nth(1).inner_text(),"numérotation")
     pg.screenshot(path=S+"pts.png")

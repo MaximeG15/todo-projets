@@ -2,6 +2,14 @@ import os,sys;sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 from helpers import APP,OUT,on_dialog
 import json, datetime, openpyxl
 from playwright.sync_api import sync_playwright
+def open_xl_menu(pg,label="Mettre à jour depuis Excel"):
+    # ouvre le menu ⋯ (nouvel essai si un rendu différé l'a refermé)
+    for _ in range(4):
+        if not pg.locator(".ddmore[open]").count():pg.locator(".ddmore summary").click()
+        try:
+            pg.locator(".ddmore .menu button",has_text=label).wait_for(state="visible",timeout=1500);return pg.locator(".ddmore .menu button",has_text=label)
+        except Exception:pg.wait_for_timeout(200)
+    return pg.locator(".ddmore .menu button",has_text=label)
 errs=[]
 def ok(c,m):
     print(("OK   " if c else "FAIL ")+m)
@@ -33,9 +41,9 @@ with sync_playwright() as pw:
     pg.locator(".ddmore summary").click()
     ok(pg.locator(".ddmore .menu",has_text="Excel").count()==0,"fonction invisible par défaut")
     pg.keyboard.press("Escape");pg.locator("#search").fill("/excel");pg.locator("#search").press("Enter");pg.wait_for_timeout(200)
-    pg.locator(".ddmore summary").click()
-    ok(pg.locator(".ddmore .menu button",has_text="Mettre à jour depuis Excel").count()==1,"commande cachée /excel : menu disponible")
-    with pg.expect_file_chooser() as fc: pg.locator(".ddmore .menu button",has_text="Mettre à jour depuis Excel").click()
+    btn=open_xl_menu(pg)
+    ok(btn.count()==1,"commande cachée /excel : menu disponible")
+    with pg.expect_file_chooser() as fc: btn.click()
     fc.value.set_files(v1);pg.wait_for_timeout(600)
     print("   ",seen[-1].replace("\n"," | ")[:400])
     ok("3 points rapprochés" in seen[-1] and "1 nouveau point" in seen[-1],"1re synchro : 3 points rapprochés, 1 nouveau")
@@ -47,8 +55,8 @@ with sync_playwright() as pw:
     pg.evaluate("()=>{}")
     s=st();[x for x in s["points"] if x["id"]=="b"][0]["hypothesis"]="Hypothèse revue dans l'appli"
     pg.evaluate("s=>{localStorage.setItem('todo-projets',JSON.stringify(s))}",s);pg.reload();pg.wait_for_timeout(300)
-    pg.locator(".pbtn",has_text="Projet Alpha").click();pg.locator(".ddmore summary").click()
-    with pg.expect_file_chooser() as fc: pg.locator(".ddmore .menu button",has_text="Mettre à jour depuis Excel").click()
+    pg.locator(".pbtn",has_text="Projet Alpha").click();btn=open_xl_menu(pg)
+    with pg.expect_file_chooser() as fc: btn.click()
     fc.value.set_files(v2);pg.wait_for_timeout(600)
     print("   ",seen[-1].replace("\n"," | ")[:500])
     ok(pt("a")["status"]=="closed" and pt("a")["answer"]=="Format 100x150 validé","2e synchro : statut et réponse modifiés dans l'Excel repris")
@@ -71,9 +79,9 @@ with sync_playwright() as pw:
     for x in s["points"]:
         if x.get("xl"): x["xl"].pop("ver",None); x["xl"].pop("n",None)
     pg.evaluate("s=>{localStorage.setItem('todo-projets',JSON.stringify(s))}",s);pg.reload();pg.wait_for_timeout(300)
-    pg.locator(".pbtn",has_text="Projet Alpha").click();pg.locator(".ddmore summary").click()
+    pg.locator(".pbtn",has_text="Projet Alpha").click();btn=open_xl_menu(pg)
     n0=len(seen)
-    with pg.expect_file_chooser() as fc: pg.locator(".ddmore .menu button",has_text="Mettre à jour depuis Excel").click()
+    with pg.expect_file_chooser() as fc: btn.click()
     fc.value.set_files(v3);pg.wait_for_timeout(800)
     conf=[m for m in seen[n0:] if "diffère" in m]
     print("   ",(conf[0] if conf else "pas d'écart").replace("\n"," | ")[:400])
@@ -83,12 +91,11 @@ with sync_playwright() as pw:
     ok(all(x["xl"].get("n") for x in st()["points"] if x.get("xl") and not x.get("deletedAt")),"N° mémorisé sur les points liés")
     # 4e lecture : N° conservé même si la description change complètement
     v4=xlsx("v4.xlsx",[[1,d,"Réception","Question entièrement réécrite",None,None,"Clôturé",None,"NON"],[2,d,"Expédition","Nombre de quais de chargement à prévoir ?","Deux quais",None,"Ouvert","Client",None],[3,d,"Expédition","Gestion des numéros de série à l'expédition (scan obligatoire)",None,None,None,None,"OUI"]])
-    pg.locator(".ddmore summary").click()
-    with pg.expect_file_chooser() as fc: pg.locator(".ddmore .menu button",has_text="Mettre à jour depuis Excel").click()
+    btn=open_xl_menu(pg)
+    with pg.expect_file_chooser() as fc: btn.click()
     fc.value.set_files(v4);pg.wait_for_timeout(800)
     ok(pt("a")["text"]=="Question entièrement réécrite" and not any("nouveau" in m for m in seen[-1:]),"N° identique : même point malgré une description réécrite")
-    pg.locator(".pbtn",has_text="Projet Alpha").click();pg.locator(".ddmore summary").click()
-    pg.locator(".ddmore .menu button",has_text="Supprimer tous les points").click();pg.wait_for_timeout(300)
+    pg.locator(".pbtn",has_text="Projet Alpha").click();open_xl_menu(pg,"Supprimer tous les points").click();pg.wait_for_timeout(300)
     ok(not [x for x in st()["points"] if x["projectId"]=="p"],"suppression de tous les points du projet")
     pg.screenshot(path=OUT+"excel_link.png")
     b.close()

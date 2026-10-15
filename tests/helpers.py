@@ -2,7 +2,22 @@
 import os, pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-APP = (ROOT / "index.html").as_uri()            # l'application, ouverte en file://
+import functools, http.server, threading
+
+class _Quiet(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_GET(self):
+        if self.path.split("?")[0].endswith("/sw.js"):   # pas de service worker pendant les tests
+            self.send_error(404); return
+        super().do_GET()
+
+def _serve():
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(_Quiet, directory=str(ROOT)))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv.server_address[1]
+
+# l'application est servie en http local (le stockage du navigateur est plus fiable qu'en file://)
+APP = f"http://127.0.0.1:{_serve()}/index.html"
 FAKE = str(pathlib.Path(__file__).resolve().parent / "fake_supabase.js")  # faux serveur Supabase
 OUT = str(pathlib.Path(__file__).resolve().parent / "out") + os.sep          # captures et exports (non versionnés)
 os.makedirs(OUT, exist_ok=True)
