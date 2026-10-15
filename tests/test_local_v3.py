@@ -64,7 +64,7 @@ with sync_playwright() as pw:
     row=pg.locator('.task[data-id="d"]'); row.locator("details.more summary").click(); row.locator('[data-a="wait"]').click()
     t=task("d")[0]; ok(t["status"]=="waiting" and t["waitingFor"]=="Validation client","menu Mettre en attente…")
     # reprendre
-    pg.locator('.task[data-id="d"] [data-a="doing"]').click()
+    pg.locator('.task[data-id="d"] .sbtn[data-a="doing"]').click()
     t=task("d")[0]; ok(t["status"]=="todo" and t["waitingFor"]=="","Reprendre remet à faire")
     # --- édition : statut + attente + historique
     pg.locator('.task[data-id="b"] .ttl').click()
@@ -81,7 +81,7 @@ with sync_playwright() as pw:
     ok(any("devient « En attente »" in x for x in items),"affichage de l'historique")
     pg.locator('.task[data-id="b"] [data-k="ko"]').click()
     # --- Aujourd'hui : relance g (due hier) visible
-    pg.locator(".vbtn",has_text="Aujourd'hui").click()
+    pg.locator(".vbtn",has_text="Ma journée").click()
     ok(pg.locator('.task[data-id="g"]').count()==1,"relance échue visible dans Aujourd'hui")
     ok(pg.locator('.task[data-id="c"]').count()==0,"attente future absente d'Aujourd'hui")
     # --- Tableau de bord
@@ -123,7 +123,7 @@ with sync_playwright() as pw:
     pg.locator("#expdlg .btn.ghost").click()
     # mobile
     pg.set_viewport_size({"width":390,"height":844})
-    pg.locator(".vbtn",has_text="Tableau de bord").click(); pg.wait_for_timeout(200)
+    pg.locator("#bnav [data-b=menu]").click();pg.locator(".vbtn",has_text="Tableau de bord").click(); pg.wait_for_timeout(200)
     ok(pg.evaluate("document.documentElement.scrollWidth")<=390,"mobile : pas de débordement (dash)")
     pg.screenshot(path=S+"v3_dash_m.png",full_page=True)
     b.close()

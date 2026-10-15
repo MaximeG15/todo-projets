@@ -22,6 +22,7 @@ with sync_playwright() as pw:
     pg.goto(APP);pg.wait_for_timeout(300)
     order=lambda: [c["id"] for c in json.loads(pg.evaluate("localStorage.getItem('todo-projets')"))["tasks"][0]["checklist"]]
     # vue liste : glisser la 2e étape au-dessus de la 1re
+    pg.locator('.task[data-id="a"] .stepstag').click()
     lis=pg.locator('.task[data-id="a"] ul.steps li')
     lis.nth(1).hover()
     drag(pg,lis.nth(1).locator(".grip"),lis.nth(0))
@@ -47,6 +48,7 @@ with sync_playwright() as pw:
     m=b.new_context(viewport={"width":390,"height":844},has_touch=True,is_mobile=True).new_page()
     m.add_init_script("localStorage.setItem('todo-projets',%s);localStorage.setItem('todo-mode','local');localStorage.setItem('todo-projets-ui','{}')"%json.dumps(json.dumps(data)))
     m.goto(APP);m.wait_for_timeout(300)
+    m.locator('.task[data-id="a"] .stepstag').tap();m.wait_for_timeout(150)
     g=m.locator('.task[data-id="a"] ul.steps li').nth(2).locator(".grip");g.scroll_into_view_if_needed();m.wait_for_timeout(100);bb=g.bounding_box();t0=m.locator('.task[data-id="a"] ul.steps li').nth(0).bounding_box()
     cdp=m.context.new_cdp_session(m)
     x=bb["x"]+bb["width"]/2;y=bb["y"]+bb["height"]/2

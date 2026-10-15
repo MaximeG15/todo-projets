@@ -892,6 +892,24 @@
     return p?`${p.first} ${p.last}`:v;
   }
   const whoName=t=>nameOf((t.who||"").trim());
+  const initialsOf=n=>String(n||"").replace(/@.*/,"").split(/[\s._-]+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("")||"?";
+  const AV_COLORS=["#3E7CB1","#2F7D5B","#8E5BB5","#B8860B","#1F8A8A","#C0396B","#4A6272","#5C7CFA"];
+  const avColor=n=>{let h=0;for(const c of String(n||""))h=(h*31+c.charCodeAt(0))>>>0;return AV_COLORS[h%AV_COLORS.length]};
+  // Panneau de détail à droite : le formulaire d'édition reste dans la ligne (même logique), affiché en panneau latéral
+  function drawerize(f,kicker,title,onClose){
+    f.classList.add("drawer");f.setAttribute("role","dialog");f.setAttribute("aria-label","Détail : "+title);
+    const h=document.createElement("div");h.className="dhead full";
+    h.innerHTML=`<div class="dkick">${kicker}</div><button type="button" class="dclose" aria-label="Fermer le détail">✕</button>`;
+    h.querySelector(".dclose").onclick=onClose;
+    // libellés visibles au-dessus des champs (les références aux champs sont déjà prises : l'enveloppe ne change rien au code)
+    [...f.children].forEach(el=>{
+      if(!/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName))return;
+      const lb=el.getAttribute("aria-label");if(!lb)return;
+      const w=document.createElement("label");w.className="dfield"+(el.tagName==="SELECT"||el.type==="date"?"":" wide");
+      w.innerHTML=`<span>${esc(lb)}</span>`;el.replaceWith(w);w.appendChild(el);
+    });
+    f.prepend(h);
+  }
   // Attribution : un nom ou une adresse correspondant à un membre du projet est enregistré sous son e-mail
   const memberEmails=pid=>{
     if(MODE!=="cloud")return [];
@@ -1122,7 +1140,7 @@
     const sctx=view+"|"+mode+"|"+(query.trim()?"q":"");
     if(selMode&&(sctx!==selCtx||!((selMode==="t"&&mode==="list")||(selMode==="o"&&mode==="points"))||query.trim())){selMode=null;selIds.clear()}
     selCtx=sctx;$("#lists").classList.toggle("selmode",!!selMode);
-    Promise.resolve().then(selBar);
+    Promise.resolve().then(()=>{selBar();document.body.classList.toggle("hasdrawer",!!document.querySelector("#lists .edit.drawer"))});
     const alive=live();
     const open=alive.filter(t=>t.status!=="done"&&!isArch(t.projectId));
     const nToday=open.filter(t=>isLate(t)||isToday(t)||needsRelance(t)).length;
@@ -1137,9 +1155,20 @@
     const V=$("#views"); V.innerHTML="";
     const vb=(id,label,n,act,fn)=>{const x=document.createElement("button");x.type="button";x.className="vbtn";x.setAttribute("aria-current",act);x.innerHTML=`<span>${label}</span><span class="n">${n}</span>`;x.onclick=fn;V.appendChild(x)};
     const go=(mode,scope)=>()=>{query="";$("#search").value="";ui.mode=mode;ui.scope=scope;saveUi();view="all";editing=null;shareOpen=false;weekStart=null;closeMenu();render()};
-    vb("today","Aujourd'hui",nToday,view==="all"&&mode==="list"&&ui.scope==="today",go("list","today"));
+    vb("today","Ma journée",nToday,view==="all"&&mode==="list"&&ui.scope==="today",go("list","today"));
     vb("agenda","Agenda de la semaine",nWeek,view==="all"&&mode==="agenda",go("agenda","all"));
     vb("all","Toutes les tâches",open.length,view==="all"&&mode==="list"&&ui.scope==="all"&&ui.who!=="__me",()=>{if(ui.who==="__me")ui.who="";go("list","all")()});
+    // barre de navigation du téléphone
+    {const bn=$("#bnav");if(bn){
+      const mine=MODE==="cloud";
+      bn.querySelector('[data-b="mine"] .bl').textContent=mine?"Mes tâches":"Toutes";
+      const act={today:view==="all"&&mode==="list"&&ui.scope==="today",mine:view==="all"&&mode==="list"&&ui.scope==="all"&&(mine?ui.who==="__me":true),agenda:mode==="agenda",menu:false};
+      bn.querySelectorAll("[data-b]").forEach(x=>{const k=x.dataset.b;x.setAttribute("aria-current",!!act[k]);
+        x.onclick=k==="menu"?()=>{const sd=$("#side");const o=sd.classList.toggle("open");$("#menubtn").setAttribute("aria-expanded",o);window.scrollTo({top:0,behavior:"smooth"})}
+          :k==="today"?()=>{if(ui.who==="__me")ui.who="";go("list","today")()}
+          :k==="agenda"?()=>{go("agenda","all")()}
+          :()=>{ui.who=mine?"__me":"";go("list","all")()}});
+    }}
     if(MODE==="cloud")vb("mine","Mes tâches",open.filter(isMyTask).length,view==="all"&&mode==="list"&&ui.scope==="all"&&ui.who==="__me",()=>{ui.who="__me";go("list","all")()});
     vb("req","Demandes client",nReq||"",view==="all"&&mode==="requests",go("requests","all"));
     vb("dash","Tableau de bord","",mode==="dash",go("dash","all"));
@@ -1215,12 +1244,36 @@
       title="Corbeille";
       sub=nTrash?`${nTrash} élément${nTrash>1?"s":""} supprimé${nTrash>1?"s":""}`:"La corbeille est vide";
     } else {
-      title=p?`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`:(ui.scope==="today"?"Aujourd'hui":ui.who==="__me"?"Mes tâches":"Toutes les tâches");
+      title=p?`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`:(ui.scope==="today"?"Ma journée":ui.who==="__me"?"Mes tâches":"Toutes les tâches");
       const poolOpen=alive.filter(t=>t.status!=="done"&&(p?t.projectId===p.id:!isArch(t.projectId)));
       const pToday=poolOpen.filter(t=>isToday(t)).length, pLate=poolOpen.filter(isLate).length, pWait=poolOpen.filter(t=>t.status==="waiting").length;
       sub=`${cap(longDay(today()))} · ${poolOpen.length} tâche${poolOpen.length>1?"s":""} ouverte${poolOpen.length>1?"s":""}`+(pToday?`, ${pToday} pour aujourd'hui`:"")+(pLate?`, ${pLate} en retard`:"")+(pWait?`, ${pWait} en attente`:"");
     }
+    {const fa=$("#fav");if(fa){const nm=MODE==="cloud"&&cloud.email?nameOf(cloud.email):"";fa.hidden=!nm;fa.textContent=initialsOf(nm)}}
     $("#ptitle").innerHTML=title; $("#psub").textContent=sub;
+    // ---- Indicateurs du projet (bandeau sous le titre) ----
+    const K=$("#kpis");K.innerHTML="";K.hidden=true;
+    if(p&&!query.trim()&&["list","agenda","requests"].includes(mode)){
+      const po=alive.filter(t=>t.projectId===p.id&&t.status!=="done");
+      const pts=livePts().filter(o=>o.projectId===p.id&&o.status!=="closed"), cli=pts.filter(o=>o.owner==="client").length;
+      const nxt=po.filter(t=>t.due&&!isLate(t)).sort((a,b)=>a.due<b.due?-1:1)[0];
+      const k=(v,l,cls)=>`<div class="hk${cls?" "+cls:""}"><b>${esc(v)}</b><span>${esc(l)}</span></div>`;
+      K.innerHTML=k(po.length,po.length>1?"tâches ouvertes":"tâche ouverte")+k(po.filter(isLate).length,"en retard",po.some(isLate)?"bad":"")+k(po.filter(t=>t.status==="waiting").length,"en attente","wait")
+        +(pts.length?k(pts.length,(pts.length>1?"points ouverts":"point ouvert")+(cli?` · ${cli} côté client`:"")):"")
+        +(nxt?k(shortDay(nxt.due),"prochaine échéance"):"");
+      K.hidden=false;
+    } else if(p&&!query.trim()&&mode==="points"){
+      const ps=livePts().filter(o=>o.projectId===p.id), no=ps.filter(o=>o.status!=="closed"), lev=ps.length-no.length;
+      if(ps.length){
+        const c=no.filter(o=>o.owner==="client").length, m=no.filter(o=>o.owner==="mecalux").length, t=no.filter(o=>o.owner==="tiers").length, nd=no.length-c-m-t;
+        const pc=n=>(100*n/ps.length).toFixed(1)+"%";
+        const xl=xlOn(p.id)&&ptLinkedProj(p.id)&&ui.xlLast&&ui.xlLast[p.id]?new Date(ui.xlLast[p.id]):null;
+        K.innerHTML=`<div class="ptbar"><div class="bar" role="img" aria-label="Répartition des points : ${c} côté client, ${m} côté Mecalux, ${t} côté tiers, ${nd} sans interlocuteur, ${lev} levés"><span class="b-cli" style="width:${pc(c)}"></span><span class="b-mec" style="width:${pc(m)}"></span><span class="b-tie" style="width:${pc(t)}"></span><span class="b-nd" style="width:${pc(nd)}"></span><span class="b-ok" style="width:${pc(lev)}"></span></div>
+          <div class="lg">${c?`<span><i class="b-cli"></i><b>${c}</b> à répondre par le client</span>`:""}${m?`<span><i class="b-mec"></i><b>${m}</b> côté Mecalux</span>`:""}${t?`<span><i class="b-tie"></i><b>${t}</b> côté tiers</span>`:""}${nd?`<span><i class="b-nd"></i><b>${nd}</b> sans interlocuteur</span>`:""}<span><i class="b-ok"></i><b>${lev}</b> levé${lev>1?"s":""}</span></div></div>
+          ${xl?`<span class="xlbadge">Lié à l'Excel · mis à jour le ${xl.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})} à ${xl.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</span>`:""}`;
+        K.hidden=false;
+      }
+    }
 
     // ---- Haut à droite : actions sur le projet (Partager, Exporter, ⋯) ----
     const tools=$("#ptools"); tools.innerHTML="";
@@ -1246,6 +1299,7 @@
         sb.innerHTML=`${who.length>1?`<span class="avs">${who.slice(0,4).map((e,i)=>`<span style="background:${AVC[i%AVC.length]}" title="${esc(nameOf(e))}">${esc(initials(nameOf(e)))}</span>`).join("")}${who.length>4?`<span class="more4">+${who.length-4}</span>`:""}</span>`:""}${shareOpen?"Fermer le partage":"Partager"}`;
         sb.title=who.length>1?"Partagé avec "+m.members.map(nameOf).join(", "):"Partager ce projet avec un collègue";
       }
+      if(p&&mode==="points"&&xlOn(p.id)&&(MODE!=="cloud"||isOwner(p.id)))b("Mettre à jour depuis Excel",()=>xlPick(p),"");
       ddMenu("Exporter ▾",[{h:"Documents"},{t:"Récap de la semaine",fn:openRecap},{t:"Plan d'actions (Excel / PDF)",fn:()=>openExport(p,"tasks")},{t:"Points ouverts (Excel / PDF)",fn:()=>openExport(p,"points")}],"ddexp");
       if(p){
         if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[{t:"Renommer le projet",fn:()=>renameProject(p)},{colors:p},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},...(xlOn(p.id)?["-",{h:"Lien Excel des points ouverts"},{t:"Mettre à jour depuis Excel…",fn:()=>xlPick(p)},{t:"Désactiver le lien Excel",fn:()=>xlToggle(p,false)},{t:"Supprimer tous les points ouverts…",fn:()=>xlPurge(p),cls:"danger"}]:[]),"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
@@ -1273,9 +1327,9 @@
         vl.appendChild(wn);
       }
       if(mode==="list"){
-        const gb=document.createElement("div");gb.className="seg";gb.setAttribute("role","group");gb.setAttribute("aria-label","Grouper par");
-        gb.innerHTML=`<span class="seglbl">Grouper par</span>`;
-        [["due","Échéance"],["family","Famille"]].forEach(([k,l])=>{const x=document.createElement("button");x.type="button";x.textContent=l;x.setAttribute("aria-pressed",(ui.groupBy||"due")===k);x.onclick=()=>{ui.groupBy=k;saveUi();render()};gb.appendChild(x)});
+        const gb=document.createElement("label");gb.className="whobox";
+        gb.innerHTML=`Grouper par <select aria-label="Grouper par"><option value="due">Échéance</option><option value="family">Famille</option></select>`;
+        const gs=gb.querySelector("select");gs.value=ui.groupBy||"due";gs.onchange=()=>{ui.groupBy=gs.value;saveUi();render()};
         vr.appendChild(gb);
       }
       if(agenda){
@@ -1629,9 +1683,10 @@
     cur.checklist=(cur.checklist||[]).map(c=>c.id===sid?{...c,done:!c.done}:c);
     save();render();
   }
+  const stepsOpen=new Set(); // tâches dont les étapes sont dépliées dans la liste
   function row(t,showProj,bucket){
     const li=document.createElement("li");
-    li.className=`task${t.status==="done"?" done":""}`;
+    li.className=`task${t.status==="done"?" done":""}${isLate(t)?" late":""}${editing===t.id?" open":""}${stepsOpen.has(t.id)?" showsteps":""}`;
     li.dataset.id=t.id;
     const p=proj(t.projectId);
     const steps=Array.isArray(t.checklist)?t.checklist:[];
@@ -1647,11 +1702,11 @@
       else if(isToday(t))tags.push(`<span class="tag today">Aujourd'hui</span>`);
       else if(bucket!=="tomorrow")tags.push(`<span class="tag">${shortDay(t.due)}</span>`);
     } else if(t.due)tags.push(`<span class="tag">${shortDay(t.due)}</span>`);
-    if(steps.length)tags.push(`<span class="tag" title="Étapes terminées">${steps.filter(c=>c.done).length}/${steps.length} étapes</span>`);
+    if(steps.length)tags.push(`<button type="button" class="tag stepstag" data-a="steps" aria-expanded="${stepsOpen.has(t.id)}" title="${stepsOpen.has(t.id)?"Masquer":"Afficher"} les étapes">${steps.filter(c=>c.done).length}/${steps.length} étapes</button>`);
     if(t.repeat&&t.repeat.unit)tags.push(`<span class="tag" title="Tâche récurrente"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l3 3-3 3"></path><path d="M4 11V9a4 4 0 0 1 4-4h12"></path><path d="M7 22l-3-3 3-3"></path><path d="M20 13v2a4 4 0 0 1-4 4H4"></path></svg>${repLabel(t.repeat)}</span>`);
     if(t.priority==="haute")tags.push(`<span class="tag hi">Priorité haute</span>`);
     if(t.priority==="basse")tags.push(`<span class="tag">Priorité basse</span>`);
-    if(t.who)tags.push(`<span class="tag who${isMyTask(t)?" me":""}" title="Responsable">${hl(whoName(t))}</span>`);
+    if(t.who)tags.push(`<span class="tag who av${isMyTask(t)?" me":""}" title="Responsable : ${esc(whoName(t))}" style="--av:${avColor(whoName(t))}"><span class="avi" aria-hidden="true">${esc(initialsOf(whoName(t)))}</span><span class="avn">${hl(whoName(t))}</span></span>`);
     const rq=reqOf(t); if(rq)tags.push(`<button type="button" class="tag reqtag" data-a="req" title="Ouvrir la demande client">Demande : ${esc(short(rq.title))}</button>`);
     if(nCom)tags.push(`<button type="button" class="tag" data-a="edit" title="Voir les commentaires" style="border:0;cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg>${nCom} commentaire${nCom>1?"s":""}</button>`);
     li.innerHTML=`<input type="checkbox" class="chk" ${t.status==="done"?"checked":""} aria-label="Marquer comme terminée">
@@ -1661,7 +1716,7 @@
       <div class="acts">
         ${t.status!=="done"?`<button class="sbtn" data-a="doing" type="button">${t.status==="doing"?"Mettre en pause":t.status==="waiting"?"Reprendre":"Démarrer"}</button>`:""}
         <details class="more"><summary aria-label="Plus d'actions">${ICON_MORE}</summary>
-          <div class="menu"><button type="button" data-a="edit">${editing===t.id?"Fermer le détail":"Modifier"}</button>${t.status!=="done"&&t.status!=="waiting"?`<button type="button" data-a="wait">Mettre en attente…</button>`:""}<button type="button" data-a="hist">Historique</button><button type="button" data-a="del" class="danger">Mettre à la corbeille</button></div>
+          <div class="menu"><button type="button" data-a="edit">${editing===t.id?"Fermer le détail":"Modifier"}</button>${t.status!=="done"?`<button type="button" data-a="doing" class="mobonly">${t.status==="doing"?"Mettre en pause":t.status==="waiting"?"Reprendre":"Démarrer"}</button>`:""}${t.status!=="done"&&t.status!=="waiting"?`<button type="button" data-a="wait">Mettre en attente…</button>`:""}<button type="button" data-a="hist">Historique</button><button type="button" data-a="del" class="danger">Mettre à la corbeille</button></div>
         </details>
       </div>`;
     li.querySelector(".chk").onchange=()=>toggle(t);
@@ -1671,6 +1726,7 @@
     if(sul)sortable(sul,order=>{const cur=state.tasks.find(x=>x.id===t.id);if(!cur||!Array.isArray(cur.checklist))return;const cl=cur.checklist.slice();if(order.some(i=>!cl[i])||order.length!==cl.length){render();return}cur.checklist=order.map(i=>cl[i]);save();render()});
     li.querySelectorAll("[data-a]").forEach(btn=>btn.onclick=()=>{
       const a=btn.dataset.a;
+      if(a==="steps"){if(stepsOpen.has(t.id))stepsOpen.delete(t.id);else stepsOpen.add(t.id);render();return}
       if(a==="doing")cycleDoing(t);
       if(a==="edit"){editing=editing===t.id?null:t.id;render()}
       if(a==="del")removeTask(t);
@@ -1750,6 +1806,7 @@
       f.querySelector("[data-k=ko]").onclick=()=>{editing=null;render()};
       f.appendChild(commentsBox(t));
       f.appendChild(histBox(t));
+      drawerize(f,`<span class="dot" style="background:${p?p.color:"#999"}"></span>${esc(p?p.name:"")}${famName(t)?" · "+esc(famName(t)):""}`,t.title,()=>{editing=null;render()});
       li.appendChild(f);
       setTimeout(()=>ti.focus(),0);
     }
@@ -1866,7 +1923,11 @@
       if(k==="erp")ptBulk(`${lbl} : ${v==="oui"?"sujet ERP":v==="non"?"hors ERP":"sujet ERP non précisé"}`,its,x=>{x.erp=v==="__none"?"":v});
     }
   }
-  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&selMode&&!document.querySelector("dialog[open]"))selEnd()});
+  document.addEventListener("keydown",e=>{
+    if(e.key!=="Escape"||document.querySelector("dialog[open]"))return;
+    if(document.querySelector("#lists .edit.drawer")&&(editing||editingPt||editingReq)){editing=editingPt=editingReq=null;render();return}
+    if(selMode)selEnd();
+  });
   // ---------- Statuts ----------
   // Change le statut (sans enregistrer). Renvoie la prochaine occurrence si une tâche récurrente est terminée.
   function applyStatus(t,st){
@@ -2360,7 +2421,7 @@
   function ptNum(x){const l=livePts().filter(y=>y.projectId===x.projectId).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));return l.findIndex(y=>y.id===x.id)+1}
   function ptRow(x,num,showProj){
     const li=document.createElement("li");
-    li.className=`task pt${x.status==="closed"?" done":""}`;li.dataset.o=x.id;
+    li.className=`task pt${x.status==="closed"?" done":""}${editingPt===x.id?" open":""}`;li.dataset.o=x.id;
     const tags=[];
     const ow=ownerTxt(x);
     const pp=proj(x.projectId);
@@ -2418,6 +2479,7 @@
         editingPt=null;save();render();
       };
       f.querySelector("[data-k=ko]").onclick=()=>{editingPt=null;render()};
+      drawerize(f,`${num?"N° "+esc(num)+" · ":""}${esc(x.theme||"Sans thème")}${x.erp==="oui"?" · Sujet ERP":""}`,x.text.split("\n")[0],()=>{editingPt=null;render()});
       li.appendChild(f);
       setTimeout(()=>g("text").focus(),0);
     }
@@ -2789,7 +2851,7 @@
   }
   function reqRow(r,showProj){
     const li=document.createElement("li");
-    li.className=`task req${reqOpen(r)?"":" done"}`;li.dataset.r=r.id;
+    li.className=`task req${reqOpen(r)?"":" done"}${editingReq===r.id?" open":""}`;li.dataset.r=r.id;
     const p=proj(r.projectId), ts=reqTasks(r), tDone=ts.filter(t=>t.status==="done").length;
     const tags=[];
     if(showProj&&p)tags.push(`<span class="tag"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>`);
@@ -2853,6 +2915,7 @@
         editingReq=null;save();render();
       };
       f.querySelector("[data-k=ko]").onclick=()=>{editingReq=null;render()};
+      drawerize(f,`<span class="dot" style="background:${p?p.color:"#999"}"></span>${esc(p?p.name:"")} · Demande client`,r.title,()=>{editingReq=null;render()});
       li.appendChild(f);
       setTimeout(()=>g("title").focus(),0);
     }

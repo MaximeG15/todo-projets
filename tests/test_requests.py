@@ -79,7 +79,7 @@ with sync_playwright() as pw:
     pg.screenshot(path=S+"req_global.png")
     pg.locator(".vbtn",has_text="Tableau de bord").click()
     ok("Demandes client ouvertes" in pg.locator(".kpis").inner_text(),"indicateur sur le tableau de bord")
-    pg.set_viewport_size({"width":390,"height":844});pg.locator(".vbtn",has_text="Demandes client").click();pg.wait_for_timeout(200)
+    pg.set_viewport_size({"width":390,"height":844});pg.locator("#bnav [data-b=menu]").click();pg.locator(".vbtn",has_text="Demandes client").click();pg.wait_for_timeout(200)
     ok(pg.evaluate("document.documentElement.scrollWidth")<=390,"mobile : pas de débordement")
     pg.screenshot(path=S+"req_m.png",full_page=True)
     # export json contient les demandes

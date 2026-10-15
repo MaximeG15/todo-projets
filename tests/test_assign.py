@@ -19,7 +19,7 @@ with sync_playwright() as pw:
     r=pg.locator('.task[data-id="t2"]');r.locator(".ttl").click()
     ed=pg.locator('.task[data-id="t2"] .edit');ed.locator('input[aria-label="Responsable"]').fill("bruno d");ed.locator('[data-k="ok"]').click();pg.wait_for_timeout(400)
     ok(tk("t2")["who"]=="bruno@exemple.test","nom d'un membre enregistré sous son e-mail")
-    ok("Bruno D" in pg.locator('.task[data-id="t2"] .tag.who').inner_text(),"étiquette : nom affiché")
+    ok("Bruno D" in pg.locator('.task[data-id="t2"] .tag.who').get_attribute("title"),"pastille : nom du responsable en info-bulle")
     # saisie rapide avec mon nom
     pg.locator(".pbtn",has_text="Projet Alpha").click()
     pg.fill("#qt","Préparer la recette");pg.fill("#qw","Alice Martin");pg.locator("#quick button[type=submit]").click();pg.wait_for_timeout(400)
