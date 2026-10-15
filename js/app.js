@@ -3065,6 +3065,54 @@
       mtgSet(mm=>{(mm.participants=mm.participants||[]).push({name,side,present:true})})};
     return box;
   }
+  // E-mail d'ordre du jour : destinataires = participants cochés ayant une adresse (client en « À », autres en copie)
+  function agendaMailData(m){
+    const p=proj(m.projectId)||{name:""}, me=(MODE==="cloud"&&cloud.email)||"";
+    const cts=ctList(m.projectId), to=[], cc=[];
+    (m.participants||[]).filter(x=>x.present).forEach(x=>{
+      const c=cts.find(c=>norm(c.name)===norm(x.name)), mail=(x.email||(c&&c.email)||"").trim();
+      if(!mail||norm(mail)===norm(me)||to.includes(mail)||cc.includes(mail))return;
+      ((x.side||(c&&c.side))==="client"?to:cc).push(mail);
+    });
+    const when=mtgDay(m)+(m.startsAt?" à "+hm(m.startsAt):"")+(m.location?` (${m.location})`:""), subject=`${p.name?p.name+" – ":""}Ordre du jour : ${m.title} (${mtgDate(m).toLocaleDateString("fr-FR")})`;
+    const lines=(m.agenda||[]).map((a,i)=>{
+      let t=a.title;
+      if(a.kind==="point"){const o=(state.points||[]).find(x=>x.id===a.ref);if(o){const n=ptNumOf(o);t=(n?n+" – ":"")+o.text.split("\n")[0]}}
+      return `${i+1}. ${t}`;
+    });
+    const ppl=(m.participants||[]).filter(x=>x.present).map(x=>x.name+(SIDE[x.side]?` (${SIDE[x.side]})`:""));
+    const body=["Bonjour,","",`Voici l'ordre du jour de la réunion « ${m.title} » prévue le ${when}.`,"","Ordre du jour :",...lines,
+      ...(ppl.length?["","Participants : "+ppl.join(", ")]:[]),"","N'hésitez pas à nous indiquer si vous souhaitez ajouter un sujet.","","Cordialement,",...(me?[nameOf(me)]:[])].join("\n");
+    return {to,cc,subject,body};
+  }
+  function agendaMail(m){
+    const r=agendaMailData(m);
+    const d=document.createElement("dialog");d.className="uidlg maildlg";d.setAttribute("aria-label","E-mail d'ordre du jour");
+    d.innerHTML=`<form method="dialog"><h3>E-mail d'ordre du jour</h3>
+      <label class="uifld"><span>À</span><input type="text" data-k="to" value="${esc(r.to.join("; "))}" placeholder="Adresse du client (ajoutez l'e-mail dans les contacts du projet)"></label>
+      <label class="uifld"><span>Cc</span><input type="text" data-k="cc" value="${esc(r.cc.join("; "))}"></label>
+      <label class="uifld"><span>Objet</span><input type="text" data-k="subject" value="${esc(r.subject)}"></label>
+      <label class="uifld"><span>Message</span><textarea rows="12" data-k="body"></textarea></label>
+      <p class="uimsg" data-hint style="font-size:13px;color:var(--muted)">Le message s'ouvre dans votre messagerie (Outlook) : vous le relisez et l'envoyez vous-même.</p>
+      <div class="uibtns"><button type="button" class="btn ghost" data-x>Fermer</button><button type="button" class="btn" data-copy>Copier le texte</button><button type="button" class="btn primary" data-open>Ouvrir dans la messagerie</button></div></form>`;
+    document.body.appendChild(d);
+    const q=k=>d.querySelector(`[data-k=${k}]`);q("body").value=r.body;
+    const close=()=>{try{d.close()}catch(e){}d.remove()};
+    d.addEventListener("cancel",e=>{e.preventDefault();close()});
+    d.querySelector("[data-x]").onclick=close;
+    const copy=async()=>{try{await navigator.clipboard.writeText(q("body").value);return true}catch(e){q("body").select();try{return document.execCommand("copy")}catch(e2){return false}}};
+    d.querySelector("[data-copy]").onclick=async()=>{if(await copy()){const b=d.querySelector("[data-copy]");b.textContent="Copié";setTimeout(()=>b.textContent="Copier le texte",1500)}};
+    d.querySelector("[data-open]").onclick=async()=>{
+      const enc=s=>encodeURIComponent(s), addr=s=>s.split(/[;,\s]+/).filter(Boolean).join(";");
+      const base=`mailto:${addr(q("to").value)}?subject=${enc(q("subject").value)}`+(q("cc").value.trim()?`&cc=${enc(addr(q("cc").value))}`:"");
+      const full=base+`&body=${enc(q("body").value)}`;
+      // Les messageries tronquent les liens trop longs : dans ce cas, le texte passe par le presse-papiers
+      if(full.length>1900){await copy();toast("Ordre du jour long : le texte est copié, collez-le dans le message (Ctrl+V).");window.__lastMailto=base;location.href=base}
+      else{window.__lastMailto=full;location.href=full}
+      close();
+    };
+    if(d.showModal)d.showModal();else d.setAttribute("open","");
+  }
   function mtgPrep(B,m,ed){
     const cands=proposeAgenda(m), keys=new Set((m.agenda||[]).map(a=>a.key));
     cands.filter(c=>!keys.has(c.key)).forEach(c=>c.checked=false);
@@ -3095,8 +3143,9 @@
     }
     right.appendChild(peoplePanel(m,ed));
     const go=document.createElement("div");go.className="mtggo";
-    go.innerHTML=ed?`<button type="button" class="btn primary">Démarrer la réunion</button>`:"";
-    const gb=go.querySelector("button");if(gb)gb.onclick=()=>{mtgPhase="run";mtgIdx=0;renderMtg()};
+    go.innerHTML=(ed?`<button type="button" class="btn primary" data-go>Démarrer la réunion</button>`:"")+((m.agenda||[]).length?`<button type="button" class="btn" data-mail>Envoyer l'ordre du jour par e-mail</button>`:"");
+    const gb=go.querySelector("[data-go]");if(gb)gb.onclick=()=>{mtgPhase="run";mtgIdx=0;renderMtg()};
+    const mb=go.querySelector("[data-mail]");if(mb)mb.onclick=()=>agendaMail(mtgCur);
     right.appendChild(go);
     B.className="mtgbody prep";B.append(left,right);
   }

@@ -33,7 +33,13 @@ with sync_playwright() as pw:
     ok(v.locator(".mtgcands input:checked").count()==3,"2 points du thème + Divers cochés")
     # participant : le contact
     v.locator(".mtgppl label",has_text="Responsable logistique").locator("input").check();pg.wait_for_timeout(100)
-    v.locator(".mtggo .btn").click();pg.wait_for_timeout(200)
+    # e-mail d'ordre du jour
+    v.locator(".mtggo [data-mail]").click();md=pg.locator("dialog.maildlg")
+    body=md.locator("[data-k=body]").input_value()
+    ok("Ordre du jour :" in body and "1. N° 40 – Format des étiquettes" in body and "Atelier Réception" in md.locator("[data-k=subject]").input_value(),"e-mail d'ordre du jour : objet et sujets numérotés")
+    md.locator("[data-open]").click();pg.wait_for_timeout(200)
+    ok(pg.evaluate("window.__lastMailto||''").startswith("mailto:?subject="),"e-mail ouvert dans la messagerie")
+    v.locator(".mtggo [data-go]").click();pg.wait_for_timeout(200)
     ok("Format des étiquettes" in v.locator(".mtgsubj").inner_text() and "N° 40" in v.locator(".mtgsubj").inner_text(),"séance : 1er sujet avec son N°")
     # lever le point
     v.locator('[data-act="close"]').click();v.locator(".mtgform textarea").fill("Format 100x150 retenu");v.locator('.mtgform [type=submit]').click();pg.wait_for_timeout(150)

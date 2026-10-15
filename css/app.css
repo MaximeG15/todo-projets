@@ -725,7 +725,11 @@ body.mtgopen{overflow:hidden}
 .mtgaddrow select{flex:1 1 260px;min-width:0}
 .mtgaddrow form{display:flex;gap:8px;flex:1 1 260px}
 .mtgaddrow form input{flex:1;min-width:0}
+.mtggo{display:flex;flex-direction:column;gap:8px}
 .mtggo .btn{width:100%;height:46px;font-size:16px}
+.mtggo .btn:not(.primary){height:42px;font-size:15px}
+.maildlg{width:min(680px,94vw)}
+.maildlg textarea{font:inherit;font-size:14px;line-height:1.45}
 .mtgag ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
 .mtgag li button{width:100%;display:flex;gap:10px;align-items:flex-start;text-align:left;border:0;border-top:1px solid var(--line2);background:none;padding:9px 6px;cursor:pointer;font-size:14px;color:var(--ink)}
 .mtgag li:first-child button{border-top:0}
