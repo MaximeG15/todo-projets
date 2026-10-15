@@ -2402,37 +2402,44 @@
   }
   // ---------- Lien Excel des points ouverts (mise à jour à sens unique : Excel vers appli) ----------
   // Fonction cachée, activée par projet avec « /excel » dans la recherche. L'Excel n'est jamais modifié.
-  // Chaque point lié garde (xl) les dernières valeurs lues dans l'Excel : un champ n'est repris que s'il a changé dans l'Excel.
+  // Chaque point lié garde (xl) les dernières valeurs lues dans l'Excel : ensuite, un champ n'est repris que s'il a changé dans l'Excel.
+  // Au premier rapprochement (ou après un changement des règles de lecture, XL_VER), les écarts entre appli et Excel sont soumis à l'utilisateur.
+  const XL_VER=2;
   const xlOn=pid=>!!(ui.xl&&ui.xl[pid]);
   function xlToggle(p,on){
     ui.xl=ui.xl||{};if(on)ui.xl[p.id]=true;else delete ui.xl[p.id];saveUi();render();
     toast(on?`Lien Excel activé pour « ${p.name} » : menu ⋯ puis « Mettre à jour depuis Excel ».`:`Lien Excel désactivé pour « ${p.name} ».`);
   }
   const XL_F=["text","theme","hypothesis","answer","status","owner","erp"];
+  const XL_LBL={text:"description",theme:"thème",hypothesis:"commentaire Mecalux",answer:"commentaire client",status:"statut",owner:"acteur",erp:"sujet ERP"};
   const xlKey=s=>norm(String(s||"")).replace(/[^a-z0-9]+/g," ").trim();
   const xlWords=s=>new Set(xlKey(s).split(" ").filter(w=>w.length>2));
   const xlSim=(a,b)=>{const A=xlWords(a),B=xlWords(b);if(!A.size||!B.size)return 0;let n=0;A.forEach(w=>{if(B.has(w))n++});return n/(A.size+B.size-n)};
   const xlStr=v=>v==null?"":String(v).replace(/\r\n?/g,"\n").replace(/[ \t]+\n/g,"\n").trim();
+  const xlSame=(f,a,b)=>f==="text"?xlKey(a)===xlKey(b):String(a||"")===String(b||"");
+  const xlShow=(f,v)=>f==="status"?(v==="closed"?"levé / clôturé":"ouvert"):f==="erp"?(v==="oui"?"OUI":v==="non"?"NON":"—"):f==="owner"?(OWNER[v]||"—"):(v?`« ${String(v).length>50?String(v).slice(0,47)+"…":v} »`:"vide");
   function xlParse(sheets){
-    const H={date:/date/,theme:/sujet|theme|famille/,text:/description|point ouvert|question/,hypothesis:/hypothese/,answer:/retour|reponse|decision/,status:/statut|etat/,owner:/acteur|qui doit|responsable/,erp:/erp/};
+    // colonnes reconnues par leur titre (l'ordre peut changer)
+    const H=[["n",h=>/^(n|no|num|numero|n o|ref|id)$/.test(h)],["date",h=>/date/.test(h)],["text",h=>/description|point ouvert|question/.test(h)],
+      ["erp",h=>/erp/.test(h)],["status",h=>/statut|etat/.test(h)],["owner",h=>/acteur|qui doit|responsable/.test(h)],
+      ["hypothesis",h=>/hypothese|mecalux/.test(h)],["answer",h=>/retour|reponse|decision|client|diamond|commentaire/.test(h)],["theme",h=>/sujet|theme|famille/.test(h)]];
     for(const sh of sheets){
       for(let hr=0;hr<Math.min(10,sh.rows.length);hr++){
-        const hd=(sh.rows[hr]||[]).map(v=>xlKey(v));
-        const col={};
-        Object.entries(H).forEach(([f,re])=>{const i=hd.findIndex((h,k)=>h&&re.test(h)&&!Object.values(col).includes(k));if(i>=0)col[f]=i});
+        const hd=(sh.rows[hr]||[]).map(v=>xlKey(v)), col={}, used=new Set();
+        H.forEach(([f,t])=>{const i=hd.findIndex((h,k)=>h&&!used.has(k)&&t(h));if(i>=0){col[f]=i;used.add(i)}});
         if(col.text==null)continue;
         const rows=[];
         sh.rows.slice(hr+1).forEach((r,i)=>{
           const g=f=>col[f]==null?null:r[col[f]];
           const text=xlStr(g("text")).slice(0,2000);if(!text)return;
-          const st=xlKey(g("status")), ow=xlKey(g("owner")), er=xlKey(g("erp")), d=g("date");
-          rows.push({line:hr+i+2,date:typeof d==="number"&&d>20000?Math.round((d-25569)*864e5+new Date().getTimezoneOffset()*6e4):null,
+          const st=xlKey(g("status")), ow=xlKey(g("owner")), er=xlKey(g("erp")), d=g("date"), n=xlStr(g("n"));
+          rows.push({line:hr+i+2,n,date:typeof d==="number"&&d>20000?Math.round((d-25569)*864e5+new Date().getTimezoneOffset()*6e4):null,
             v:{text,theme:xlStr(g("theme")).slice(0,80),hypothesis:xlStr(g("hypothesis")),answer:xlStr(g("answer")),
-               status:/clotur|leve|ferme|termine|resolu/.test(st)?"closed":"open",
+               status:!st?"":/clotur|leve|ferme|termine|resolu/.test(st)?"closed":"open",
                owner:!ow?"":/mecalux/.test(ow)?"mecalux":/tiers/.test(ow)?"tiers":"client",
                erp:/^(oui|yes|o|x)$/.test(er)?"oui":/^(non|no|n)$/.test(er)?"non":""}});
         });
-        return {sheet:sh.name,rows};
+        return {sheet:sh.name,rows,cols:Object.keys(col)};
       }
     }
     throw new Error("Aucune colonne « Description » trouvée dans le classeur.");
@@ -2446,15 +2453,28 @@
     try{parsed=xlParse(await window.XlsxLite.readXlsx(await file.arrayBuffer()))}
     catch(e){uiAlert("Lecture impossible : "+(e&&e.message||"fichier Excel illisible.")+"\n\nVérifiez qu'il s'agit bien d'un fichier .xlsx (pas .xls ni .xlsm protégé).");return}
     const plan=xlPlan(p.id,parsed.rows);
-    const nUp=plan.updates.length, nF=plan.updates.reduce((n,u)=>n+u.fields.length,0);
-    if(!nUp&&!plan.added.length&&!plan.gone.length&&!plan.links.length){if(plan.silent.length){plan.silent.forEach(l=>l.apply());save()}toast(`Points ouverts déjà à jour avec l'Excel (${parsed.rows.length} lignes lues).`);ui.xlLast=ui.xlLast||{};ui.xlLast[p.id]=Date.now();saveUi();return}
-    const LBL={text:"description",theme:"thème",hypothesis:"hypothèse",answer:"réponse",status:"statut",owner:"acteur",erp:"sujet ERP"};
+    const tag=r=>r&&r.n?`N° ${r.n} – `:"";
+    // 1. écarts entre l'appli et l'Excel sur des points pas encore rapprochés : l'utilisateur choisit
+    let prefer="xl";
+    if(plan.conflicts.length){
+      const nP=new Set(plan.conflicts.map(c=>c.pt)).size;
+      const ex=plan.conflicts.slice(0,8).map(c=>`• ${tag(c.row)}${short(c.pt.text)}\n   ${XL_LBL[c.f]} : appli ${xlShow(c.f,c.pt[c.f])} / Excel ${xlShow(c.f,c.row.v[c.f])}`);
+      const ch=await uiDialog({title:"Écarts entre l'appli et l'Excel",msg:[`${plan.conflicts.length} valeur${plan.conflicts.length>1?"s":""} diffère${plan.conflicts.length>1?"nt":""} sur ${nP} point${nP>1?"s":""} :`,"",...ex,...(plan.conflicts.length>8?[`• … et ${plan.conflicts.length-8} autre(s)`]:[]),"","Ce choix ne vaut que pour ces écarts. Ensuite, seuls les changements faits dans l'Excel seront repris."].join("\n"),
+        buttons:[{v:null,label:"Annuler",cls:"ghost"},{v:"app",label:"Garder les valeurs de l'appli"},{v:"xl",label:"Prendre les valeurs de l'Excel",cls:"primary",focus:true}]});
+      if(ch==null)return;prefer=ch;
+    }
+    const nUp=plan.updates.length, nF=plan.updates.reduce((n,u)=>n+u.fields.length,0)+(prefer==="xl"?plan.conflicts.length:0);
+    const nUpAll=new Set([...plan.updates.map(u=>u.pt),...(prefer==="xl"?plan.conflicts.map(c=>c.pt):[])]).size;
+    const nothing=!nUpAll&&!plan.added.length&&!plan.gone.length&&!plan.links.length;
+    if(nothing){if(plan.silent.length){plan.silent.forEach(f=>f());save()}toast(`Points ouverts déjà à jour avec l'Excel (${parsed.rows.length} lignes lues).`);ui.xlLast=ui.xlLast||{};ui.xlLast[p.id]=Date.now();saveUi();return}
     const lines=[`Fichier : ${file.name} (onglet « ${parsed.sheet} », ${parsed.rows.length} lignes)`,""];
-    if(nUp)lines.push(`• ${nUp} point${nUp>1?"s":""} mis à jour (${nF} champ${nF>1?"s":""}) :`,...plan.updates.slice(0,6).map(u=>`   – ${short(u.pt.text)} : ${u.fields.map(f=>LBL[f]).join(", ")}`),...(nUp>6?[`   – … et ${nUp-6} autre(s)`]:[]));
-    if(plan.added.length)lines.push(`• ${plan.added.length} nouveau${plan.added.length>1?"x":""} point${plan.added.length>1?"s":""}`);
-    if(plan.links.length)lines.push(`• ${plan.links.length} point${plan.links.length>1?"s":""} existant${plan.links.length>1?"s":""} relié${plan.links.length>1?"s":""} à l'Excel (vos saisies dans l'appli sont conservées, seuls les champs vides sont complétés)`);
-    if(plan.gone.length)lines.push(`• ${plan.gone.length} point${plan.gone.length>1?"s":""} n'existe${plan.gone.length>1?"nt":""} plus dans l'Excel :`,...plan.gone.slice(0,5).map(x=>`   – ${short(x.text)}`),...(plan.gone.length>5?[`   – … et ${plan.gone.length-5} autre(s)`]:[]));
-    if(plan.dupes)lines.push("",`Attention : ${plan.dupes} ligne${plan.dupes>1?"s":""} en double dans l'Excel (même description) ignorée${plan.dupes>1?"s":""}.`);
+    if(nUpAll)lines.push(`• ${nUpAll} point${nUpAll>1?"s":""} mis à jour (${nF} champ${nF>1?"s":""})${nUp?" :":""}`,...plan.updates.slice(0,6).map(u=>`   – ${tag(u.row)}${short(u.pt.text)} : ${u.fields.map(f=>XL_LBL[f]).join(", ")}`),...(nUp>6?[`   – … et ${nUp-6} autre(s)`]:[]));
+    if(plan.added.length)lines.push(`• ${plan.added.length} nouveau${plan.added.length>1?"x":""} point${plan.added.length>1?"s":""} :`,...plan.added.slice(0,6).map(r=>`   – ${tag(r)}${short(r.v.text)}`),...(plan.added.length>6?[`   – … et ${plan.added.length-6} autre(s)`]:[]));
+    if(plan.links.length)lines.push(`• ${plan.links.length} point${plan.links.length>1?"s":""} rapproché${plan.links.length>1?"s":""} de l'Excel`);
+    if(plan.gone.length)lines.push(`• ${plan.gone.length} point${plan.gone.length>1?"s":""} n'existe${plan.gone.length>1?"nt":""} plus dans l'Excel :`,...plan.gone.slice(0,5).map(x=>`   – ${x.xl&&x.xl.n?`N° ${x.xl.n} – `:""}${short(x.text)}`),...(plan.gone.length>5?[`   – … et ${plan.gone.length-5} autre(s)`]:[]));
+    if(plan.dupes)lines.push("",`Attention : ${plan.dupes} ligne${plan.dupes>1?"s":""} en double dans l'Excel (même N° ou même description) ignorée${plan.dupes>1?"s":""}.`);
+    const miss=["hypothesis","answer","status"].filter(f=>!parsed.cols.includes(f));
+    if(miss.length)lines.push("",`Colonne${miss.length>1?"s":""} non trouvée${miss.length>1?"s":""} dans l'Excel : ${miss.map(f=>XL_LBL[f]).join(", ")}.`);
     lines.push("","L'Excel n'est pas modifié.");
     const btns=plan.gone.length?[{v:null,label:"Annuler",cls:"ghost"},{v:"keep",label:"Appliquer, garder les points retirés"},{v:"trash",label:"Appliquer, retirés à la corbeille",cls:"primary",focus:true}]
       :[{v:null,label:"Annuler",cls:"ghost"},{v:"keep",label:"Appliquer",cls:"primary",focus:true}];
@@ -2462,40 +2482,61 @@
     if(ch==null)return;
     const before=JSON.parse(JSON.stringify((state.points||[]).filter(x=>x.projectId===p.id)));
     const now=Date.now();
-    plan.updates.forEach(u=>u.apply());plan.links.forEach(l=>l.apply());plan.silent.forEach(l=>l.apply());
-    plan.added.forEach((r,i)=>state.points.push({id:newId(),projectId:p.id,...r.v,ownerName:"",taskId:null,requestId:null,createdAt:r.date||now+i,closedAt:r.v.status==="closed"?now:null,xl:{k:xlKey(r.v.text),v:r.v}}));
+    const setF=(x,f,v)=>{if(f==="status"){v=v||"open";x.closedAt=v==="closed"?(x.closedAt||now):null}x[f]=v};
+    plan.updates.forEach(u=>u.fields.forEach(f=>setF(u.pt,f,u.row.v[f])));
+    if(prefer==="xl")plan.conflicts.forEach(c=>setF(c.pt,c.f,c.row.v[c.f]));
+    plan.refs.forEach(f=>f());
+    plan.added.forEach((r,i)=>state.points.push({id:newId(),projectId:p.id,...r.v,status:r.v.status||"open",ownerName:"",taskId:null,requestId:null,createdAt:r.date?r.date+i:now+i,closedAt:r.v.status==="closed"?now:null,xl:{ver:XL_VER,n:r.n||"",k:xlKey(r.v.text),v:r.v}}));
     plan.gone.forEach(x=>{delete x.xl;if(ch==="trash")x.deletedAt=now});
     ui.xlLast=ui.xlLast||{};ui.xlLast[p.id]=now;saveUi();
     save();render();
-    toast(`Mise à jour Excel appliquée : ${nUp} modifié${nUp>1?"s":""}, ${plan.added.length} ajouté${plan.added.length>1?"s":""}${plan.gone.length?`, ${plan.gone.length} retiré${plan.gone.length>1?"s":""}${ch==="trash"?" (corbeille)":" (conservé"+(plan.gone.length>1?"s":"")+")"}`:""}`,()=>{
+    const nAdd=plan.added.length;
+    toast(`Mise à jour Excel appliquée : ${nUpAll} modifié${nUpAll>1?"s":""}, ${nAdd} ajouté${nAdd>1?"s":""}${plan.gone.length?`, ${plan.gone.length} retiré${plan.gone.length>1?"s":""}${ch==="trash"?" (corbeille)":" (conservé"+(plan.gone.length>1?"s":"")+")"}`:""}`,()=>{
       state.points=(state.points||[]).filter(x=>x.projectId!==p.id).concat(before);save();render();
     });
   }
   // Rapproche les lignes Excel des points du projet et prépare les changements (sans rien modifier)
   function xlPlan(pid,rows){
     const pts=(state.points||[]).filter(x=>x.projectId===pid);
-    const byKey=new Map();let dupes=0;
-    rows.forEach(r=>{const k=xlKey(r.v.text);if(byKey.has(k))dupes++;else byKey.set(k,r)});
-    const free=new Set(byKey.keys()), match=new Map(); // point -> ligne
-    // 1. clé mémorisée, puis 2. texte identique
-    pts.filter(x=>x.xl&&free.has(x.xl.k)).forEach(x=>{match.set(x,byKey.get(x.xl.k));free.delete(x.xl.k)});
-    pts.filter(x=>!match.has(x)&&free.has(xlKey(x.text))).forEach(x=>{const k=xlKey(x.text);match.set(x,byKey.get(k));free.delete(k)});
-    // 3. texte proche (description reformulée d'un côté ou de l'autre)
+    const byKey=new Map(), byN=new Map();let dupes=0;
+    rows.forEach(r=>{
+      const k=xlKey(r.v.text);
+      if((r.n&&byN.has(r.n))||(!r.n&&byKey.has(k))){dupes++;return}
+      r.k=k;if(r.n)byN.set(r.n,r);if(!byKey.has(k))byKey.set(k,r);
+    });
+    const free=new Set(rows.filter(r=>r.k!=null)), match=new Map(); // point -> ligne
+    const take=(x,r)=>{if(r&&free.has(r)&&!match.has(x)){match.set(x,r);free.delete(r)}};
+    // 1. N° mémorisé, 2. description mémorisée, 3. description identique, 4. description proche
+    pts.forEach(x=>{if(x.xl&&x.xl.n)take(x,byN.get(x.xl.n))});
+    pts.forEach(x=>{if(x.xl&&x.xl.k)take(x,byKey.get(x.xl.k))});
+    pts.forEach(x=>take(x,byKey.get(xlKey(x.text))));
     const cand=[];
-    pts.filter(x=>!match.has(x)).forEach(x=>free.forEach(k=>{const r=byKey.get(k),s=Math.max(xlSim(x.xl?x.xl.v.text:x.text,r.v.text),xlSim(x.text,r.v.text))+((x.xl?x.xl.v.theme:x.theme)===r.v.theme?0.05:0);if(s>=0.6)cand.push([s,x,k])}));
-    cand.sort((a,b)=>b[0]-a[0]).forEach(([,x,k])=>{if(!match.has(x)&&free.has(k)){match.set(x,byKey.get(k));free.delete(k)}});
-    const updates=[],links=[];
+    pts.filter(x=>!match.has(x)).forEach(x=>free.forEach(r=>{const s=Math.max(x.xl?xlSim(x.xl.v.text,r.v.text):0,xlSim(x.text,r.v.text))+((x.xl?x.xl.v.theme:x.theme)===r.v.theme?0.05:0);if(s>=0.6)cand.push([s,x,r])}));
+    cand.sort((a,b)=>b[0]-a[0]).forEach(([,x,r])=>take(x,r));
+    const updates=[],links=[],conflicts=[],refs=[],silent=[];
     match.forEach((r,x)=>{
       if(x.deletedAt)return; // à la corbeille : on n'y touche pas
-      const v=r.v, base=x.xl&&x.xl.v;
-      const fields=XL_F.filter(f=>base?(v[f]!==base[f]&&v[f]!==(x[f]||"")):(!(x[f]||"")&&v[f]&&f!=="status"));
-      const setRef=()=>{x.xl={k:xlKey(v.text),v}};
-      const apply=()=>{fields.forEach(f=>{x[f]=v[f];if(f==="status")x.closedAt=v[f]==="closed"?(x.closedAt||Date.now()):null});setRef()};
-      if(fields.length)updates.push({pt:x,fields,apply});
-      if(!base)links.push({pt:x,apply:fields.length?()=>{}:setRef});
-      else if(!fields.length&&(base.text!==v.text||XL_F.some(f=>base[f]!==v[f])))links.push({pt:x,apply:setRef,silent:true});
+      const v=r.v, base=x.xl&&x.xl.ver===XL_VER?x.xl.v:null;
+      const ref=()=>{x.xl={ver:XL_VER,n:r.n||"",k:r.k,v}};
+      if(base){
+        // déjà rapproché : on ne reprend que ce qui a changé dans l'Excel depuis la dernière lecture
+        const fields=XL_F.filter(f=>!xlSame(f,v[f],base[f])&&!(f==="status"&&!v[f])&&!xlSame(f,v[f],x[f]));
+        if(fields.length)updates.push({pt:x,row:r,fields});
+        const changed=XL_F.some(f=>!xlSame(f,v[f],base[f]))||x.xl.n!==(r.n||"");
+        if(fields.length||changed)(fields.length?refs:silent).push(ref);
+        return;
+      }
+      // premier rapprochement : on complète les champs vides, les écarts sont soumis à l'utilisateur
+      const fields=[];
+      XL_F.forEach(f=>{
+        const xv=v[f], av=x[f]||"";
+        if(!xv||xlSame(f,xv,av))return;
+        if(f==="status"?false:!av)fields.push(f);else conflicts.push({pt:x,row:r,f});
+      });
+      if(fields.length)updates.push({pt:x,row:r,fields});
+      links.push(x);refs.push(ref);
     });
-    return {updates,links:links.filter(l=>!l.silent),silent:links.filter(l=>l.silent),added:[...free].map(k=>byKey.get(k)),gone:pts.filter(x=>x.xl&&!x.deletedAt&&!match.has(x)),dupes};
+    return {updates,conflicts,links,refs,silent,added:[...free],gone:pts.filter(x=>x.xl&&!x.deletedAt&&!match.has(x)),dupes};
   }
   // ---------- Demandes client ----------
   const REQ=[["new","Nouvelle"],["analysis","En analyse"],["doing","En cours"],["waiting","En attente client"],["done","Traitée"],["refused","Refusée"]];

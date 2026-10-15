@@ -38,7 +38,7 @@ with sync_playwright() as pw:
     with pg.expect_file_chooser() as fc: pg.locator(".ddmore .menu button",has_text="Mettre à jour depuis Excel").click()
     fc.value.set_files(v1);pg.wait_for_timeout(600)
     print("   ",seen[-1].replace("\n"," | ")[:400])
-    ok("3 points existants reliés" in seen[-1] and "1 nouveau point" in seen[-1],"1re synchro : 3 points reliés, 1 nouveau")
+    ok("3 points rapprochés" in seen[-1] and "1 nouveau point" in seen[-1],"1re synchro : 3 points rapprochés, 1 nouveau")
     ok(pt("b")["answer"]=="Réponse saisie dans l'appli" and pt("b")["hypothesis"]=="Deux quais" and pt("b")["owner"]=="client","1re synchro : saisie appli conservée, champs vides complétés")
     ok(pt("a")["erp"]=="non" and pt("c")["erp"]=="oui","1re synchro : sujet ERP repris")
     ok(any(x["text"]=="Nouveau point venu de l'Excel" and x["owner"]=="mecalux" and x["createdAt"]>1e12 for x in st()["points"]),"nouveau point créé avec sa date")
@@ -64,6 +64,29 @@ with sync_playwright() as pw:
     # autre projet : rien
     pg.locator(".pbtn",has_text="Projet Bêta").click();pg.locator(".ddmore summary").click()
     ok(pg.locator(".ddmore .menu",has_text="Excel").count()==0,"autre projet : fonction absente")
+    # Excel avec N° et colonnes « Commentaire » ; points liés par une ancienne version (sans N°) : écarts soumis
+    HDR[:]=["N°","Date d'ouverture","Sujets ouverts","Description","Commentaire Mecalux","Commentaires CLIENT","Statut","Acteur","Sujet ERP ?"]
+    v3=xlsx("v3.xlsx",[[1,d,"Réception",A,"Mecalux propose 100x150","Validé","Clôturé",None,"NON"],[2,d,"Expédition","Nombre de quais de chargement à prévoir ?","Deux quais",None,"Ouvert","Client",None],[3,d,"Expédition","Gestion des numéros de série à l'expédition (scan obligatoire)",None,None,None,None,"OUI"]])
+    s=st()
+    for x in s["points"]:
+        if x.get("xl"): x["xl"].pop("ver",None); x["xl"].pop("n",None)
+    pg.evaluate("s=>{localStorage.setItem('todo-projets',JSON.stringify(s))}",s);pg.reload();pg.wait_for_timeout(300)
+    pg.locator(".pbtn",has_text="Projet Alpha").click();pg.locator(".ddmore summary").click()
+    n0=len(seen)
+    with pg.expect_file_chooser() as fc: pg.locator(".ddmore .menu button",has_text="Mettre à jour depuis Excel").click()
+    fc.value.set_files(v3);pg.wait_for_timeout(800)
+    conf=[m for m in seen[n0:] if "diffère" in m]
+    print("   ",(conf[0] if conf else "pas d'écart").replace("\n"," | ")[:400])
+    ok(conf and "statut : appli ouvert / Excel levé" in conf[0] and "N° 1" in conf[0],"écarts appli / Excel soumis (ancienne version du lien)")
+    ok(pt("a")["hypothesis"]=="Mecalux propose 100x150" and pt("a")["answer"]=="Validé","colonnes « Commentaire Mecalux / Commentaires client » lues, Excel retenu")
+    ok(pt("b")["text"]=="Nombre de quais de chargement à prévoir ?" or "quais" in pt("b")["text"],"description reformulée rapprochée")
+    ok(all(x["xl"].get("n") for x in st()["points"] if x.get("xl") and not x.get("deletedAt")),"N° mémorisé sur les points liés")
+    # 4e lecture : N° conservé même si la description change complètement
+    v4=xlsx("v4.xlsx",[[1,d,"Réception","Question entièrement réécrite",None,None,"Clôturé",None,"NON"],[2,d,"Expédition","Nombre de quais de chargement à prévoir ?","Deux quais",None,"Ouvert","Client",None],[3,d,"Expédition","Gestion des numéros de série à l'expédition (scan obligatoire)",None,None,None,None,"OUI"]])
+    pg.locator(".ddmore summary").click()
+    with pg.expect_file_chooser() as fc: pg.locator(".ddmore .menu button",has_text="Mettre à jour depuis Excel").click()
+    fc.value.set_files(v4);pg.wait_for_timeout(800)
+    ok(pt("a")["text"]=="Question entièrement réécrite" and not any("nouveau" in m for m in seen[-1:]),"N° identique : même point malgré une description réécrite")
     pg.screenshot(path=OUT+"excel_link.png")
     b.close()
 print("ERREURS :",errs or "aucune")
