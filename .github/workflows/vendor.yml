@@ -1,5 +1,7 @@
 name: Récupération des fichiers tiers
 on: workflow_dispatch
+permissions:
+  contents: write
 jobs:
   vendor:
     runs-on: ubuntu-latest
@@ -13,9 +15,7 @@ jobs:
           for w in 600 700; do for s in latin latin-ext; do cp fontsource-barlow-condensed-*/package/files/barlow-condensed-$s-$w-normal.woff2 fonts/; done; done
           cp fontsource-barlow-5*/package/LICENSE fonts/OFL.txt || true
           ls -la js fonts
-      - uses: actions/upload-artifact@v4
-        with:
-          name: vendor
-          path: |
-            out/js
-            out/fonts
+      - run: |
+          cd out && git init -q -b vendor-files && git add js/supabase.js fonts
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "Fichiers tiers"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" vendor-files
