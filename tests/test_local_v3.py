@@ -9,7 +9,7 @@ now=int(time.time()*1000)
 T=[
  {"id":"a","projectId":"p1","title":"Mail pour les points ouverts Recep + Convoyeur","due":"2026-10-08","priority":"haute","status":"todo","who":"Alice Martin","note":"Demander le type de base","createdAt":1},
  {"id":"b","projectId":"p1","title":"Tester le standard avant l'atelier d'AF","due":"2026-10-13","priority":"normale","status":"doing","who":"","note":"","createdAt":2,"checklist":[{"id":"s1","text":"x","done":True},{"id":"s2","text":"y","done":False}]},
- {"id":"c","projectId":"p2","title":"Organiser un déplacement sur site","due":"2026-10-16","priority":"normale","status":"waiting","waitingFor":"Signature Projet Bêta","who":"Bruno D","note":"","createdAt":3},
+ {"id":"c","projectId":"p2","title":"Organiser un déplacement sur site","due":(__import__("datetime").date.today()+__import__("datetime").timedelta(days=10)).isoformat(),"priority":"normale","status":"waiting","waitingFor":"Signature Projet Bêta","who":"Bruno D","note":"","createdAt":3},
  {"id":"d","projectId":"p2","title":"Faire valider la partie réception","due":"2026-10-06","priority":"normale","status":"todo","who":"Bruno D","note":"","createdAt":4},
  {"id":"e","projectId":"p3","title":"Clôturer l'hypercare","due":"2026-10-20","priority":"basse","status":"todo","who":"","note":"","createdAt":5},
  {"id":"f","projectId":"p1","title":"Déployer la VM","due":"","priority":"normale","status":"done","doneAt":now-86400000,"who":"","note":"","createdAt":6},
