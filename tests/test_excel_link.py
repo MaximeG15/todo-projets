@@ -2,7 +2,7 @@ import os,sys;sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 from helpers import APP,OUT,on_dialog
 import json, datetime, openpyxl
 from playwright.sync_api import sync_playwright
-def open_xl_menu(pg,label="Mettre à jour depuis Excel"):
+def open_xl_menu(pg,label="Importer un fichier Excel"):
     # ouvre le menu ⋯ (nouvel essai si un rendu différé l'a refermé)
     for _ in range(4):
         if not pg.locator(".ddmore[open]").count():pg.locator(".ddmore summary").click()

@@ -1302,10 +1302,10 @@
       if(ps.length){
         const c=no.filter(o=>o.owner==="client").length, m=no.filter(o=>o.owner==="mecalux").length, t=no.filter(o=>o.owner==="tiers").length, nd=no.length-c-m-t;
         const pc=n=>(100*n/ps.length).toFixed(1)+"%";
-        const xl=xlOn(p.id)&&ptLinkedProj(p.id)&&ui.xlLast&&ui.xlLast[p.id]?new Date(ui.xlLast[p.id]):null;
+        const xl=xlOn(p.id)&&ptLinkedProj(p.id)&&ui.xlLast&&ui.xlLast[p.id]?new Date(ui.xlLast[p.id]):null, xf=ui.xlFile&&ui.xlFile[p.id];
         K.innerHTML=`<div class="ptbar"><div class="bar" role="img" aria-label="Répartition des points : ${c} côté client, ${m} côté Mecalux, ${t} côté tiers, ${nd} sans interlocuteur, ${lev} levés"><span class="b-cli" style="width:${pc(c)}"></span><span class="b-mec" style="width:${pc(m)}"></span><span class="b-tie" style="width:${pc(t)}"></span><span class="b-nd" style="width:${pc(nd)}"></span><span class="b-ok" style="width:${pc(lev)}"></span></div>
           <div class="lg">${c?`<span><i class="b-cli"></i><b>${c}</b> à répondre par le client</span>`:""}${m?`<span><i class="b-mec"></i><b>${m}</b> côté Mecalux</span>`:""}${t?`<span><i class="b-tie"></i><b>${t}</b> côté tiers</span>`:""}${nd?`<span><i class="b-nd"></i><b>${nd}</b> sans interlocuteur</span>`:""}<span><i class="b-ok"></i><b>${lev}</b> levé${lev>1?"s":""}</span></div></div>
-          ${xl?`<span class="xlbadge">Lié à l'Excel · mis à jour le ${xl.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})} à ${xl.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</span>`:""}`;
+          ${xl?`<span class="xlbadge" title="${esc(xf||"")}">Lié à ${xf?esc(xf):"l'Excel"} · mis à jour le ${xl.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})} à ${xl.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</span>`:""}`;
         K.hidden=false;
       }
     }
@@ -1334,10 +1334,10 @@
         sb.innerHTML=`${who.length>1?`<span class="avs">${who.slice(0,4).map((e,i)=>`<span style="background:${AVC[i%AVC.length]}" title="${esc(nameOf(e))}">${esc(initials(nameOf(e)))}</span>`).join("")}${who.length>4?`<span class="more4">+${who.length-4}</span>`:""}</span>`:""}${shareOpen?"Fermer le partage":"Partager"}`;
         sb.title=who.length>1?"Partagé avec "+m.members.map(nameOf).join(", "):"Partager ce projet avec un collègue";
       }
-      if(p&&mode==="points"&&xlOn(p.id)&&(MODE!=="cloud"||isOwner(p.id)))b("Mettre à jour depuis Excel",()=>xlPick(p),"");
+      if(p&&mode==="points"&&xlOn(p.id)&&(MODE!=="cloud"||isOwner(p.id)))b("Synchroniser avec Excel",()=>xlQuick(p),"");
       ddMenu("Exporter ▾",[{h:"Documents"},{t:"Récap de la semaine",fn:openRecap},{t:"Plan d'actions (Excel / PDF)",fn:()=>openExport(p,"tasks")},{t:"Points ouverts (Excel / PDF)",fn:()=>openExport(p,"points")}],"ddexp");
       if(p){
-        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[{t:"Renommer le projet",fn:()=>renameProject(p)},{colors:p},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},...(MODE==="cloud"?[{t:"Ajouter les points ouverts standard…",fn:()=>tplDialog(p,false)}]:[]),...(xlOn(p.id)?["-",{h:"Lien Excel des points ouverts"},{t:"Mettre à jour depuis Excel…",fn:()=>xlPick(p)},{t:"Désactiver le lien Excel",fn:()=>xlToggle(p,false)},{t:"Supprimer tous les points ouverts…",fn:()=>xlPurge(p),cls:"danger"}]:[]),"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
+        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[{t:"Renommer le projet",fn:()=>renameProject(p)},{colors:p},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},...(MODE==="cloud"?[{t:"Ajouter les points ouverts standard…",fn:()=>tplDialog(p,false)}]:[]),...(xlOn(p.id)?["-",{h:"Lien Excel des points ouverts"},{t:"Synchroniser avec Excel",fn:()=>xlQuick(p)},...(xlFsOk()?[{t:"Choisir le fichier Excel lié…",fn:()=>xlLink(p)}]:[]),{t:"Importer un fichier Excel…",fn:()=>xlPick(p)},{t:"Désactiver le lien Excel",fn:()=>xlToggle(p,false)},{t:"Supprimer tous les points ouverts…",fn:()=>xlPurge(p),cls:"danger"}]:[]),"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
         else ddMenu("⋯",[{t:"Quitter le projet",fn:()=>shareRemove(p.id,cloud.email,true),cls:"danger"}],"ddmore");
       }
     }
@@ -2680,7 +2680,7 @@
   const xlOn=pid=>!!(ui.xl&&ui.xl[pid]);
   function xlToggle(p,on){
     ui.xl=ui.xl||{};if(on)ui.xl[p.id]=true;else delete ui.xl[p.id];saveUi();render();
-    toast(on?`Lien Excel activé pour « ${p.name} » : menu ⋯ puis « Mettre à jour depuis Excel ».`:`Lien Excel désactivé pour « ${p.name} ».`);
+    toast(on?`Lien Excel activé pour « ${p.name} » : bouton « Synchroniser avec Excel » dans les points ouverts.`:`Lien Excel désactivé pour « ${p.name} ».`);
   }
   const XL_F=["text","theme","hypothesis","answer","status","owner","erp"];
   const XL_LBL={text:"description",theme:"thème",hypothesis:"commentaire Mecalux",answer:"commentaire client",status:"statut",owner:"acteur",erp:"sujet ERP"};
@@ -2724,6 +2724,44 @@
     state.points=(state.points||[]).filter(x=>x.projectId!==p.id);
     if(editingPt)editingPt=null;
     save();render();toast(`${n} points ouverts supprimés.`);
+  }
+  // Fichier lié (Edge / Chrome sur ordinateur) : le navigateur garde l'accès au fichier choisi, ici la copie OneDrive synchronisée.
+  // La poignée est conservée dans IndexedDB (par projet, sur ce poste) ; elle ne quitte jamais le navigateur.
+  const xlFsOk=()=>typeof window.showOpenFilePicker==="function";
+  const xlHandles={};
+  function xlIdb(){return new Promise((res,rej)=>{const r=indexedDB.open("todo-projets-fichiers",1);r.onupgradeneeded=()=>r.result.createObjectStore("xl");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+  async function xlHandleGet(pid){
+    if(xlHandles[pid])return xlHandles[pid];
+    try{const db=await xlIdb();return await new Promise(res=>{const q=db.transaction("xl").objectStore("xl").get(pid);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null)})}catch(e){return null}
+  }
+  async function xlHandleSet(pid,h){
+    xlHandles[pid]=h;
+    try{const db=await xlIdb();await new Promise(res=>{const t=db.transaction("xl","readwrite");t.objectStore("xl").put(h,pid);t.oncomplete=res;t.onerror=res;t.onabort=res})}catch(e){}
+  }
+  async function xlLink(p){
+    if(!xlFsOk()){xlPick(p);return}
+    let h;
+    try{[h]=await window.showOpenFilePicker({id:"xl-points",multiple:false,types:[{description:"Classeur Excel",accept:{"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":[".xlsx"]}}]})}
+    catch(e){return}
+    await xlHandleSet(p.id,h);
+    ui.xlFile=ui.xlFile||{};ui.xlFile[p.id]=h.name;saveUi();
+    await xlRead(p,h);
+  }
+  async function xlRead(p,h){
+    try{
+      if(h.queryPermission&&await h.queryPermission({mode:"read"})!=="granted"&&await h.requestPermission({mode:"read"})!=="granted"){uiAlert("Accès au fichier Excel refusé. Cliquez sur « Autoriser » quand le navigateur le demande.");return}
+      await xlSync(p,await h.getFile());
+    }catch(e){
+      if(e&&e.name&&!/NotFound|NotReadable|InvalidState/.test(e.name)){uiAlert("Lecture du fichier Excel impossible : "+(e.message||e.name));return}
+      if(await uiConfirm(`Le fichier « ${h.name} » est introuvable (déplacé, renommé ou pas encore synchronisé par OneDrive).\n\nChoisir à nouveau le fichier Excel lié ?`,{ok:"Choisir le fichier"}))xlLink(p);
+    }
+  }
+  // Un clic : relit le fichier lié ; la première fois, on le choisit
+  async function xlQuick(p){
+    if(!xlFsOk()){xlPick(p);return}
+    const h=await xlHandleGet(p.id);
+    if(!h){xlLink(p);return}
+    await xlRead(p,h);
   }
   function xlPick(p){
     const inp=document.createElement("input");inp.type="file";inp.accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
