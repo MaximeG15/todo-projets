@@ -30,5 +30,5 @@
   const ch={on(type,f,cb){window.__rt.push({table:f&&f.table,cb});return ch},subscribe(cb){if(cb)setTimeout(()=>cb("SUBSCRIBED"),0);window.__rtStatus=cb;return ch}};
   window.__emit=(table,pl)=>window.__rt.filter(h=>h.table===table).forEach(h=>h.cb(pl));
   window.supabase={createClient:()=>({auth:{getSession:async()=>({data:{session:{access_token:"eyJ",user}}}),onAuthStateChange(){},refreshSession:async()=>({data:{}}),signOut:async()=>({})},
-    from:q,channel:()=>{window.__rt=[];return ch},removeChannel(){},realtime:{setAuth(){}},functions:{invoke:async()=>({data:null,error:{message:"x"}})}})};
+    rpc:async(n,a)=>{(window.__rpc=window.__rpc||[]).push(n);try{sessionStorage.setItem('__rpc',(sessionStorage.getItem('__rpc')||'')+n+';')}catch(e){}return {data:null,error:null}},from:q,channel:()=>{window.__rt=[];return ch},removeChannel(){},realtime:{setAuth(){}},functions:{invoke:async()=>({data:null,error:{message:"x"}})}})};
 })();

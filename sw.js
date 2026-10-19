@@ -1,8 +1,7 @@
 // To do projets : fonctionnement hors connexion de l'application installée.
 // Les données en ligne (Supabase) ne passent jamais par ce cache.
-const CACHE = "todo-projets-v51";
-const CORE = ["./", "./index.html", "./css/app.css", "./js/config.js", "./js/xlsx.js", "./js/app.js", "./manifest.webmanifest", "./icons/icon-192-v3.png", "./icons/icon-512-v3.png"];
-const LIB = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@";
+const CACHE = "todo-projets-v52";
+const CORE = ["./", "./index.html", "./css/app.css", "./js/config.js", "./js/xlsx.js", "./js/app.js", "./manifest.webmanifest", "./icons/icon-192-v3.png", "./icons/icon-512-v3.png", "./vendor/supabase.js"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
@@ -15,7 +14,7 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
-  if (!sameOrigin && !req.url.startsWith(LIB)) return; // Supabase, polices… : réseau direct
+  if (!sameOrigin) return; // Supabase : réseau direct
   // Page de l'application : toujours la version la plus récente, la copie locale seulement hors connexion
   if (req.mode === "navigate") {
     e.respondWith(fetch(req.url, { cache: "no-store", credentials: "same-origin" }).then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put("./index.html", c)); return r; })
@@ -24,13 +23,13 @@ self.addEventListener("fetch", e => {
   }
   // Code de l'application (styles et scripts) : toujours la version en ligne, la copie locale seulement hors connexion.
   // (clé de cache sans le paramètre ?v= pour retrouver la copie hors connexion)
-  if (sameOrigin && /\.(js|css)$/.test(url.pathname) && !url.pathname.endsWith("/sw.js")) {
+  if (sameOrigin && /\.(js|css)$/.test(url.pathname) && !url.pathname.endsWith("/sw.js") && !url.pathname.includes("/vendor/")) {
     const key = url.origin + url.pathname;
     e.respondWith(fetch(req, { cache: "no-store" }).then(r => { if (r.ok) { const c = r.clone(); caches.open(CACHE).then(x => x.put(key, c)); } return r; })
       .catch(() => caches.match(key)));
     return;
   }
-  // Fichiers fixes (icônes, librairie) : copie locale, mise à jour en arrière-plan
+  // Fichiers fixes (icônes, polices, librairie Supabase) : copie locale, mise à jour en arrière-plan
   e.respondWith(caches.match(req).then(hit => {
     const net = fetch(req).then(r => { if (r.ok) { const c = r.clone(); caches.open(CACHE).then(x => x.put(req, c)); } return r; }).catch(() => hit);
     return hit || net;

@@ -625,6 +625,51 @@
     f.onchange=e=>{if(e.target.files[0])importToCloud(e.target.files[0]);e.target.value=""};
     a.querySelectorAll("button").forEach(b=>b.onclick=()=>({imp:()=>f.click(),exp:exportData,name:()=>openProfile(false),pwd:changePassword,out:logout,loc:toLocal})[b.dataset.a]());
   }
+  // ---------- Données et confidentialité (RGPD) : information, export, suppression du compte ----------
+  function openPrivacy(){
+    const cl=MODE==="cloud";
+    const d=document.createElement("dialog");d.className="uidlg privdlg";d.setAttribute("aria-label","Données et confidentialité");
+    d.innerHTML=`<form method="dialog"><h3>Données et confidentialité</h3>
+      <div class="privbody">
+      <h4>Données enregistrées</h4>
+      <p>Ce que vous saisissez : projets, tâches, points ouverts, demandes client, comptes rendus de réunion et contacts de projet. Pour chaque utilisateur en ligne : prénom, nom et adresse e-mail. Le lien de votre calendrier Outlook, si vous l'ajoutez, n'est visible que de vous.</p>
+      <h4>Où sont-elles stockées ?</h4>
+      <p>${cl?"Mode en ligne : base de données Supabase hébergée dans l'Union européenne (Irlande).":"Mode local : uniquement dans ce navigateur, ou dans le fichier que vous avez choisi sur votre ordinateur."} Le code de l'appli est servi par GitHub Pages et ne contient aucune donnée. L'appli ne fait appel à aucun autre service tiers : polices et bibliothèques sont hébergées avec elle. Avec le lien Excel, le fichier reste sur votre ordinateur ; seuls les points lus sont enregistrés.</p>
+      <h4>Qui y a accès ?</h4>
+      <p>Un projet n'est visible que de son propriétaire et des personnes avec qui il le partage.</p>
+      <h4>Durées de conservation</h4>
+      <ul><li>Éléments supprimés (corbeille) : effacés définitivement après ${TRASH_DAYS} jours.</li>
+      <li>Contacts d'un projet archivé : effacés ${Math.round(CONTACTS_ARCH_DAYS/30)} mois après l'archivage.</li>
+      <li>Projet supprimé : tout son contenu est effacé${cl?` ; il disparaît des sauvegardes automatiques au bout de ${BACKUP_WEEKS} semaines`:""}.</li>
+      ${cl?`<li>Sauvegardes automatiques hebdomadaires : conservées ${BACKUP_WEEKS} semaines.</li>`:""}</ul>
+      <h4>Vos droits</h4>
+      <p>Vous pouvez à tout moment télécharger une copie de vos données${cl?" ou supprimer votre compte":""}. Pour toute autre demande (rectification, question), adressez-vous au propriétaire du projet concerné.</p>
+      </div>
+      <div class="uibtns">${cl?`<button type="button" class="btn ghost danger-t" data-del>Supprimer mon compte…</button><span style="flex:1"></span>`:""}<button type="button" class="btn" data-exp>Exporter mes données</button><button type="button" class="btn primary" data-x>Fermer</button></div></form>`;
+    document.body.appendChild(d);
+    const close=()=>{try{d.close()}catch(e){}d.remove()};
+    d.addEventListener("cancel",e=>{e.preventDefault();close()});
+    d.querySelector("[data-x]").onclick=close;
+    d.querySelector("[data-exp]").onclick=()=>exportData();
+    const del=d.querySelector("[data-del]");if(del)del.onclick=async()=>{close();await deleteAccount()};
+    if(d.showModal)d.showModal();else d.setAttribute("open","");
+  }
+  async function deleteAccount(){
+    const mine=state.projects.filter(p=>isOwner(p.id)), shared=mine.filter(p=>((cloud.meta[p.id]||{}).members||[]).length);
+    const msg=[`Supprimer définitivement votre compte ${cloud.email} ?`,"",
+      mine.length?`Vos ${mine.length} projet(s) seront supprimés avec tout leur contenu${shared.length?`, y compris pour les personnes avec qui ils sont partagés (${shared.map(p=>p.name).join(", ")})`:""}.`:"Vous n'êtes propriétaire d'aucun projet.",
+      "Vous serez retiré des projets partagés avec vous.","","Pensez à « Exporter mes données » avant. Cette action est irréversible."].join("\n");
+    if(!await uiConfirm(msg,{ok:"Supprimer mon compte",danger:true}))return;
+    const conf=await uiPrompt("Pour confirmer, saisissez votre adresse e-mail","",{ok:"Supprimer définitivement"});
+    if(conf==null)return;
+    if(norm(conf.trim())!==norm(cloud.email)){uiAlert("L'adresse saisie ne correspond pas : le compte n'a pas été supprimé.");return}
+    const {error}=await cloudClient().rpc("delete_my_account");
+    if(error){uiAlert(/delete_my_account|PGRST202|function/i.test(error.message||"")?"La suppression de compte n'est pas encore activée sur le serveur. Contactez l'administrateur de l'appli.":"Suppression impossible : "+error.message);return}
+    await uiAlert("Votre compte et vos données ont été supprimés.");
+    try{await cloudClient().auth.signOut()}catch(e){}
+    try{localStorage.removeItem("todo-mode")}catch(e){}
+    location.reload();
+  }
   // Import d'un fichier .json (export ou fichier de données local) dans le compte en ligne
   function importToCloud(file){
     const r=new FileReader();
@@ -2067,7 +2112,7 @@
   }
 
   // ---------- Corbeille ----------
-  const TRASH_DAYS=30;
+  const TRASH_DAYS=30, CONTACTS_ARCH_DAYS=182, BACKUP_WEEKS=12;
   async function emptyTrash(){
     const n=state.tasks.filter(t=>t.deletedAt).length+(state.requests||[]).filter(r=>r.deletedAt).length+(state.points||[]).filter(o=>o.deletedAt).length;
     if(!n||!await uiConfirm(`Supprimer définitivement ${n>1?`les ${n} éléments`:"l'élément"} de la corbeille ? Cette action est irréversible.`,{ok:"Vider la corbeille",danger:true}))return;
@@ -2077,6 +2122,15 @@
     const lim=Date.now()-TRASH_DAYS*864e5;
     const old=x=>x.deletedAt&&x.deletedAt<lim;
     if(state.tasks.some(old)||(state.requests||[]).some(old)||(state.points||[]).some(old)){state.tasks=state.tasks.filter(t=>!old(t));state.requests=(state.requests||[]).filter(r=>!old(r));state.points=(state.points||[]).filter(o=>!old(o));save();render()}
+    // Mode local : mêmes règles de conservation que côté serveur (comptes rendus supprimés : 30 jours ; contacts d'un projet archivé : 6 mois)
+    if(MODE!=="cloud"){
+      const limA=Date.now()-CONTACTS_ARCH_DAYS*864e5;let ch=false;
+      state.projects.forEach(p=>{
+        if(p.meetings&&p.meetings.some(old)){p.meetings=p.meetings.filter(m=>!old(m));ch=true}
+        if(p.archived&&p.archivedAt&&p.archivedAt<limA&&(p.contacts||[]).length){p.contacts=[];ch=true}
+      });
+      if(ch){save();render()}
+    }
   }
   function renderTrash(L){
     const items=[...state.tasks.filter(t=>t.deletedAt),...(state.requests||[]).filter(r=>r.deletedAt).map(r=>Object.assign(Object.create(null),{__req:r,...r})),...(state.points||[]).filter(o=>o.deletedAt).map(o=>Object.assign(Object.create(null),{__pt:o,...o,title:o.text}))].sort((a,b)=>b.deletedAt-a.deletedAt);
@@ -2108,7 +2162,7 @@
 
   // ---------- Archivage des projets ----------
   function archiveProject(p,on){
-    const id=p.id;p.archived=!!on;
+    const id=p.id;p.archived=!!on;if(MODE!=="cloud")p.archivedAt=on?Date.now():null;
     if(on&&view===id)view="all";
     save();render();
     toast(on?`Projet « ${short(p.name)} » archivé : il reste consultable dans « Projets archivés ».`:`Projet « ${short(p.name)} » réactivé.`,()=>{const cur=proj(id);if(!cur)return;cur.archived=!on;if(on)view=id;save();render()});
@@ -3683,6 +3737,7 @@
   function closeMenu(){const s=$("#side");if(s){s.classList.remove("open");$("#menubtn").setAttribute("aria-expanded","false")}}
 
   // ---------- Init ----------
+  $("#privacybtn").onclick=openPrivacy;
   $("#addp").onsubmit=e=>{e.preventDefault();addProject($("#newp").value);$("#newp").value=""};
   $("#quick").onsubmit=e=>{e.preventDefault();addTask()};
   $("#qt").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addTask()}});

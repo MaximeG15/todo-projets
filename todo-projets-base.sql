@@ -562,3 +562,18 @@ create table if not exists public.point_templates (
 alter table public.point_templates enable row level security;
 create policy "point_templates lecture" on public.point_templates for select to authenticated using (true);
 grant select on public.point_templates to authenticated;
+
+-- ---------- Conservation des données ----------
+-- Date d'archivage d'un projet (renseignée automatiquement)
+alter table public.projects add column if not exists archived_at bigint;
+create or replace function public.set_archived_at() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  if new.archived and not coalesce(old.archived, false) then new.archived_at := (extract(epoch from now()) * 1000)::bigint;
+  elsif not new.archived then new.archived_at := null;
+  end if;
+  return new;
+end $$;
+create or replace trigger projects_archived_at before update of archived on public.projects
+  for each row execute function public.set_archived_at();
+-- Purge nocturne : voir supabase/conservation.sql
