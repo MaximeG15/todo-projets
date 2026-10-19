@@ -1305,7 +1305,10 @@
         const xl=xlOn(p.id)&&ptLinkedProj(p.id)&&ui.xlLast&&ui.xlLast[p.id]?new Date(ui.xlLast[p.id]):null, xf=ui.xlFile&&ui.xlFile[p.id];
         K.innerHTML=`<div class="ptbar"><div class="bar" role="img" aria-label="Répartition des points : ${c} côté client, ${m} côté Mecalux, ${t} côté tiers, ${nd} sans interlocuteur, ${lev} levés"><span class="b-cli" style="width:${pc(c)}"></span><span class="b-mec" style="width:${pc(m)}"></span><span class="b-tie" style="width:${pc(t)}"></span><span class="b-nd" style="width:${pc(nd)}"></span><span class="b-ok" style="width:${pc(lev)}"></span></div>
           <div class="lg">${c?`<span><i class="b-cli"></i><b>${c}</b> à répondre par le client</span>`:""}${m?`<span><i class="b-mec"></i><b>${m}</b> côté Mecalux</span>`:""}${t?`<span><i class="b-tie"></i><b>${t}</b> côté tiers</span>`:""}${nd?`<span><i class="b-nd"></i><b>${nd}</b> sans interlocuteur</span>`:""}<span><i class="b-ok"></i><b>${lev}</b> levé${lev>1?"s":""}</span></div></div>
-          ${xl?`<span class="xlbadge" title="${esc(xf||"")}">Lié à ${xf?esc(xf):"l'Excel"} · mis à jour le ${xl.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})} à ${xl.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</span>`:""}`;
+          ${xl?`<span class="xlbadge" title="${esc(xf||"")}${xf&&xlFsOk()?" – synchronisation automatique toutes les 10 minutes, appli ouverte":""}">Lié à ${xf?esc(xf):"l'Excel"} · mis à jour le ${xl.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})} à ${xl.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</span>`:""}
+          ${xlOn(p.id)&&xlNeed[p.id]?`<button type="button" class="xlbadge xlact" data-xlgo>Cliquez pour reprendre la synchro Excel</button>`:""}
+          ${xlOn(p.id)&&ui.xlPend&&ui.xlPend[p.id]?`<button type="button" class="xlbadge xlact" data-xlgo>Excel : ${ui.xlPend[p.id]} élément${ui.xlPend[p.id]>1?"s":""} à valider</button>`:""}`;
+        K.querySelectorAll("[data-xlgo]").forEach(b=>b.onclick=()=>xlQuick(p));
         K.hidden=false;
       }
     }
@@ -2750,7 +2753,9 @@
   async function xlRead(p,h){
     try{
       if(h.queryPermission&&await h.queryPermission({mode:"read"})!=="granted"&&await h.requestPermission({mode:"read"})!=="granted"){uiAlert("Accès au fichier Excel refusé. Cliquez sur « Autoriser » quand le navigateur le demande.");return}
-      await xlSync(p,await h.getFile());
+      const f=await h.getFile();delete xlNeed[p.id];
+      if(await xlSync(p,f)==="ok"){ui.xlMod=ui.xlMod||{};ui.xlMod[p.id]=f.lastModified;saveUi()}
+      render();
     }catch(e){
       if(e&&e.name&&!/NotFound|NotReadable|InvalidState/.test(e.name)){uiAlert("Lecture du fichier Excel impossible : "+(e.message||e.name));return}
       if(await uiConfirm(`Le fichier « ${h.name} » est introuvable (déplacé, renommé ou pas encore synchronisé par OneDrive).\n\nChoisir à nouveau le fichier Excel lié ?`,{ok:"Choisir le fichier"}))xlLink(p);
@@ -2785,7 +2790,7 @@
     const nUp=plan.updates.length, nF=plan.updates.reduce((n,u)=>n+u.fields.length,0)+(prefer==="xl"?plan.conflicts.length:0);
     const nUpAll=new Set([...plan.updates.map(u=>u.pt),...(prefer==="xl"?plan.conflicts.map(c=>c.pt):[])]).size;
     const nothing=!nUpAll&&!plan.added.length&&!plan.gone.length&&!plan.links.length;
-    if(nothing){if(plan.silent.length){plan.silent.forEach(f=>f());save()}toast(`Points ouverts déjà à jour avec l'Excel (${parsed.rows.length} lignes lues).`);ui.xlLast=ui.xlLast||{};ui.xlLast[p.id]=Date.now();saveUi();return}
+    if(nothing){if(plan.silent.length){plan.silent.forEach(f=>f());save()}toast(`Points ouverts déjà à jour avec l'Excel (${parsed.rows.length} lignes lues).`);ui.xlLast=ui.xlLast||{};ui.xlLast[p.id]=Date.now();if(ui.xlPend)delete ui.xlPend[p.id];saveUi();render();return "ok"}
     const lines=[`Fichier : ${file.name} (onglet « ${parsed.sheet} », ${parsed.rows.length} lignes)`,""];
     if(nUpAll)lines.push(`• ${nUpAll} point${nUpAll>1?"s":""} mis à jour (${nF} champ${nF>1?"s":""})${nUp?" :":""}`,...plan.updates.slice(0,6).map(u=>`   – ${tag(u.row)}${short(u.pt.text)} : ${u.fields.map(f=>XL_LBL[f]).join(", ")}`),...(nUp>6?[`   – … et ${nUp-6} autre(s)`]:[]));
     if(plan.added.length)lines.push(`• ${plan.added.length} nouveau${plan.added.length>1?"x":""} point${plan.added.length>1?"s":""} :`,...plan.added.slice(0,6).map(r=>`   – ${tag(r)}${short(r.v.text)}`),...(plan.added.length>6?[`   – … et ${plan.added.length-6} autre(s)`]:[]));
@@ -2799,21 +2804,65 @@
       :[{v:null,label:"Annuler",cls:"ghost"},{v:"keep",label:"Appliquer",cls:"primary",focus:true}];
     const ch=await uiDialog({title:"Mise à jour depuis Excel",msg:lines.join("\n"),buttons:btns});
     if(ch==null)return;
+    const undo=xlApply(p,plan,prefer,ch);
+    if(ui.xlPend)delete ui.xlPend[p.id];saveUi();
+    const nAdd=plan.added.length;
+    toast(`Mise à jour Excel appliquée : ${nUpAll} modifié${nUpAll>1?"s":""}, ${nAdd} ajouté${nAdd>1?"s":""}${plan.gone.length?`, ${plan.gone.length} retiré${plan.gone.length>1?"s":""}${ch==="trash"?" (corbeille)":" (conservé"+(plan.gone.length>1?"s":"")+")"}`:""}`,undo);
+    return "ok";
+  }
+  // Applique un plan (gone : "trash", "keep" ou null pour ne pas toucher aux points retirés de l'Excel) ; renvoie l'annulation
+  function xlApply(p,plan,prefer,gone){
     const before=JSON.parse(JSON.stringify((state.points||[]).filter(x=>x.projectId===p.id)));
     const now=Date.now();
     const setF=(x,f,v)=>{if(f==="status"){v=v||"open";x.closedAt=v==="closed"?(x.closedAt||now):null}x[f]=v};
     plan.updates.forEach(u=>u.fields.forEach(f=>setF(u.pt,f,u.row.v[f])));
     if(prefer==="xl")plan.conflicts.forEach(c=>setF(c.pt,c.f,c.row.v[c.f]));
-    plan.refs.forEach(f=>f());
+    plan.refs.forEach(f=>f());plan.silent.forEach(f=>f());
     plan.added.forEach((r,i)=>state.points.push({id:newId(),projectId:p.id,...r.v,status:r.v.status||"open",ownerName:"",taskId:null,requestId:null,createdAt:r.date?r.date+i:now+i,closedAt:r.v.status==="closed"?now:null,xl:{ver:XL_VER,n:r.n||"",k:xlKey(r.v.text),v:r.v}}));
-    plan.gone.forEach(x=>{delete x.xl;if(ch==="trash")x.deletedAt=now});
+    if(gone)plan.gone.forEach(x=>{delete x.xl;if(gone==="trash")x.deletedAt=now});
     ui.xlLast=ui.xlLast||{};ui.xlLast[p.id]=now;saveUi();
     save();render();
-    const nAdd=plan.added.length;
-    toast(`Mise à jour Excel appliquée : ${nUpAll} modifié${nUpAll>1?"s":""}, ${nAdd} ajouté${nAdd>1?"s":""}${plan.gone.length?`, ${plan.gone.length} retiré${plan.gone.length>1?"s":""}${ch==="trash"?" (corbeille)":" (conservé"+(plan.gone.length>1?"s":"")+")"}`:""}`,()=>{
-      state.points=(state.points||[]).filter(x=>x.projectId!==p.id).concat(before);save();render();
-    });
+    return ()=>{state.points=(state.points||[]).filter(x=>x.projectId!==p.id).concat(before);save();render()};
   }
+  // ---------- Synchronisation automatique (appli ouverte, fichier lié, accès autorisé) ----------
+  // Toutes les 10 minutes, à l'ouverture et au retour sur l'onglet. Les changements faits dans l'Excel et les nouveaux points
+  // sont appliqués sans confirmation (annulables) ; les points retirés de l'Excel et les écarts d'un premier rapprochement
+  // attendent un clic sur « Synchroniser avec Excel ».
+  const XL_AUTO_MS=10*60e3;
+  const xlNeed={};let xlAutoBusy=false,xlAutoAt=0;
+  const xlCanSync=pid=>xlOn(pid)&&(MODE!=="cloud"||isOwner(pid));
+  async function xlAuto(force){
+    if(xlAutoBusy||!xlFsOk()||(!force&&Date.now()-xlAutoAt<60e3))return;
+    if(document.hidden||document.querySelector("dialog[open]")||editingPt||mtgCur)return;
+    xlAutoBusy=true;xlAutoAt=Date.now();
+    try{
+      for(const p of state.projects.filter(p=>!p.archived&&xlCanSync(p.id))){
+        const h=await xlHandleGet(p.id);if(!h)continue;
+        let file;
+        try{
+          if(h.queryPermission&&await h.queryPermission({mode:"read"})!=="granted"){if(!xlNeed[p.id]){xlNeed[p.id]=true;render()}continue}
+          file=await h.getFile();
+        }catch(e){continue}
+        if(xlNeed[p.id]){delete xlNeed[p.id];render()}
+        ui.xlMod=ui.xlMod||{};
+        if(ui.xlMod[p.id]===file.lastModified)continue;
+        let parsed;try{parsed=xlParse(await window.XlsxLite.readXlsx(await file.arrayBuffer()))}catch(e){continue}
+        if(document.querySelector("dialog[open]")||editingPt||mtgCur)break;
+        const plan=xlPlan(p.id,parsed.rows);
+        if(plan.conflicts.length||plan.links.length){ui.xlPend=ui.xlPend||{};ui.xlPend[p.id]=plan.conflicts.length+plan.links.length+plan.gone.length;ui.xlMod[p.id]=file.lastModified;saveUi();render();continue}
+        const nUp=plan.updates.length,nAdd=plan.added.length;
+        ui.xlPend=ui.xlPend||{};if(plan.gone.length)ui.xlPend[p.id]=plan.gone.length;else delete ui.xlPend[p.id];
+        ui.xlMod[p.id]=file.lastModified;saveUi();
+        if(!nUp&&!nAdd&&!plan.silent.length&&!plan.refs.length){ui.xlLast=ui.xlLast||{};ui.xlLast[p.id]=Date.now();saveUi();render();continue}
+        const undo=xlApply(p,plan,"xl",null);
+        if(nUp||nAdd)toast(`« ${p.name} » mis à jour depuis Excel : ${nUp} point${nUp>1?"s":""} modifié${nUp>1?"s":""}, ${nAdd} ajouté${nAdd>1?"s":""}.`,undo);
+      }
+    }finally{xlAutoBusy=false}
+  }
+  setInterval(()=>xlAuto(true),XL_AUTO_MS);
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)xlAuto(false)});
+  setTimeout(()=>xlAuto(true),8000);
+  window.__xlAutoNow=()=>xlAuto(true); // utilisé par les tests
   // Rapproche les lignes Excel des points du projet et prépare les changements (sans rien modifier)
   function xlPlan(pid,rows){
     const pts=(state.points||[]).filter(x=>x.projectId===pid);

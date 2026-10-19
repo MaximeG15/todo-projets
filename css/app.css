@@ -574,6 +574,8 @@ body.hasselbar{padding-bottom:calc(var(--selbarh,70px) + 40px)}
 .ptbar i{width:10px;height:10px;border-radius:3px;display:inline-block}
 .b-cli{background:#3E7CB1}.b-mec{background:#D9480F}.b-tie{background:#8E5BB5}.b-nd{background:#9AABB6}.b-ok{background:#2F7D5B}
 .xlbadge{font-size:13px;color:#1F5C43;background:#E3F2EA;border-radius:999px;padding:4px 12px;white-space:nowrap}
+.xlbadge.xlact{border:0;cursor:pointer;color:#6B5200;background:#FFF4CC;font:inherit;font-size:13px;font-weight:600}
+.xlbadge.xlact:hover{background:#F2D27A}
 
 /* --- Pied de la colonne : avatar --- */
 .foot{flex-direction:row;align-items:center;gap:10px}
