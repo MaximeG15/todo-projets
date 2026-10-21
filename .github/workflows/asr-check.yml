@@ -11,6 +11,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with: { ref: main, path: app }
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
@@ -62,4 +63,4 @@ jobs:
         run: |
           nproc > asr-machine.txt; free -m >> asr-machine.txt
           git config user.name "github-actions"; git config user.email "github-actions@users.noreply.github.com"
-          git add asr-small.txt asr-turbo.txt asr-machine.txt; git commit -m "Résultats transcription [vendored]" && git push || true
+          git pull -q --rebase || true; git add asr-small.txt asr-turbo.txt asr-machine.txt; git commit -m "Résultats transcription [vendored]" && git push || true
