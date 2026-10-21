@@ -1,14 +1,17 @@
 import os,sys,io,base64;sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 from helpers import APP,FAKE,OUT
 from playwright.sync_api import sync_playwright
-from PIL import Image,ImageDraw
+import zlib,struct
 errs=[]
 def ok(c,m):
     print(("OK   " if c else "FAIL ")+m)
     if not c: errs.append(m)
 # logo fictif : rectangle bleu au milieu de larges marges blanches
-im=Image.new("RGB",(600,300),"white");ImageDraw.Draw(im).rectangle([100,100,499,199],fill=(29,78,120))
-buf=io.BytesIO();im.save(buf,"PNG");PNG=buf.getvalue()
+def png(w,h,px):
+    raw=b"".join(b"\0"+b"".join(bytes(px(x,y)) for x in range(w)) for y in range(h))
+    ck=lambda t,d:struct.pack(">I",len(d))+t+d+struct.pack(">I",zlib.crc32(t+d)&0xffffffff)
+    return b"\x89PNG\r\n\x1a\n"+ck(b"IHDR",struct.pack(">IIBBBBB",w,h,8,2,0,0,0))+ck(b"IDAT",zlib.compress(raw))+ck(b"IEND",b"")
+PNG=png(600,300,lambda x,y:(29,78,120) if 100<=x<=499 and 100<=y<=199 else (255,255,255))
 with sync_playwright() as pw:
     b=pw.chromium.launch();pg=b.new_page(viewport={"width":1440,"height":950})
     pg.on("pageerror",lambda e:errs.append("JS: "+str(e)))
