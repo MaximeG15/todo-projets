@@ -1,0 +1,52 @@
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /index.html HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /css/app.css?v=66 HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /vendor/supabase.js HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /js/config.js?v=66 HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /js/xlsx.js?v=66 HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /js/app.js?v=66 HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /fonts/barlow-latin-600-normal.woff2 HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /fonts/barlow-latin-400-normal.woff2 HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /fonts/barlow-condensed-latin-700-normal.woff2 HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /sw.js HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /css/app.css HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /js/config.js HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /js/xlsx.js HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /js/app.js HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /icons/icon-192-v3.png HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /manifest.webmanifest HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:14] "GET /icons/icon-512-v3.png HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:16] "GET /fr.wav HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:16] "GET /js/transcribe-worker.js HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:16] "GET /vendor/transformers/transformers.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:17] "GET /sw.js HTTP/1.1" 304 -
+127.0.0.1 - - [21/Oct/2026 15:07:18] "GET /vendor/transformers/ort-wasm-simd-threaded.jsep.mjs HTTP/1.1" 200 -
+127.0.0.1 - - [21/Oct/2026 15:07:18] "GET /vendor/transformers/ort-wasm-simd-threaded.jsep.wasm HTTP/1.1" 200 -
+console: Unable to determine content-length from response headers. Will expand buffer when needed.
+console: Unable to determine content-length from response headers. Will expand buffer when needed.
+console: Unable to determine content-length from response headers. Will expand buffer when needed.
+console: Unable to determine content-length from response headers. Will expand buffer when needed.
+console: Unable to determine content-length from response headers. Will expand buffer when needed.
+console: Unable to determine content-length from response headers. Will expand buffer when needed.
+=== onnx-community/whisper-small
+{
+ "res": {
+  "t": "done",
+  "job": "x",
+  "text": "Bonjour. Nous sommes sur le quai de réception. Les palettes arrivent avec une étiquette fournisseure, qui passe tout court dans le qualité de l'hombre stockage."
+ },
+ "secs": 21,
+ "dur": 9.795691609977323,
+ "log": [
+  "dl 100% 0Mo",
+  "dl 25% 240Mo",
+  "dl 50% 240Mo",
+  "dl 75% 240Mo",
+  "dl 100% 240Mo",
+  "loaded",
+  "charge en 6s",
+  "prog 0",
+  "prog 100",
+  "done"
+ ]
+}
