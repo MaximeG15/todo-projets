@@ -1115,6 +1115,7 @@
     const nb=state.tasks.filter(t=>t.projectId===p.id).length;
     const mem=MODE==="cloud"&&cloud.meta[p.id]?cloud.meta[p.id].members.length:0;
     if(!await uiConfirm(`Supprimer définitivement le projet « ${p.name} »${nb?` et ses ${nb} tâche(s)`:""} ?${mem?` Il sera aussi supprimé pour les ${mem} personne(s) avec qui il est partagé.`:""}\n\nCette action est irréversible. Pour un projet terminé, préférez « Archiver » : il sera masqué mais restera consultable.`,{ok:"Supprimer le projet",danger:true}))return;
+    await visPurgeProject(p.id);
     state.projects=state.projects.filter(x=>x.id!==p.id);
     state.tasks=state.tasks.filter(t=>t.projectId!==p.id);
     state.requests=(state.requests||[]).filter(r=>r.projectId!==p.id);
@@ -1651,6 +1652,15 @@
     L.appendChild(top);
     if(MODE==="cloud"&&ui.showMeetings){loadMeetings(false);const ms=document.createElement("p");ms.id="meetstatus";ms.style.margin="0";top.insertBefore(ms,top.lastElementChild);setTimeout(renderMeetStatus,0)}
     const meets=MODE==="cloud"?meetingsByDay(weekStart):{};
+    // Visites sur site (préparées, en cours ou terminées) à leur date
+    visEnsure();
+    const hid=p?null:hiddenSet();
+    const visDay={};state.projects.filter(x=>(p?x.id===p.id:!x.archived&&!(hid&&hid.has(x.id)))).forEach(x=>visList(x.id).forEach(v=>{if(v.status==="prep"&&!(v.prep&&v.prep.plannedAt))return;const k=iso(new Date(visDate(v)));(visDay[k]=visDay[k]||[]).push(v)}));
+    const visEl=v=>{const el=document.createElement("div");const pj=proj(v.projectId)||{name:"",color:"#999"};const st={prep:"Préparée",open:"En cours",done:"Terminée"}[v.status]||"";
+      el.className="meet visag clk "+v.status;el.setAttribute("role","button");el.tabIndex=0;
+      el.innerHTML=`<span class="mt">${v.status==="prep"||v.startedAt?hm(visDate(v)):""} <span class="vstb">Visite · ${st}</span></span><span class="mn">${esc(v.title)}</span>${showProj?`<span class="ml"><i class="dot" style="background:${esc(pj.color)}"></i>${esc(pj.name)}</span>`:v.prep&&v.prep.location?`<span class="ml">${esc(v.prep.location)}</span>`:""}`;
+      el.title=`${v.title} (${st.toLowerCase()}) — cliquez pour ouvrir la visite`;
+      el.onclick=()=>visOpen(v);el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();visOpen(v)}};return el};
     const wk=document.createElement("div");wk.className="week";
     for(let i=0;i<7;i++){
       const d=addDays(weekStart,i), di=iso(d);
@@ -1661,9 +1671,11 @@
       col.className=`day${i>=5?" we":""}${di===todayIso?" today":""}`;
       col.innerHTML=`<h2 class="dhead"><span>${cap(d.toLocaleDateString("fr-FR",{weekday:"short",day:"numeric"}))}</span>${di===todayIso?`<span class="badge">Aujourd'hui</span>`:(nOpen?`<span class="n">${nOpen}</span>`:"")}</h2><div class="dbody"></div>`;
       const body=col.querySelector(".dbody");
+      const dayVis=(visDay[di]||[]).sort((a,b)=>visDate(a)-visDate(b));
+      dayVis.forEach(v=>body.appendChild(visEl(v)));
       dayMeets.forEach(m=>body.appendChild(meetEl(m,d.getTime())));
       if(items.length)items.forEach(t=>body.appendChild(card(t,showProj,false)));
-      else if(i<5&&!dayMeets.length)body.innerHTML=`<div class="dempty">Rien de prévu</div>`;
+      else if(i<5&&!dayMeets.length&&!dayVis.length)body.innerHTML=`<div class="dempty">Rien de prévu</div>`;
       dropZone(col,di);
       wk.appendChild(col);
     }
@@ -3520,8 +3532,8 @@
   const idbGet=(st,k)=>idb(st,"readonly",s=>s.get(k));
   const idbPut=(st,v)=>idb(st,"readwrite",s=>s.put(v));
   const idbDel=(st,k)=>idb(st,"readwrite",s=>s.delete(k));
-  const rowVis=v=>({id:v.id,project_id:v.projectId,title:v.title||"",started_at:v.startedAt||null,ended_at:v.endedAt||null,status:v.status||"open",flows:v.flows||[],notes:v.notes||[],prep:v.prep||{},items:v.items||[],updated_at:v.updatedAt||Date.now(),deleted_at:v.deletedAt||null});
-  const fromVis=r=>({id:r.id,projectId:r.project_id,title:r.title||"",startedAt:r.started_at?Number(r.started_at):null,endedAt:r.ended_at?Number(r.ended_at):null,status:r.status||"open",flows:Array.isArray(r.flows)?r.flows:[],notes:Array.isArray(r.notes)?r.notes:[],prep:r.prep&&typeof r.prep==="object"?r.prep:{},items:Array.isArray(r.items)?r.items:[],createdBy:r.created_by||"",createdAt:Number(r.created_at)||0,updatedAt:Number(r.updated_at)||0,deletedAt:r.deleted_at?Number(r.deleted_at):null});
+  const rowVis=v=>({id:v.id,project_id:v.projectId,title:v.title||"",started_at:v.startedAt||null,ended_at:v.endedAt||null,status:v.status||"open",flows:v.flows||[],notes:v.notes||[],prep:v.prep||{},items:v.items||[],sync:v.sync||{},updated_at:v.updatedAt||Date.now(),deleted_at:v.deletedAt||null});
+  const fromVis=r=>({id:r.id,projectId:r.project_id,title:r.title||"",startedAt:r.started_at?Number(r.started_at):null,endedAt:r.ended_at?Number(r.ended_at):null,status:r.status||"open",flows:Array.isArray(r.flows)?r.flows:[],notes:Array.isArray(r.notes)?r.notes:[],prep:r.prep&&typeof r.prep==="object"?r.prep:{},items:Array.isArray(r.items)?r.items:[],sync:r.sync&&typeof r.sync==="object"?r.sync:{},createdBy:r.created_by||"",createdAt:Number(r.created_at)||0,updatedAt:Number(r.updated_at)||0,deletedAt:r.deleted_at?Number(r.deleted_at):null});
   const visDate=v=>v.startedAt||(v.prep&&v.prep.plannedAt)||v.createdAt||Date.now();
   const visList=pid=>Object.values(vis.map).map(x=>x.v).filter(v=>v.projectId===pid&&!v.deletedAt).sort((a,b)=>((b.status==="prep")-(a.status==="prep"))||(a.status==="prep"?visDate(a)-visDate(b):visDate(b)-visDate(a)));
   const visFlows=v=>(v.flows||[]).filter(f=>!f.off);
@@ -3536,32 +3548,85 @@
     });
     return n;
   }
-  function visLoad(){
+  // ---- Fusion : deux appareils (ou deux personnes) peuvent modifier la même visite sans s'écraser ----
+  // Chaque note, élément « À voir » et flux porte un horodatage (u) ; les suppressions sont mémorisées (sync.gone).
+  const VIS_RANK={prep:0,open:1,done:2};
+  function visStamp(v,prev){
+    const now=Date.now();v.sync=v.sync||{};const gone=new Set(v.sync.gone||[]);
+    const strip=x=>{const {u,...r}=x;return JSON.stringify(r)};
+    ["notes","items","flows"].forEach(k=>{
+      const old=new Map(((prev&&prev[k])||[]).map(x=>[x.id,x]));
+      (v[k]||[]).forEach(x=>{const o=old.get(x.id);if(!o||strip(o)!==strip(x))x.u=now;old.delete(x.id)});
+      old.forEach((_,id)=>gone.add(id));
+    });
+    v.sync.gone=[...gone].slice(-3000);
+    if(!prev||JSON.stringify(prev.prep||{})!==JSON.stringify(v.prep||{}))v.sync.pu=now;
+    const meta=x=>JSON.stringify([x.title,x.status,x.startedAt||null,x.endedAt||null]);
+    if(!prev||meta(prev)!==meta(v))v.sync.mu=now;
+    const ord=x=>(x.flows||[]).map(f=>f.id).join(",");
+    if(!prev||ord(prev)!==ord(v))v.sync.ou=now;
+  }
+  function visMerge(a,b){ // a : version de cet appareil ; b : version du serveur
+    const sa=a.sync||{}, sb=b.sync||{}, gone=new Set([...(sa.gone||[]),...(sb.gone||[])]);
+    const m=JSON.parse(JSON.stringify((sa.mu||0)>=(sb.mu||0)?a:b)), o=m===a?b:((sa.mu||0)>=(sb.mu||0)?b:a);
+    const un=k=>{const map=new Map();[...(b[k]||[]),...(a[k]||[])].forEach(x=>{const p=map.get(x.id);if(!p||(x.u||0)>=(p.u||0))map.set(x.id,JSON.parse(JSON.stringify(x)))});return [...map.values()].filter(x=>!gone.has(x.id))};
+    m.notes=un("notes").sort((x,y)=>(x.at||0)-(y.at||0));
+    const ordItems=[...(a.items||[]),...(b.items||[])].map(x=>x.id), ip=new Map();ordItems.forEach((id,i)=>{if(!ip.has(id))ip.set(id,i)});
+    m.items=un("items").sort((x,y)=>ip.get(x.id)-ip.get(y.id));
+    const src=((sa.ou||0)>=(sb.ou||0)?a:b).flows||[], pos=new Map(src.map((f,i)=>[f.id,i]));
+    m.flows=un("flows").sort((x,y)=>(pos.has(x.id)?pos.get(x.id):1e9)-(pos.has(y.id)?pos.get(y.id):1e9));
+    m.prep=JSON.parse(JSON.stringify(((sa.pu||0)>=(sb.pu||0)?a:b).prep||{}));
+    // une visite démarrée ou terminée ne revient jamais à l'état « préparée »
+    if(m.status==="prep"&&o.status!=="prep"){m.status=o.status;m.endedAt=o.endedAt||null}
+    m.startedAt=[a.startedAt,b.startedAt].filter(Boolean).sort((x,y)=>x-y)[0]||null;
+    m.sync={gone:[...gone].slice(-3000),mu:Math.max(sa.mu||0,sb.mu||0),pu:Math.max(sa.pu||0,sb.pu||0),ou:Math.max(sa.ou||0,sb.ou||0)};
+    m.updatedAt=Math.max(a.updatedAt||0,b.updatedAt||0);
+    m.deletedAt=a.deletedAt||b.deletedAt||null;
+    return m;
+  }
+  // Remplace la visite affichée par sa version fusionnée (sans perdre l'écran en cours ni une saisie)
+  function visAdopt(v){
+    if(!visCur||visCur.id!==v.id)return;
+    if(JSON.stringify(visCur)===JSON.stringify(v))return;
+    visCur=JSON.parse(JSON.stringify(v));visCur.items=visCur.items||[];visCur.prep=visCur.prep||{};
+    if(visCur.deletedAt){visCur=null;renderVisit();render();return}
+    const a=document.activeElement;if(a&&a.closest&&a.closest("#visview")&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))return;
+    renderVisit();
+  }
+  // Charge les visites (appareil + serveur) ; relancé à l'ouverture de l'onglet, d'une visite et au retour sur l'appli
+  function visLoad(force){
     if(vis.loading)return vis.loading;
     if(MODE==="cloud"&&!cloud.user)return Promise.resolve();
+    if(vis.loaded&&!force&&Date.now()-(vis.at||0)<15e3)return Promise.resolve();
     vis.loading=(async()=>{
-      const acct=visAcct(), m={};vis.acct=acct;
-      try{(await idbAll("visits")).filter(r=>r.acct===acct).forEach(r=>m[r.id]=r)}catch(e){}
+      const acct=visAcct();let m={};vis.acct=acct;
+      if(vis.loaded&&vis.acct===acct)m={...vis.map};
+      else try{(await idbAll("visits")).filter(r=>r.acct===acct).forEach(r=>m[r.id]=r)}catch(e){}
+      let changed=!vis.loaded;
       if(MODE==="cloud"&&cloud.user&&navigator.onLine!==false){
         let data=null,error=true;try{({data,error}=await cloudClient().from("visits").select("*"))}catch(e){}
         if(!error)for(const row of data||[]){
           const v=fromVis(row), loc=m[v.id];
-          if(!loc||(!loc.dirty&&v.updatedAt>=(loc.v.updatedAt||0))){m[v.id]={id:v.id,acct,v,dirty:false};idbPut("visits",m[v.id])}
+          if(!loc||(!loc.dirty&&v.updatedAt>=(loc.v.updatedAt||0))){if(!loc||JSON.stringify(loc.v)!==JSON.stringify(v)){m[v.id]={id:v.id,acct,v,dirty:false};idbPut("visits",m[v.id]);changed=true}}
+          else if(loc.dirty){const mg=visMerge(loc.v,v);m[v.id]={id:v.id,acct,v:mg,dirty:true};idbPut("visits",m[v.id]);changed=true}
         }
+        vis.at=Date.now();
       }
       vis.map=m;vis.loaded=true;vis.loading=null;
       await visCount();
-      if(!visCur)render();else renderVisit();
+      if(changed){if(visCur&&m[visCur.id])visAdopt(m[visCur.id].v);if(!visCur)render();else renderVisit()}
       visFlush();
     })();
     return vis.loading;
   }
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden&&vis.loaded)visLoad()});
   async function visCount(){
     const acct=visAcct();let n=Object.values(vis.map).filter(x=>x.dirty).length;
     try{n+=(await idbAll("photos")).filter(p=>p.acct===acct&&(!p.up||p.del)).length}catch(e){}
     vis.pending=MODE==="cloud"?n:0;
   }
   function visPut(v){
+    visStamp(v,vis.map[v.id]&&vis.map[v.id].v);
     v.updatedAt=Date.now();
     const rec={id:v.id,acct:visAcct(),v:JSON.parse(JSON.stringify(v)),dirty:MODE==="cloud"};
     vis.map[v.id]=rec;idbPut("visits",rec).then(()=>visCount()).then(()=>{if(visCur)visStatus()});
@@ -3581,16 +3646,51 @@
         p.up=true;await idbPut("photos",p);
       }
       for(const rec of Object.values(vis.map).filter(r=>r.dirty)){
+        // avant d'envoyer : fusion avec la version du serveur (modifiée entre-temps sur un autre appareil ?)
+        const {data:sv,error:e1}=await c.from("visits").select("*").eq("id",rec.id);
+        if(e1){if(transient(e1))throw e1}
+        else if(sv&&sv[0]){const mg=visMerge(rec.v,fromVis(sv[0]));if(JSON.stringify(mg)!==JSON.stringify(rec.v)){mg.updatedAt=Math.max(Date.now(),mg.updatedAt||0);rec.v=mg;await idbPut("visits",rec);visAdopt(mg)}}
         const sent=rec.v.updatedAt;
         const {error}=await c.from("visits").upsert(rowVis(rec.v));
         if(error){if(transient(error))throw error;vis.err=error.message;continue}
         const cur=vis.map[rec.id];if(cur&&cur.v.updatedAt===sent){cur.dirty=false;await idbPut("visits",cur)}
       }
+      visCleanCache();
     }catch(e){vis.err=""}
     finally{vis.flushing=false}
     await visCount();if(visCur)visStatus();
   }
   window.addEventListener("online",()=>visFlush());
+  // C. Demande au navigateur de ne pas effacer les données de l'appli (photos pas encore envoyées)
+  function visPersist(){try{if(vis.persistAsked||!navigator.storage||!navigator.storage.persist)return;vis.persistAsked=true;navigator.storage.persisted().then(ok=>{if(!ok)return navigator.storage.persist()}).catch(()=>{})}catch(e){}}
+  // D. Les photos déjà envoyées ne restent sur l'appareil que pour les visites en cours (ou consultées dans les 7 derniers jours)
+  async function visCleanCache(){
+    if(MODE!=="cloud"||vis.cleaned)return;vis.cleaned=true;
+    const lim=Date.now()-7*864e5, acct=visAcct();
+    for(const ph of await idbAll("photos")){
+      if(ph.acct!==acct||!ph.up||ph.del)continue;
+      const v=vis.map[ph.vid]&&vis.map[ph.vid].v;
+      if(v&&!v.deletedAt&&v.status!=="done")continue;
+      if((ph.at||0)>lim)continue;
+      await idbDel("photos",ph.id);if(vis.urls[ph.id]){try{URL.revokeObjectURL(vis.urls[ph.id])}catch(e){}delete vis.urls[ph.id]}
+    }
+  }
+  // E. Suppression d'un projet : ses photos de visite sont retirées du stockage et de l'appareil
+  async function visPurgeProject(pid){
+    try{
+      const acct=visAcct();
+      for(const ph of await idbAll("photos"))if(ph.pid===pid)await idbDel("photos",ph.id);
+      for(const r of Object.values(vis.map))if(r.v.projectId===pid){await idbDel("visits",r.id);delete vis.map[r.id]}
+      if(MODE!=="cloud"||!cloud.user||navigator.onLine===false)return;
+      const st=cloudClient().storage.from("visit-photos");
+      const {data:dirs}=await st.list(pid,{limit:1000});
+      for(const d of dirs||[]){
+        const {data:files}=await st.list(`${pid}/${d.name}`,{limit:1000});
+        const paths=(files||[]).filter(f=>f.name).map(f=>`${pid}/${d.name}/${f.name}`);
+        for(let i=0;i<paths.length;i+=100)await st.remove(paths.slice(i,i+100));
+      }
+    }catch(e){}
+  }
   setInterval(()=>{if(!vis.loaded)visLoad();else if(vis.pending)visFlush()},60e3);
   setTimeout(()=>{if(!vis.loaded)visLoad()},3000);
   // Photo : image locale (sur l'appareil) ou téléchargée du stockage puis gardée en cache
@@ -3599,7 +3699,7 @@
     let rec=await idbGet("photos",phid);
     if(!rec&&MODE==="cloud"&&cloud.user&&navigator.onLine!==false){
       const {data,error}=await cloudClient().storage.from("visit-photos").download(`${v.projectId}/${v.id}/${phid}.jpg`);
-      if(!error&&data){rec={id:phid,acct:visAcct(),pid:v.projectId,vid:v.id,blob:data,up:true,del:false};idbPut("photos",rec)}
+      if(!error&&data){rec={id:phid,acct:visAcct(),pid:v.projectId,vid:v.id,blob:data,up:true,del:false,at:Date.now()};idbPut("photos",rec)}
     }
     if(!rec||!rec.blob)return "";
     return vis.urls[phid]=URL.createObjectURL(rec.blob);
@@ -3612,6 +3712,7 @@
     if(t==null)return;
     const now=Date.now();
     const v={id:newId(),projectId:p.id,title:(t.trim()||"Visite sur site").slice(0,300),startedAt:prep?null:now,endedAt:null,status:prep?"prep":"open",flows:VIS_FLOWS.map(n=>({id:uid(),name:n})),notes:[],items:[],prep:{participants:defaultParticipants(p.id)},createdAt:now};
+    visPersist();
     if(prep){const n=visSeed(v);if(n)toast(`${plural(n,"point ouvert repris","points ouverts repris")} dans « À voir », par flux.`)}
     visPut(v);visOpen(v);render();
   }
@@ -3625,7 +3726,7 @@
   }
   // ---------- Écran de visite ----------
   let visCur=null, visScreen="home", visFlowId=null, visType="note", visStage=[], visText="", visReply=null;
-  function visOpen(v,flowId){visCur=JSON.parse(JSON.stringify(v));visCur.items=visCur.items||[];visCur.prep=visCur.prep||{};visScreen=v.status==="prep"?"prep":flowId?"flow":"home";visFlowId=flowId||null;visStage=[];visText="";visReply=null;renderVisit()}
+  function visOpen(v,flowId){if(vis.loaded)setTimeout(()=>visLoad(true),0);visCur=JSON.parse(JSON.stringify(v));visCur.items=visCur.items||[];visCur.prep=visCur.prep||{};visScreen=v.status==="prep"?"prep":flowId?"flow":"home";visFlowId=flowId||null;visStage=[];visText="";visReply=null;renderVisit()}
   function visClose(){if(visStage.length)visDropPhotos(visCur,visStage.map(s=>s.id));visCur=null;visStage=[];renderVisit();render()}
   function visSet(fn){fn(visCur);visPut(visCur);renderVisit()}
   function visQuiet(fn){fn(visCur);visPut(visCur)} // modification sans redessiner (saisie en cours)
@@ -3710,7 +3811,7 @@
         <div class="visseg" role="radiogroup" aria-label="Type de note">${Object.entries(NTYPE).map(([k,[l]])=>`<button type="button" role="radio" aria-checked="${visType===k}" data-t="${k}">${l}</button>`).join("")}</div>
         ${rep?`<div class="visreply"><span>Réponse à : <b>${esc(rep.text)}</b></span><button type="button" data-unrep aria-label="Ne plus répondre à cet élément">✕</button></div>`:""}
         ${visStage.length?`<div class="visstage">${visStage.map(s=>`<span class="vph sm"><img data-ph="${esc(s.id)}" alt="Photo jointe"><button type="button" data-unstage="${esc(s.id)}" aria-label="Retirer la photo">✕</button></span>`).join("")}</div>`:""}
-        <div class="visin"><button type="button" class="viscam" data-cam aria-label="Prendre une photo">${CAM_SVG}</button><textarea rows="2" aria-label="Texte de la note" placeholder="Écrire ou dicter (micro du clavier)…">${esc(visText)}</textarea><button type="button" class="visok" data-add aria-label="Ajouter la note"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></button></div>
+        <div class="visin"><button type="button" class="viscam" data-cam aria-label="Prendre une photo">${CAM_SVG}</button>${bcOk()?`<button type="button" class="viscam scan" data-scan aria-label="Scanner un code-barres">${BC_SVG}</button>`:""}<textarea rows="2" aria-label="Texte de la note" placeholder="Écrire ou dicter (micro du clavier)…">${esc(visText)}</textarea><button type="button" class="visok" data-add aria-label="Ajouter la note"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></button></div>
       </footer>`;
     o.querySelector("[data-back]").onclick=()=>{visScreen="home";renderVisit()};
     o.querySelectorAll(".vischips [data-f]").forEach(b=>b.onclick=()=>{visFlowId=b.dataset.f;renderVisit()});
@@ -3719,6 +3820,7 @@
     const ta=o.querySelector(".visin textarea");ta.oninput=()=>{visText=ta.value};
     o.querySelectorAll("[data-unstage]").forEach(b=>b.onclick=()=>{const id=b.dataset.unstage;visDropPhotos(visCur,[id]);visStage=visStage.filter(s=>s.id!==id);renderVisit()});
     o.querySelector("[data-cam]").onclick=()=>visCapture(photos=>{visStage=visStage.concat(photos);renderVisit()});
+    const sc=o.querySelector("[data-scan]");if(sc)sc.onclick=()=>visScan(r=>{if(!r)return;visText=(ta.value.trim()?ta.value.trim()+"\n":"")+r.text;if(r.photo)visStage=visStage.concat([r.photo]);renderVisit();const t=$("#visview .visin textarea");if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length)}});
     o.querySelector("[data-add]").onclick=()=>{
       const t=ta.value.trim();if(!t&&!visStage.length){ta.focus();return}
       const photos=visStage;visStage=[];visText="";
@@ -3795,6 +3897,7 @@
     return c;
   }
   async function visCapture(done){
+    visPersist();
     const file=await visPickFile();if(!file)return;
     let base;try{base=await visLoadImage(file)}catch(e){uiAlert("Photo illisible.");return}
     visEditor([{base,shapes:[],caption:""}],done);
@@ -3911,6 +4014,55 @@
       const sp=box.querySelector("[data-addpt]");if(sp)sp.onchange=()=>{const x=livePts().find(z=>z.id===sp.value);if(x)visSet(y=>{y.items=y.items||[];y.items.push({id:uid(),flow:fid,kind:"point",ref:x.id,text:x.text.split("\n")[0].slice(0,300),label:ptNumOf(x)||"Point ouvert",seen:false})})};
     });
   }
+  // ---------- Scan de codes-barres (API BarcodeDetector : Chrome sur Android ; absente sur iPhone) ----------
+  const BC_FMT={ean_13:"EAN-13",ean_8:"EAN-8",upc_a:"UPC-A",upc_e:"UPC-E",code_128:"Code 128",code_39:"Code 39",code_93:"Code 93",codabar:"Codabar",itf:"ITF (2 parmi 5 entrelacé)",data_matrix:"Datamatrix",qr_code:"QR code",pdf417:"PDF417",aztec:"Aztec"};
+  const bcOk=()=>typeof window.BarcodeDetector==="function"&&!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);
+  const BC_SVG=`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 7V4h3M21 7V4h-3M3 17v3h3M21 17v3h-3M7 8v8M10 8v8M13 8v8M17 8v8"></path></svg>`;
+  async function visScan(done){
+    let stream=null, timer=null, det=null, found=null, shot=null;
+    const d=document.createElement("div");d.className="visscan";d.setAttribute("role","dialog");d.setAttribute("aria-modal","true");d.setAttribute("aria-label","Scanner un code-barres");
+    d.innerHTML=`<header><button type="button" class="visround" data-x aria-label="Fermer le scan">✕</button><div class="vist"><b>Scanner un code-barres</b><span>Étiquette fournisseur, emplacement, support…</span></div></header>
+      <div class="visscanv"><video playsinline muted autoplay></video><div class="visscanf" aria-hidden="true"></div></div>
+      <div class="visscanr" aria-live="polite"><p class="muted">Visez le code-barres, il est lu automatiquement.</p></div>`;
+    document.body.appendChild(d);
+    const video=d.querySelector("video"), out=d.querySelector(".visscanr");
+    const stop=()=>{clearInterval(timer);timer=null;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null};
+    const close=v=>{stop();d.remove();done(v)};
+    d.querySelector("[data-x]").onclick=()=>close(null);
+    const start=async()=>{
+      if(shot&&shot.parentNode)shot.remove();video.hidden=false;
+      found=null;shot=null;
+      out.innerHTML=`<p class="muted">Visez le code-barres, il est lu automatiquement.</p>`;
+      try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false})}
+      catch(e){out.innerHTML=`<p class="uierr">Accès à l'appareil photo refusé ou impossible. Autorisez la caméra pour ce site dans les réglages du navigateur.</p>`;return}
+      video.srcObject=stream;try{await video.play()}catch(e){}
+      if(!det){let fm;try{fm=await window.BarcodeDetector.getSupportedFormats()}catch(e){}det=new window.BarcodeDetector(fm&&fm.length?{formats:fm}:undefined)}
+      timer=setInterval(async()=>{
+        if(!video.videoWidth||found)return;
+        let r;try{r=await det.detect(video)}catch(e){return}
+        if(!r||!r.length||found)return;
+        found=r[0];
+        const c=document.createElement("canvas"), k=Math.min(1,VIS_MAX/Math.max(video.videoWidth,video.videoHeight));
+        c.width=Math.round(video.videoWidth*k);c.height=Math.round(video.videoHeight*k);c.getContext("2d").drawImage(video,0,0,c.width,c.height);shot=c;
+        stop();c.className="visshot";video.hidden=true;d.querySelector(".visscanv").appendChild(c);
+        const raw=String(found.rawValue||""), gs1=raw.includes("\u001d"), fmt=(BC_FMT[found.format]||found.format||"Code-barres")+(gs1?" (données GS1)":"");
+        out.innerHTML=`<div class="visbc"><span class="muted">Format</span><b>${esc(fmt)}</b><span class="muted">Contenu</span><code>${esc(raw.replace(/\u001d/g," | "))||"(vide)"}</code></div>
+          <label class="vischk"><input type="checkbox" data-shot checked><span>Joindre la photo de l'étiquette</span></label>
+          <div class="visscanb"><button type="button" class="btn" data-again>Scanner à nouveau</button><button type="button" class="btn primary" data-use>Ajouter à la note</button></div>`;
+        out.querySelector("[data-again]").onclick=start;
+        out.querySelector("[data-use]").onclick=async()=>{
+          let photo=null;
+          if(out.querySelector("[data-shot]").checked&&shot){
+            const blob=await new Promise(res=>shot.toBlob(res,"image/jpeg",VIS_Q)), id=uid()+uid();
+            await idbPut("photos",{id,acct:visAcct(),pid:visCur.projectId,vid:visCur.id,blob,up:false,del:false,at:Date.now()});
+            photo={id,caption:`Code-barres ${fmt}`.slice(0,200)};
+          }
+          close({text:`Code-barres ${fmt} : ${raw.replace(/\u001d/g," | ")}`,photo});
+        };
+      },250);
+    };
+    start();
+  }
   // ---------- Fin de visite : bilan, points ouverts, tâches, export ----------
   function visEndScreen(o,v,p){
     const ns=v.notes||[], its=v.items||[];
@@ -3989,7 +4141,7 @@
   // ---------- Onglet Visites d'un projet ----------
   function visEnsure(){if(vis.loaded&&vis.acct!==visAcct()){vis.loaded=false;vis.map={};vis.urls={}}if(!vis.loaded)visLoad()}
   function renderVisits(L,p){
-    visEnsure();
+    visEnsure();if(vis.loaded)visLoad();
     const top=document.createElement("div");top.className="mtgtop";
     top.innerHTML=`<button type="button" class="btn primary" data-prep>Préparer une visite</button><button type="button" class="btn" data-new>Démarrer une visite maintenant</button><span class="muted">Préparez au bureau, puis « Démarrer la visite » sur site. Fonctionne sans réseau : l'envoi se fait au retour de la connexion.</span>`;
     top.querySelector("[data-prep]").onclick=()=>visNew(p,true);

@@ -610,3 +610,4 @@ alter table public.visits add column if not exists prep jsonb not null default '
 alter table public.visits add column if not exists items jsonb not null default '[]'::jsonb;
 alter table public.visits drop constraint if exists visits_status_check;
 alter table public.visits add constraint visits_status_check check (status in ('prep','open','done'));
+alter table public.visits add column if not exists sync jsonb not null default '{}'::jsonb;

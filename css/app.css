@@ -1097,3 +1097,27 @@ body.visopen{overflow:hidden}
 .visleft em{display:block;font-style:normal;font-size:12px;color:var(--muted)}
 .visleft select{height:38px;font:inherit;font-size:14px;border:1px solid var(--field);border-radius:8px;background:var(--panel);color:var(--ink)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .visreply{background:#1C3140;color:#9CC3DD}:root:not([data-theme="light"]) .visre{color:#9CC3DD}}
+/* Visites dans l'agenda */
+.meet.visag{background:var(--signalsoft);border-color:#F2D27A;color:var(--ink)}
+.meet.visag .mt{color:var(--signalink)}
+.meet.visag .vstb{font-weight:700}
+.meet.visag.done{opacity:.75}
+.meet.visag .ml .dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .meet.visag{background:#3A3110;border-color:#6B5200;color:#F2D27A}}
+/* Scan de codes-barres */
+.viscam.scan{background:var(--chip);color:var(--chipink)}
+.visscan{position:fixed;inset:0;z-index:72;background:#0E1A22;color:#E8EEF2;display:flex;flex-direction:column;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 12px calc(14px + env(safe-area-inset-bottom,0px))}
+.visscan header{display:flex;align-items:center;gap:8px}
+.visscan .vist span{color:#9FB3C0}
+.visscanv{flex:1;min-height:0;position:relative;border-radius:12px;overflow:hidden;background:#000;display:grid;place-items:center}
+.visscanv video{width:100%;height:100%;object-fit:cover}
+.visscanf{position:absolute;left:12%;right:12%;top:30%;bottom:30%;border:3px solid var(--signal);border-radius:12px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
+.visscanr{display:flex;flex-direction:column;gap:10px;min-height:90px}
+.visscanr .muted{color:#9FB3C0;margin:0}
+.visbc{display:grid;grid-template-columns:80px 1fr;gap:4px 10px;align-items:baseline;background:#1F3342;border-radius:10px;padding:12px}
+.visbc code{font-size:16px;word-break:break-all;color:#fff}
+.visscanr .vischk{color:#E8EEF2}
+.visscanb{display:flex;gap:8px}
+.visscanb .btn{flex:1;height:50px;font-size:16px}
+.visscanb .btn:not(.primary){background:transparent;color:#E8EEF2;border:1px solid #4A6577}
+.visscanv canvas.visshot{width:100%;height:100%;object-fit:cover}

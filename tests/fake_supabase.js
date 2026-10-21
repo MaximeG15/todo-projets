@@ -33,5 +33,6 @@
     rpc:async(n,a)=>{(window.__rpc=window.__rpc||[]).push(n);try{sessionStorage.setItem('__rpc',(sessionStorage.getItem('__rpc')||'')+n+';')}catch(e){}return {data:null,error:null}},from:q,channel:()=>{window.__rt=[];return ch},removeChannel(){},realtime:{setAuth(){}},functions:{invoke:async()=>({data:null,error:{message:"x"}})},
     storage:{from:b=>({upload:async(path,blob)=>{if(window.__storageDown)return {data:null,error:{message:"Failed to fetch"}};(window.__storage=window.__storage||{})[b+"/"+path]=blob;return {data:{path},error:null}},
       download:async path=>{const x=(window.__storage||{})[b+"/"+path];return x?{data:x,error:null}:{data:null,error:{message:"not found"}}},
+      list:async prefix=>{const pre=b+"/"+prefix+"/",seen=new Set(),out=[];Object.keys(window.__storage||{}).filter(k=>k.startsWith(pre)).forEach(k=>{const rest=k.slice(pre.length),n=rest.split("/")[0];if(!seen.has(n)){seen.add(n);out.push({name:n,id:rest.includes("/")?null:n})}});return {data:out,error:null}},
       remove:async paths=>{paths.forEach(x=>{delete (window.__storage||{})[b+"/"+x]});return {data:[],error:null}}})}})};
 })();
