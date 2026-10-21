@@ -103,9 +103,8 @@ with sync_playwright() as pw:
     v.locator("[data-pdf]").click();pg.wait_for_timeout(1500)
     pr=pg.evaluate("window.__lastPrint||''")
     ok("Réception" in pr and pr.count("<img")==2 and "Quai 3" in pr,"export PDF avec photos et légendes")
-    v.locator("[data-done]").click();pg.wait_for_timeout(300)
-    v.locator("[data-back]").click();v.locator("[data-back]").click();pg.wait_for_timeout(300)
-    ok(pg.locator("#lists .mtgrow",has_text="Terminée").count()==1,"liste des visites")
+    v.locator("[data-done]").click();pg.wait_for_timeout(500)
+    ok(v.is_hidden() and pg.locator("#lists .mtgrow",has_text="Terminée").count()==1,"bilan : « Clôturer la visite » ramène à la liste, visite terminée")
     # rechargement : tout est relu, photos comprises
     pg.reload();pg.wait_for_timeout(1500)
     pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.locator(".phtile",has_text="Visites").click();pg.wait_for_timeout(800)
@@ -123,8 +122,10 @@ with sync_playwright() as pw:
     import json
     data={"projects":[{"id":"p","name":"Projet Local","color":"#E0703A"}],"tasks":[],"requests":[],"points":[],"deleted":[]}
     b=pw.chromium.launch();pg=b.new_page(viewport={"width":390,"height":844})
-    pg.on("pageerror",lambda e:errs.append("JS3: "+str(e)));on_dialog(pg,lambda d:d.accept())
+    SHEET={}
+    pg.on("pageerror",lambda e:errs.append("JS3: "+str(e)));on_dialog(pg,lambda d:d.accept(SHEET.get(d.type)))
     pg.add_init_script(PHOTO)
+    pg.add_init_script("""window.__testGallery=()=>Promise.all([1,2,3].map(i=>new Promise(r=>{const c=document.createElement('canvas');c.width=1200;c.height=900;const g=c.getContext('2d');g.fillStyle=['#2F7D5B','#1D4E78','#B42318'][i-1];g.fillRect(0,0,1200,900);c.toBlob(b=>r(new File([b],'g'+i+'.jpg',{type:'image/jpeg'})),'image/jpeg',0.9)})));""")
     pg.add_init_script("if(!localStorage.getItem('__seed')){localStorage.setItem('todo-projets',%s);localStorage.setItem('todo-mode','local');localStorage.setItem('__seed','1')}"%json.dumps(json.dumps(data)))
     pg.goto(APP);pg.wait_for_timeout(500)
     pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Local").click();pg.locator(".phtile",has_text="Visites").click()
@@ -133,6 +134,34 @@ with sync_playwright() as pw:
     v.locator("[data-cam]").click();pg.wait_for_timeout(1200);pg.locator(".visedit [data-ok]").click();pg.wait_for_timeout(800)
     v.locator(".visin textarea").fill("Note locale");v.locator("[data-add]").click();pg.wait_for_timeout(500)
     ok("mode local" in v.locator(".visst").inner_text(),"mode local : enregistré sur cet appareil")
+    # galerie : plusieurs photos d'un coup, depuis le flux puis depuis l'éditeur
+    v.locator("[data-gal]").click();pg.wait_for_timeout(1500)
+    ed=pg.locator(".visedit")
+    ok("Photo 1 sur 3" in ed.inner_text(),"galerie : 3 photos importées d'un coup, l'éditeur s'ouvre sur la première")
+    pg.screenshot(path=OUT+"visit_gallery_editor.png")
+    ed.locator("[data-galm]").click();pg.wait_for_timeout(1500)
+    ok("Photo 4 sur 6" in ed.inner_text(),"éditeur : ajout depuis la galerie")
+    ed.locator("[data-ok]").click();pg.wait_for_timeout(1500)
+    ok(v.locator(".visstage .vph").count()==6,"6 photos de la galerie jointes à la note")
+    v.locator(".visin textarea").fill("Photos de la galerie");v.locator("[data-add]").click();pg.wait_for_timeout(500)
+    pg.screenshot(path=OUT+"visit_gallery_flow.png")
+    # accueil : import rapide de la galerie, puis choix du flux
+    v.locator("[data-back]").click();pg.wait_for_timeout(200)
+    pg.screenshot(path=OUT+"visit_home_gallery.png")
+    v.locator("[data-qgal]").click();pg.wait_for_timeout(1500);pg.locator(".visedit [data-ok]").click();pg.wait_for_timeout(1200)
+    pg.locator("dialog.vissheet [data-f]",has_text="Réception").click();pg.wait_for_timeout(300)
+    ok("3 photos" in v.locator(".vistile",has_text="Réception").inner_text(),"accueil : photos de la galerie rangées dans le flux choisi")
+    # clôture depuis le menu ⋯ de la visite, puis reprise depuis la liste
+    SHEET["sheet"]="Clôturer la visite"
+    v.locator("[data-vm]").click();pg.wait_for_timeout(600)
+    ok(v.is_hidden() and pg.locator("#lists .mtgrow",has_text="Terminée").count()==1,"menu ⋯ : visite clôturée, retour à la liste")
+    SHEET["sheet"]="Reprendre la visite"
+    pg.locator("#lists .mtgrow").first.click();pg.wait_for_timeout(300);v.locator("[data-vm]").click();pg.wait_for_timeout(400)
+    v.locator("[data-back]").click();pg.wait_for_timeout(300)
+    ok(pg.locator("#lists .mtgrow",has_text="En cours").locator("[data-fin]").count()==1,"liste : bouton « Clôturer » sur une visite en cours")
+    pg.locator("#lists [data-fin]").click();pg.wait_for_timeout(400)
+    ok(pg.locator("#lists .mtgrow",has_text="Terminée").count()==1,"liste : visite clôturée sans l'ouvrir")
+    pg.locator("#lists .mtgrow").first.click();pg.wait_for_timeout(300)
     pg.reload();pg.wait_for_timeout(800)
     pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Local").click();pg.locator(".phtile",has_text="Visites").click();pg.wait_for_timeout(500)
     pg.locator("#lists .mtgrow").first.click();pg.locator("#visview .vistile",has_text="Stockage").click();pg.wait_for_timeout(600)

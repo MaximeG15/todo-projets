@@ -1135,3 +1135,11 @@ body.visopen{overflow:hidden}
 .logodrop small{display:block;margin-top:6px;font-size:12px}
 @media (max-width:760px){.head h1 .plogo{height:30px;max-width:90px}}
 .logodlg .logodel{color:var(--late)}
+/* Visite : galerie et clôture */
+.vistop{display:flex;gap:6px;align-items:center}
+.vistop .visseg{flex:1;min-width:0}
+.vistool{flex:none;width:42px;height:42px;border:0;border-radius:10px;background:var(--chip);color:var(--chipink);display:grid;place-items:center;cursor:pointer}
+.visgal{width:52px;height:52px;flex:none;border:1px solid var(--line);border-radius:50%;background:var(--panel);color:var(--ink);display:grid;place-items:center;cursor:pointer}
+.visedit footer .btn.ico{flex:none;width:56px;padding:0;display:grid;place-items:center}
+.visf .visdone:not(.primary){background:var(--panel);border:1px solid var(--field);color:var(--ink);font-weight:600}
+@media (max-width:760px){.task.mtgrow .acts .sbtn[data-fin]{display:inline-flex;align-items:center}}

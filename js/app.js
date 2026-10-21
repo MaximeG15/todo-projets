@@ -3811,6 +3811,27 @@
   }
   const visBack=(label)=>`<button type="button" class="visback" data-back aria-label="${label}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button>`;
   const CAM_SVG=`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>`;
+  const GAL_SVG=`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"></rect><circle cx="9" cy="10" r="2"></circle><path d="M21 16.5l-5.2-5.2L7 20"></path></svg>`;
+  // Clôture : depuis l'accueil de la visite, le bilan ou la liste des visites
+  function visPendingN(v){const its=v.items||[];return (v.notes||[]).filter(n=>!n.conv&&(n.type==="question"||n.type==="action")&&!(n.item&&(its.find(i=>i.id===n.item)||{}).kind==="point")).length}
+  async function visFinish(v){
+    const n=visPendingN(v);
+    if(n&&!await uiConfirm(`${n>1?`${n} questions ou actions n'ont`:"Une question ou action n'a"} pas encore été transformée${n>1?"s":""} en point ouvert ou en tâche.\n\nClôturer quand même ? Vous pourrez le faire plus tard depuis le bilan de la visite.`,{ok:"Clôturer la visite"}))return false;
+    const now=Date.now();
+    if(visCur&&visCur.id===v.id){visQuiet(x=>{x.status="done";x.endedAt=x.endedAt||now});visClose()}
+    else{const x=JSON.parse(JSON.stringify(v));x.status="done";x.endedAt=x.endedAt||now;visPut(x);render()}
+    toast("Visite clôturée. Elle reste consultable dans l'onglet Visites du projet.");
+    return true;
+  }
+  function visQuick(src){
+    visCapture(async photos=>{
+      if(!photos.length)return;
+      const fid=await visPickFlow("Dans quel flux ranger "+(photos.length>1?"ces photos ?":"cette photo ?"));
+      if(!fid){visDropPhotos(visCur,photos.map(x=>x.id));return}
+      visSet(x=>x.notes.push({id:uid(),flow:fid,type:"note",text:"",photos,at:Date.now(),conv:null}));
+      toast(`${plural(photos.length,"photo")} ajoutée${photos.length>1?"s":""} au flux « ${(visCur.flows.find(f=>f.id===fid)||{}).name} ».`);
+    },src);
+  }
   function visHomeScreen(o,v,p){
     const ns=v.notes||[], nPh=ns.reduce((n,x)=>n+(x.photos||[]).length,0);
     o.innerHTML=`<header class="vish"><div class="visrow">${visBack("Quitter la visite")}<div class="vist"><b>${esc(v.title)}</b><span>${esc(p.name)} · ${esc(new Date(visDate(v)).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"}))}${v.status==="done"?" · terminée":""}</span></div><button type="button" class="visback" data-vm aria-label="Actions sur la visite">⋯</button></div><div class="visst"></div></header>
@@ -3818,25 +3839,23 @@
       <div class="vistiles">${visFlows(v).map(f=>{const n=visNotes(v,f.id), ph=n.reduce((k,x)=>k+(x.photos||[]).length,0), q=n.filter(x=>x.type==="question").length, it=visItems(v,f.id), seen=it.filter(i=>i.seen).length;
         return `<button type="button" class="vistile${it.length&&seen===it.length?" alldone":""}" data-f="${esc(f.id)}"><b>${esc(f.name)}</b><span>${n.length||ph?`${plural(n.length,"note")} · ${plural(ph,"photo")}`:"Pas encore de note"}</span>${it.length?`<i class="visprog">${seen}/${it.length} vus</i>`:""}${q?`<em>${plural(q,"question")}</em>`:""}</button>`}).join("")}
       <button type="button" class="vistile add" data-addf><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Ajouter un flux</button></div></main>
-      <footer class="visf"><button type="button" class="btn visend" data-end>${v.status==="done"?"Bilan de la visite":"Terminer la visite"}</button><button type="button" class="visfab" data-quick aria-label="Photo rapide (le flux est choisi ensuite)">${CAM_SVG}</button></footer>`;
+      <footer class="visf"><button type="button" class="btn visend" data-end>${v.status==="done"?"Bilan de la visite":"Terminer la visite"}</button><button type="button" class="visgal" data-qgal aria-label="Importer des photos de la galerie (le flux est choisi ensuite)">${GAL_SVG}</button><button type="button" class="visfab" data-quick aria-label="Photo rapide (le flux est choisi ensuite)">${CAM_SVG}</button></footer>`;
     o.querySelector("[data-back]").onclick=visClose;
     o.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{visScreen="flow";visFlowId=b.dataset.f;visStage=[];renderVisit()});
     o.querySelector("[data-vm]").onclick=async()=>{
-      const ch=await visSheet(v.title,[{k:"prep",l:"Revoir la préparation"},{k:"ren",l:"Renommer la visite"},{k:"pdf",l:"Exporter le compte rendu (PDF)"},{k:"del",l:"Supprimer la visite",danger:true}]);
-      if(ch==="prep"){visScreen="prep";renderVisit()}
+      const ch=await visSheet(v.title,[...(v.status==="done"?[{k:"reopen",l:"Reprendre la visite"}]:[{k:"finish",l:"Clôturer la visite"}]),{k:"gal",l:"Importer des photos de la galerie"},{k:"prep",l:"Revoir la préparation"},{k:"ren",l:"Renommer la visite"},{k:"pdf",l:"Exporter le compte rendu (PDF)"},{k:"del",l:"Supprimer la visite",danger:true}]);
+      if(ch==="finish")visFinish(visCur);
+      else if(ch==="reopen")visSet(x=>{x.status="open";x.endedAt=null});
+      else if(ch==="gal")visQuick("gallery");
+      else if(ch==="prep"){visScreen="prep";renderVisit()}
       else if(ch==="ren"){const t=await uiPrompt("Intitulé de la visite",v.title,{ok:"Renommer"});if(t&&t.trim())visSet(x=>{x.title=t.trim().slice(0,300)})}
       else if(ch==="pdf")visPdf(visCur);
       else if(ch==="del")visDelete(visCur);
     };
     o.querySelector("[data-addf]").onclick=async()=>{const n=await uiPrompt("Nom du nouveau flux","",{ok:"Ajouter"});if(n&&n.trim())visSet(x=>x.flows.push({id:uid(),name:n.trim().slice(0,60)}))};
     o.querySelector("[data-end]").onclick=()=>{visScreen="end";renderVisit()};
-    o.querySelector("[data-quick]").onclick=()=>visCapture(async photos=>{
-      if(!photos.length)return;
-      const fid=await visPickFlow("Dans quel flux ranger ces photos ?");
-      if(!fid){visDropPhotos(visCur,photos.map(x=>x.id));return}
-      visSet(x=>x.notes.push({id:uid(),flow:fid,type:"note",text:"",photos,at:Date.now(),conv:null}));
-      toast(`${plural(photos.length,"photo")} ajoutée${photos.length>1?"s":""} au flux « ${(visCur.flows.find(f=>f.id===fid)||{}).name} ».`);
-    });
+    o.querySelector("[data-quick]").onclick=()=>visQuick("camera");
+    o.querySelector("[data-qgal]").onclick=()=>visQuick("gallery");
   }
   function visPickFlow(title,except){
     return new Promise(res=>{
@@ -3866,10 +3885,10 @@
       <main class="vism notes">${its.length?`<details class="visitems"${ui.visItemsClosed?"":" open"}><summary>À voir <b>${nSeen}/${its.length}</b></summary>${its.map(i=>`<div class="visit${i.seen?" seen":""}" data-i="${esc(i.id)}"><button type="button" class="visseen" data-seen aria-pressed="${!!i.seen}" aria-label="${i.seen?"Marquer comme non vu":"Marquer comme vu"}"></button><span class="vitx">${i.kind==="point"?`<small>${esc(i.label||"Point ouvert")}</small>`:""}${esc(i.text)}${(v.notes||[]).some(n=>n.item===i.id)?`<em>${plural((v.notes||[]).filter(n=>n.item===i.id).length,"réponse")}</em>`:""}</span><button type="button" class="btn visrep" data-rep>Répondre</button></div>`).join("")}</details>`:""}
         ${ns.length?ns.map(visNoteHtml).join(""):`<p class="visempty">Aucune note pour ce flux. Écrivez ou prenez une photo ci-dessous.</p>`}</main>
       <footer class="viscap">
-        <div class="visseg" role="radiogroup" aria-label="Type de note">${Object.entries(NTYPE).map(([k,[l]])=>`<button type="button" role="radio" aria-checked="${visType===k}" data-t="${k}">${l}</button>`).join("")}</div>
+        <div class="vistop"><div class="visseg" role="radiogroup" aria-label="Type de note">${Object.entries(NTYPE).map(([k,[l]])=>`<button type="button" role="radio" aria-checked="${visType===k}" data-t="${k}" aria-label="${l}">${k==="question"?"Question":l}</button>`).join("")}</div><button type="button" class="vistool" data-gal aria-label="Ajouter des photos de la galerie">${GAL_SVG}</button>${bcOk()?`<button type="button" class="vistool" data-scan aria-label="Scanner un code-barres">${BC_SVG}</button>`:""}</div>
         ${rep?`<div class="visreply"><span>Réponse à : <b>${esc(rep.text)}</b></span><button type="button" data-unrep aria-label="Ne plus répondre à cet élément">✕</button></div>`:""}
         ${visStage.length?`<div class="visstage">${visStage.map(s=>`<span class="vph sm"><img data-ph="${esc(s.id)}" alt="Photo jointe"><button type="button" data-unstage="${esc(s.id)}" aria-label="Retirer la photo">✕</button></span>`).join("")}</div>`:""}
-        <div class="visin"><button type="button" class="viscam" data-cam aria-label="Prendre une photo">${CAM_SVG}</button>${bcOk()?`<button type="button" class="viscam scan" data-scan aria-label="Scanner un code-barres">${BC_SVG}</button>`:""}<textarea rows="2" aria-label="Texte de la note" placeholder="Écrire ou dicter (micro du clavier)…">${esc(visText)}</textarea><button type="button" class="visok" data-add aria-label="Ajouter la note"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></button></div>
+        <div class="visin"><button type="button" class="viscam" data-cam aria-label="Prendre une photo">${CAM_SVG}</button><textarea rows="2" aria-label="Texte de la note" placeholder="Écrire ou dicter (micro du clavier)…">${esc(visText)}</textarea><button type="button" class="visok" data-add aria-label="Ajouter la note"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></button></div>
       </footer>`;
     o.querySelector("[data-back]").onclick=()=>{visScreen="home";renderVisit()};
     o.querySelectorAll(".vischips [data-f]").forEach(b=>b.onclick=()=>{visFlowId=b.dataset.f;renderVisit()});
@@ -3878,6 +3897,7 @@
     const ta=o.querySelector(".visin textarea");ta.oninput=()=>{visText=ta.value};
     o.querySelectorAll("[data-unstage]").forEach(b=>b.onclick=()=>{const id=b.dataset.unstage;visDropPhotos(visCur,[id]);visStage=visStage.filter(s=>s.id!==id);renderVisit()});
     o.querySelector("[data-cam]").onclick=()=>visCapture(photos=>{visStage=visStage.concat(photos);renderVisit()});
+    o.querySelector("[data-gal]").onclick=()=>visCapture(photos=>{visStage=visStage.concat(photos);renderVisit()},"gallery");
     const sc=o.querySelector("[data-scan]");if(sc)sc.onclick=()=>visScan(r=>{if(!r)return;visText=(ta.value.trim()?ta.value.trim()+"\n":"")+r.text;if(r.photo)visStage=visStage.concat([r.photo]);renderVisit();const t=$("#visview .visin textarea");if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length)}});
     o.querySelector("[data-add]").onclick=()=>{
       const t=ta.value.trim();if(!t&&!visStage.length){ta.focus();return}
@@ -3911,11 +3931,11 @@
   }
   async function visNoteMenu(nid){
     const n=visCur.notes.find(x=>x.id===nid);if(!n)return;
-    const items=[{k:"edit",l:"Modifier le texte"},...Object.entries(NTYPE).filter(([k])=>k!==n.type).map(([k,[l]])=>({k:"t:"+k,l:"Changer en « "+l+" »"})),{k:"photo",l:"Ajouter des photos"},...(visFlows(visCur).length>1?[{k:"move",l:"Déplacer vers un autre flux"}]:[]),{k:"del",l:"Supprimer la note",danger:true}];
+    const items=[{k:"edit",l:"Modifier le texte"},...Object.entries(NTYPE).filter(([k])=>k!==n.type).map(([k,[l]])=>({k:"t:"+k,l:"Changer en « "+l+" »"})),{k:"photo",l:"Prendre une photo"},{k:"gal",l:"Ajouter des photos de la galerie"},...(visFlows(visCur).length>1?[{k:"move",l:"Déplacer vers un autre flux"}]:[]),{k:"del",l:"Supprimer la note",danger:true}];
     const ch=await visSheet("Note de "+hm(n.at),items);if(!ch)return;
     if(ch==="edit"){const t=await uiPrompt("Texte de la note",n.text||"",{ok:"Enregistrer",multiline:true});if(t!=null)visSet(x=>{x.notes.find(y=>y.id===nid).text=t.trim().slice(0,4000)})}
     else if(ch.startsWith("t:"))visSet(x=>{x.notes.find(y=>y.id===nid).type=ch.slice(2)});
-    else if(ch==="photo")visCapture(photos=>visSet(x=>{const y=x.notes.find(z=>z.id===nid);y.photos=(y.photos||[]).concat(photos)}));
+    else if(ch==="photo"||ch==="gal")visCapture(photos=>{if(photos.length)visSet(x=>{const y=x.notes.find(z=>z.id===nid);y.photos=(y.photos||[]).concat(photos)})},ch==="gal"?"gallery":"camera");
     else if(ch==="move"){const fid=await visPickFlow("Déplacer la note vers…",n.flow);if(fid)visSet(x=>{x.notes.find(y=>y.id===nid).flow=fid})}
     else if(ch==="del"){if(!await uiConfirm("Supprimer cette note"+((n.photos||[]).length?` et ses ${plural(n.photos.length,"photo")}`:"")+" ?",{ok:"Supprimer",danger:true}))return;visDropPhotos(visCur,(n.photos||[]).map(p=>p.id));visSet(x=>{x.notes=x.notes.filter(y=>y.id!==nid)})}
   }
@@ -3938,12 +3958,24 @@
     if(d.showModal)d.showModal();else d.setAttribute("open","");
   }
   // ---------- Photo : prise de vue, réduction, annotation, légende, série ----------
-  function visPickFile(){
+  // src « camera » : appareil photo direct ; « gallery » : galerie du téléphone, plusieurs photos possibles
+  function visPickFiles(src){
     return new Promise(res=>{
-      if(typeof window.__testPhoto==="function"){Promise.resolve(window.__testPhoto()).then(res);return}
-      const inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.setAttribute("capture","environment");
-      inp.onchange=()=>res(inp.files&&inp.files[0]||null);inp.click();
+      if(src==="gallery"&&typeof window.__testGallery==="function"){Promise.resolve(window.__testGallery()).then(r=>res(r||[]));return}
+      if(src!=="gallery"&&typeof window.__testPhoto==="function"){Promise.resolve(window.__testPhoto()).then(f=>res(f?[f]:[]));return}
+      const inp=document.createElement("input");inp.type="file";inp.accept="image/*";
+      if(src==="gallery")inp.multiple=true;else inp.setAttribute("capture","environment");
+      inp.onchange=()=>res([...(inp.files||[])]);inp.click();
     });
+  }
+  const visPickFile=()=>visPickFiles("camera").then(a=>a[0]||null);
+  const VIS_GAL_MAX=12;
+  async function visLoadShots(files){
+    const out=[];let bad=0;
+    for(const f of files.slice(0,VIS_GAL_MAX)){try{out.push({base:await visLoadImage(f),shapes:[],caption:""})}catch(e){bad++}}
+    const msg=[files.length>VIS_GAL_MAX&&`${VIS_GAL_MAX} photos au plus par import : ${files.length-VIS_GAL_MAX} ignorée${files.length-VIS_GAL_MAX>1?"s":""}.`,bad&&`${plural(bad,"image illisible")}${bad>1?" ignorées":" ignorée"}.`].filter(Boolean);
+    if(msg.length&&out.length)toast(msg.join(" "));
+    return out;
   }
   async function visLoadImage(file){
     let src;
@@ -3954,14 +3986,14 @@
     c.getContext("2d").drawImage(src,0,0,c.width,c.height);
     return c;
   }
-  async function visCapture(done){
+  async function visCapture(done,src){
     visPersist();
-    const file=await visPickFile();if(!file)return;
-    let base;try{base=await visLoadImage(file)}catch(e){uiAlert("Photo illisible.");return}
-    visEditor([{base,shapes:[],caption:""}],done);
+    const files=await visPickFiles(src||"camera");if(!files.length)return;
+    const shots=await visLoadShots(files);if(!shots.length){uiAlert(files.length>1?"Images illisibles.":"Photo illisible.");return}
+    visEditor(shots,done,src==="gallery"?0:shots.length-1);
   }
-  function visEditor(shots,done){
-    let cur=shots.length-1, tool="circle", color="#F2B705", drawing=null;
+  function visEditor(shots,done,start){
+    let cur=start==null?shots.length-1:start, tool="circle", color="#F2B705", drawing=null;
     const d=document.createElement("div");d.className="visedit";d.setAttribute("role","dialog");d.setAttribute("aria-modal","true");d.setAttribute("aria-label","Photo");
     document.body.appendChild(d);
     const paint=(cv,s,w)=>{
@@ -3982,7 +4014,7 @@
         <div class="vistools" role="toolbar" aria-label="Annotation">${[["circle","Cercle"],["arrow","Flèche"],["pen","Crayon"]].map(([k,l])=>`<button type="button" data-tool="${k}" aria-pressed="${tool===k}">${l}</button>`).join("")}<span class="sp"></span>${[["#F2B705","jaune"],["#E5484D","rouge"],["#FFFFFF","blanc"]].map(([c,l])=>`<button type="button" class="viscol" data-col="${c}" style="background:${c}" aria-label="Couleur ${l}" aria-pressed="${color===c}"></button>`).join("")}<button type="button" class="visround" data-undo aria-label="Annuler le dernier trait">↶</button></div>
         <input type="text" class="viscapt" maxlength="200" placeholder="Légende (ex. : quai 3, étiquette actuelle)" aria-label="Légende de la photo" value="${esc(s.caption)}">
         <div class="visstrip">${shots.map((x,i)=>`<button type="button" data-i="${i}" aria-label="Photo ${i+1}" aria-current="${i===cur}"><canvas width="${Math.round(x.base.width/x.base.height*48)}" height="48"></canvas></button>`).join("")}<button type="button" class="add" data-more aria-label="Ajouter une photo à la série">+</button></div>
-        <footer><button type="button" class="btn" data-more>Autre photo</button><button type="button" class="btn primary" data-ok>${shots.length>1?`Ajouter les ${shots.length} photos`:"Ajouter la photo"}</button></footer>`;
+        <footer><button type="button" class="btn ico" data-more aria-label="Prendre une autre photo" title="Prendre une autre photo">${CAM_SVG}</button><button type="button" class="btn ico" data-galm aria-label="Ajouter des photos de la galerie" title="Ajouter des photos de la galerie">${GAL_SVG}</button><button type="button" class="btn primary" data-ok>${shots.length>1?`Ajouter les ${shots.length} photos`:"Ajouter la photo"}</button></footer>`;
       const cv=d.querySelector(".visstagecv canvas");cv.width=s.base.width;cv.height=s.base.height;paint(cv,s);
       d.querySelectorAll(".visstrip canvas").forEach((c,i)=>c.getContext("2d").drawImage(shots[i].base,0,0,c.width,c.height));
       const pt=e=>{const r=cv.getBoundingClientRect();return [(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]};
@@ -3995,6 +4027,7 @@
       d.querySelector("[data-undo]").onclick=()=>{s.shapes.pop();paint(cv,s)};
       d.querySelectorAll("[data-i]").forEach(b=>b.onclick=()=>{cur=+b.dataset.i;draw()});
       d.querySelector("[data-retake]").onclick=async()=>{const f=await visPickFile();if(!f)return;try{s.base=await visLoadImage(f);s.shapes=[]}catch(e){}draw()};
+      d.querySelector("[data-galm]").onclick=async()=>{const fs=await visPickFiles("gallery");if(!fs.length)return;const add=await visLoadShots(fs);if(!add.length){uiAlert("Images illisibles.");return}cur=shots.length;shots.push(...add);draw()};
       d.querySelectorAll("[data-more]").forEach(b=>b.onclick=async()=>{const f=await visPickFile();if(!f)return;try{shots.push({base:await visLoadImage(f),shapes:[],caption:""});cur=shots.length-1}catch(e){uiAlert("Photo illisible.")}draw()});
       d.querySelector("[data-x]").onclick=async()=>{if(shots.some(x=>x.shapes.length||x.caption)&&!await uiConfirm("Abandonner ces photos ?",{ok:"Abandonner",danger:true}))return;d.remove();done([])};
       d.querySelector("[data-ok]").onclick=async()=>{
@@ -4183,7 +4216,7 @@
         </section>
         ${left.length?`<section class="viscard"><h3>Restant à voir</h3>${leftFree.map(i=>`<div class="visleft"><span><em>${esc(fname(i.flow))}</em>${esc(i.text)}</span><select data-left="${esc(i.id)}" aria-label="Que faire de « ${esc(i.text)} » ?"><option value="">Ignorer</option><option value="point">Point ouvert</option><option value="task">Tâche</option></select></div>`).join("")}${leftPts.map(i=>`<div class="visleft"><span><em>${esc(i.label||"Point ouvert")} · ${esc(fname(i.flow))}</em>${esc(i.text)}</span><span class="muted">reste ouvert</span></div>`).join("")}</section>`:""}
       </main>
-      <footer class="visf col">${anything?`<button type="button" class="btn primary" data-apply>Appliquer au projet</button>`:""}<button type="button" class="btn" data-pdf>Exporter le compte rendu de visite (PDF)</button>${v.status==="done"?`<button type="button" class="btn ghost" data-reopen>Reprendre la visite</button>`:`<button type="button" class="btn ghost" data-done>Clôturer la visite</button>`}</footer>`;
+      <footer class="visf col">${anything?`<button type="button" class="btn primary" data-apply>Appliquer au projet</button>`:""}<button type="button" class="btn" data-pdf>Exporter le compte rendu de visite (PDF)</button>${v.status==="done"?`<button type="button" class="btn ghost" data-reopen>Reprendre la visite</button>`:`<button type="button" class="btn ${anything?"":"primary "}visdone" data-done>Clôturer la visite</button>`}</footer>`;
     o.querySelector("[data-back]").onclick=()=>{visScreen="home";renderVisit()};
     o.querySelectorAll("[data-all]").forEach(cb=>cb.onchange=()=>o.querySelectorAll(`[data-kind="${cb.dataset.all}"]`).forEach(x=>x.checked=cb.checked));
     const ap=o.querySelector("[data-apply]");if(ap)ap.onclick=()=>visApply(
@@ -4191,7 +4224,7 @@
       new Set([...o.querySelectorAll("[data-close]")].filter(x=>x.checked).map(x=>x.dataset.close)),
       Object.fromEntries([...o.querySelectorAll("[data-left]")].map(x=>[x.dataset.left,x.value])));
     o.querySelector("[data-pdf]").onclick=()=>visPdf(visCur);
-    const dn=o.querySelector("[data-done]");if(dn)dn.onclick=()=>{visSet(x=>{x.status="done";x.endedAt=Date.now()});toast("Visite clôturée. Elle reste consultable dans l'onglet Visites du projet.")};
+    const dn=o.querySelector("[data-done]");if(dn)dn.onclick=()=>visFinish(visCur);
     const ro=o.querySelector("[data-reopen]");if(ro)ro.onclick=()=>{visSet(x=>{x.status="open";x.endedAt=null});visScreen="home";renderVisit()};
   }
   function visApply(ids,closeIds,leftChoice){
@@ -4250,8 +4283,9 @@
       vs.forEach(v=>{const li=document.createElement("li");li.className="task mtgrow";
         const ns=v.notes||[], ph=ns.reduce((k,x)=>k+(x.photos||[]).length,0), q=ns.filter(x=>x.type==="question").length;
         const its=v.items||[], pl=v.prep&&v.prep.plannedAt;
-        li.innerHTML=`<span class="mtgdate">${v.status==="prep"&&!pl?"À dater":esc(new Date(visDate(v)).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"}))}</span><div><div class="ttl">${esc(v.title)}</div><div class="meta">${v.status==="prep"?`<span class="tag">${plural(its.length,"élément")} à voir</span>${pl?`<span class="tag">${hm(pl)}</span>`:""}${v.prep.location?`<span class="tag">${esc(v.prep.location)}</span>`:""}`:`<span class="tag">${plural(ns.length,"note")}</span><span class="tag">${plural(ph,"photo")}</span>${q?`<span class="tag">${plural(q,"question")}</span>`:""}`}<span class="tag ${v.status==="done"?"done-t":"wait"}">${v.status==="done"?"Terminée":v.status==="prep"?"Préparée":"En cours"}</span>${vis.map[v.id]&&vis.map[v.id].dirty?`<span class="tag">En attente d'envoi</span>`:""}</div></div><div class="acts"><button type="button" class="sbtn">Ouvrir</button><button type="button" class="sbtn" data-del aria-label="Supprimer la visite ${esc(v.title)}" title="Supprimer">✕</button></div>`;
+        li.innerHTML=`<span class="mtgdate">${v.status==="prep"&&!pl?"À dater":esc(new Date(visDate(v)).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"}))}</span><div><div class="ttl">${esc(v.title)}</div><div class="meta">${v.status==="prep"?`<span class="tag">${plural(its.length,"élément")} à voir</span>${pl?`<span class="tag">${hm(pl)}</span>`:""}${v.prep.location?`<span class="tag">${esc(v.prep.location)}</span>`:""}`:`<span class="tag">${plural(ns.length,"note")}</span><span class="tag">${plural(ph,"photo")}</span>${q?`<span class="tag">${plural(q,"question")}</span>`:""}`}<span class="tag ${v.status==="done"?"done-t":"wait"}">${v.status==="done"?"Terminée":v.status==="prep"?"Préparée":"En cours"}</span>${vis.map[v.id]&&vis.map[v.id].dirty?`<span class="tag">En attente d'envoi</span>`:""}</div></div><div class="acts">${v.status==="open"?`<button type="button" class="sbtn" data-fin>Clôturer</button>`:""}<button type="button" class="sbtn">Ouvrir</button><button type="button" class="sbtn" data-del aria-label="Supprimer la visite ${esc(v.title)}" title="Supprimer">✕</button></div>`;
         li.querySelector("[data-del]").onclick=e=>{e.stopPropagation();visDelete(v)};
+        const fin=li.querySelector("[data-fin]");if(fin)fin.onclick=e=>{e.stopPropagation();visFinish(v)};
         li.onclick=()=>visOpen(v);ul.appendChild(li)});
       g.appendChild(ul);
     }
