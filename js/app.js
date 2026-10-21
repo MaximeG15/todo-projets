@@ -1207,8 +1207,8 @@
     if(view!=="all"&&!proj(view))view="all";
     if(ui.mode==="kanban")ui.mode="list"; // ancien mode Kanban (retiré)
     if(ui.taskMode==="kanban")ui.taskMode="list";
-    if(!["list","agenda","dash","trash","requests","points","meetings"].includes(ui.mode))ui.mode="list";
-    if((ui.mode==="points"||ui.mode==="meetings")&&view==="all")ui.mode="list";
+    if(!["list","agenda","dash","trash","requests","points","meetings","visits"].includes(ui.mode))ui.mode="list";
+    if((ui.mode==="points"||ui.mode==="meetings"||ui.mode==="visits")&&view==="all")ui.mode="list";
     if(["list","agenda"].includes(ui.mode))ui.taskMode=ui.mode;
     if(ui.mode==="trash"||ui.mode==="dash")view="all";
     const mode=ui.mode;
@@ -1291,7 +1291,7 @@
       const nT=alive.filter(t=>t.projectId===p.id&&t.status!=="done").length, nR=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)).length;
       tabs.hidden=false;
       const nO=livePts().filter(o=>o.projectId===p.id&&o.status!=="closed").length;
-      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"&&mode!=="meetings"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points ouverts <span>${nO}</span></button><button type="button" role="tab" aria-selected="${mode==="requests"}" data-tab="requests">Demandes client <span>${nR}</span></button><button type="button" role="tab" aria-selected="${mode==="meetings"}" data-tab="meetings">Réunions <span>${mtgList(p.id).length}</span></button>`;
+      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"&&mode!=="meetings"&&mode!=="visits"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points ouverts <span>${nO}</span></button><button type="button" role="tab" aria-selected="${mode==="requests"}" data-tab="requests">Demandes client <span>${nR}</span></button><button type="button" role="tab" aria-selected="${mode==="meetings"}" data-tab="meetings">Réunions <span>${mtgList(p.id).length}</span></button><button type="button" role="tab" aria-selected="${mode==="visits"}" data-tab="visits">Visites <span>${(visEnsure(),visList(p.id).length)}</span></button>`;
       tabs.querySelectorAll("[data-tab]").forEach(x=>x.onclick=()=>{const k=x.dataset.tab;ui.mode=k==="tasks"?(ui.taskMode||"list"):k;if(ui.mode!=="list")ui.scope="all";saveUi();editing=null;editingReq=null;editingPt=null;render()});
     } else {tabs.hidden=true;tabs.innerHTML=""}
     if(!weekStart)weekStart=mondayOf(new Date());
@@ -1316,6 +1316,10 @@
       const ps=livePts().filter(o=>o.projectId===p.id), no=ps.filter(o=>o.status!=="closed");
       const byO=k=>no.filter(o=>o.owner===k).length;
       sub=`${no.length} point${no.length>1?"s":""} ouvert${no.length>1?"s":""}`+(ps.length-no.length?`, ${ps.length-no.length} levé${ps.length-no.length>1?"s":""}`:"")+([["client","côté client"],["mecalux","côté Mecalux"],["tiers","côté tiers"]].filter(([k])=>byO(k)).map(([k,l])=>` · ${byO(k)} ${l}`).join(""));
+    } else if(mode==="visits"){
+      title=`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`;
+      const vs=visList(p.id), nOpen=vs.filter(x=>x.status!=="done").length;
+      sub=`${vs.length} visite${vs.length>1?"s":""} sur site`+(nOpen?`, dont ${nOpen} en cours`:"");
     } else if(mode==="meetings"){
       title=`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`;
       const ms=mtgList(p.id), nd=ms.filter(x=>x.status==="draft").length;
@@ -1461,6 +1465,7 @@
     }
     if(mode==="requests"&&!query.trim()){renderRequests(L,p);return}
     if(mode==="meetings"&&p&&!query.trim()){renderMeetings(L,p);return}
+    if(mode==="visits"&&p&&!query.trim()){renderVisits(L,p);return}
     if(mode==="points"&&p&&!query.trim()){renderPoints(L,p);return}
     const base=alive.filter(t=>(!p||t.projectId===p.id)&&(!ui.who||mode==="dash"||(ui.who==="__me"?isMyTask(t):ui.who==="__none"?!(t.who||"").trim():whoName(t)===ui.who)));
     if(query.trim()){
@@ -3468,6 +3473,402 @@
     const f=cg.querySelector("form");f.onsubmit=async e=>{e.preventDefault();const r=await ctAdd(p.id,{name:f.querySelector("[data-n]").value,role:f.querySelector("[data-r]").value,email:f.querySelector("[data-e]").value,side:f.querySelector("[data-s]").value});if(r)render()};
     L.appendChild(cg);
   }
+  // ---------- Visites sur site (prise de notes par flux, photos, hors connexion) ----------
+  // Une visite = un document (flux + notes). Tout est d'abord enregistré sur l'appareil (IndexedDB) : la visite
+  // fonctionne sans réseau. En mode en ligne, les visites et les photos partent dès que la connexion le permet
+  // (table « visits », stockage privé « visit-photos », chemin <projet>/<visite>/<photo>.jpg).
+  const VIS_FLOWS=["Généralités","Réception","Stockage","Réapprovisionnement","Préparation","Expédition","Gestion de stock","Inventaire"];
+  const NTYPE={note:["Note","nt-note"],question:["Question client","nt-q"],action:["Action","nt-act"]};
+  const VIS_MAX=1600, VIS_Q=0.8;
+  const vis={map:{},loaded:false,loading:null,pending:0,flushing:false,err:"",urls:{},t:null};
+  const visAcct=()=>MODE==="cloud"&&cloud.user?cloud.user.id:"local";
+  let visDbP=null;
+  function visDb(){return visDbP||(visDbP=new Promise((res,rej)=>{const r=indexedDB.open("todo-projets-visites",1);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains("visits"))d.createObjectStore("visits",{keyPath:"id"});if(!d.objectStoreNames.contains("photos"))d.createObjectStore("photos",{keyPath:"id"})};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}))}
+  async function idb(st,mode,fn){const d=await visDb();return new Promise(res=>{let out;const t=d.transaction(st,mode);const q=fn(t.objectStore(st));if(q)q.onsuccess=()=>{out=q.result};t.oncomplete=()=>res(out);t.onerror=t.onabort=()=>res(undefined)})}
+  const idbAll=st=>idb(st,"readonly",s=>s.getAll()).then(r=>r||[]);
+  const idbGet=(st,k)=>idb(st,"readonly",s=>s.get(k));
+  const idbPut=(st,v)=>idb(st,"readwrite",s=>s.put(v));
+  const idbDel=(st,k)=>idb(st,"readwrite",s=>s.delete(k));
+  const rowVis=v=>({id:v.id,project_id:v.projectId,title:v.title||"",started_at:v.startedAt||null,ended_at:v.endedAt||null,status:v.status||"open",flows:v.flows||[],notes:v.notes||[],updated_at:v.updatedAt||Date.now(),deleted_at:v.deletedAt||null});
+  const fromVis=r=>({id:r.id,projectId:r.project_id,title:r.title||"",startedAt:r.started_at?Number(r.started_at):null,endedAt:r.ended_at?Number(r.ended_at):null,status:r.status||"open",flows:Array.isArray(r.flows)?r.flows:[],notes:Array.isArray(r.notes)?r.notes:[],createdBy:r.created_by||"",createdAt:Number(r.created_at)||0,updatedAt:Number(r.updated_at)||0,deletedAt:r.deleted_at?Number(r.deleted_at):null});
+  const visList=pid=>Object.values(vis.map).map(x=>x.v).filter(v=>v.projectId===pid&&!v.deletedAt).sort((a,b)=>(b.startedAt||0)-(a.startedAt||0));
+  function visLoad(){
+    if(vis.loading)return vis.loading;
+    if(MODE==="cloud"&&!cloud.user)return Promise.resolve();
+    vis.loading=(async()=>{
+      const acct=visAcct(), m={};vis.acct=acct;
+      try{(await idbAll("visits")).filter(r=>r.acct===acct).forEach(r=>m[r.id]=r)}catch(e){}
+      if(MODE==="cloud"&&cloud.user&&navigator.onLine!==false){
+        let data=null,error=true;try{({data,error}=await cloudClient().from("visits").select("*"))}catch(e){}
+        if(!error)for(const row of data||[]){
+          const v=fromVis(row), loc=m[v.id];
+          if(!loc||(!loc.dirty&&v.updatedAt>=(loc.v.updatedAt||0))){m[v.id]={id:v.id,acct,v,dirty:false};idbPut("visits",m[v.id])}
+        }
+      }
+      vis.map=m;vis.loaded=true;vis.loading=null;
+      await visCount();
+      if(!visCur)render();else renderVisit();
+      visFlush();
+    })();
+    return vis.loading;
+  }
+  async function visCount(){
+    const acct=visAcct();let n=Object.values(vis.map).filter(x=>x.dirty).length;
+    try{n+=(await idbAll("photos")).filter(p=>p.acct===acct&&(!p.up||p.del)).length}catch(e){}
+    vis.pending=MODE==="cloud"?n:0;
+  }
+  function visPut(v){
+    v.updatedAt=Date.now();
+    const rec={id:v.id,acct:visAcct(),v:JSON.parse(JSON.stringify(v)),dirty:MODE==="cloud"};
+    vis.map[v.id]=rec;idbPut("visits",rec).then(()=>visCount()).then(()=>{if(visCur)visStatus()});
+    clearTimeout(vis.t);vis.t=setTimeout(visFlush,1500);
+  }
+  async function visFlush(){
+    if(MODE!=="cloud"||!cloud.user||vis.flushing)return;
+    if(navigator.onLine===false){await visCount();if(visCur)visStatus();return}
+    vis.flushing=true;vis.err="";
+    try{
+      const acct=visAcct(), c=cloudClient(), st=c.storage.from("visit-photos");
+      for(const p of (await idbAll("photos")).filter(p=>p.acct===acct&&(p.del||!p.up))){
+        const path=`${p.pid}/${p.vid}/${p.id}.jpg`;
+        if(p.del){const {error}=await st.remove([path]);if(error&&transient(error))throw error;await idbDel("photos",p.id);continue}
+        const {error}=await st.upload(path,p.blob,{contentType:"image/jpeg",upsert:true});
+        if(error){if(transient(error))throw error;vis.err=error.message;continue}
+        p.up=true;await idbPut("photos",p);
+      }
+      for(const rec of Object.values(vis.map).filter(r=>r.dirty)){
+        const sent=rec.v.updatedAt;
+        const {error}=await c.from("visits").upsert(rowVis(rec.v));
+        if(error){if(transient(error))throw error;vis.err=error.message;continue}
+        const cur=vis.map[rec.id];if(cur&&cur.v.updatedAt===sent){cur.dirty=false;await idbPut("visits",cur)}
+      }
+    }catch(e){vis.err=""}
+    finally{vis.flushing=false}
+    await visCount();if(visCur)visStatus();
+  }
+  window.addEventListener("online",()=>visFlush());
+  setInterval(()=>{if(!vis.loaded)visLoad();else if(vis.pending)visFlush()},60e3);
+  setTimeout(()=>{if(!vis.loaded)visLoad()},3000);
+  // Photo : image locale (sur l'appareil) ou téléchargée du stockage puis gardée en cache
+  async function visPhotoUrl(v,phid){
+    if(vis.urls[phid])return vis.urls[phid];
+    let rec=await idbGet("photos",phid);
+    if(!rec&&MODE==="cloud"&&cloud.user&&navigator.onLine!==false){
+      const {data,error}=await cloudClient().storage.from("visit-photos").download(`${v.projectId}/${v.id}/${phid}.jpg`);
+      if(!error&&data){rec={id:phid,acct:visAcct(),pid:v.projectId,vid:v.id,blob:data,up:true,del:false};idbPut("photos",rec)}
+    }
+    if(!rec||!rec.blob)return "";
+    return vis.urls[phid]=URL.createObjectURL(rec.blob);
+  }
+  function visFillPhotos(root,v){root.querySelectorAll("img[data-ph]").forEach(async im=>{const u=await visPhotoUrl(v,im.dataset.ph);if(u)im.src=u;else im.closest(".vph")&&im.closest(".vph").classList.add("missing")})}
+  function visDropPhotos(v,ids){ids.forEach(async id=>{const r=await idbGet("photos",id);if(MODE!=="cloud"){idbDel("photos",id);return}await idbPut("photos",r?{...r,blob:null,del:true}:{id,acct:visAcct(),pid:v.projectId,vid:v.id,blob:null,up:true,del:true});visFlush()})}
+  // ---------- Création, suppression ----------
+  async function visNew(p){
+    const t=await uiPrompt("Intitulé de la visite","Visite d'analyse fonctionnelle",{ok:"Démarrer la visite"});
+    if(t==null)return;
+    const now=Date.now();
+    const v={id:newId(),projectId:p.id,title:(t.trim()||"Visite sur site").slice(0,300),startedAt:now,endedAt:null,status:"open",flows:VIS_FLOWS.map(n=>({id:uid(),name:n})),notes:[],createdAt:now};
+    visPut(v);visOpen(v);render();
+  }
+  async function visDelete(v){
+    const nP=(v.notes||[]).reduce((n,x)=>n+(x.photos||[]).length,0);
+    if(!await uiConfirm(`Supprimer la visite « ${v.title} » du ${new Date(v.startedAt).toLocaleDateString("fr-FR")} ?\n\n${(v.notes||[]).length} note(s) et ${nP} photo(s) seront supprimées. Les points ouverts et tâches déjà créés restent dans le projet.`,{ok:"Supprimer",danger:true}))return;
+    const x=JSON.parse(JSON.stringify(v));x.deletedAt=Date.now();
+    visDropPhotos(x,(x.notes||[]).flatMap(n=>(n.photos||[]).map(p=>p.id)));
+    visPut(x);if(visCur&&visCur.id===v.id){visCur=null;renderVisit()}render();
+    toast("Visite supprimée.");
+  }
+  // ---------- Écran de visite ----------
+  let visCur=null, visScreen="home", visFlowId=null, visType="note", visStage=[], visText="";
+  function visOpen(v,flowId){visCur=JSON.parse(JSON.stringify(v));visScreen=flowId?"flow":"home";visFlowId=flowId||null;visStage=[];visText="";renderVisit()}
+  function visClose(){if(visStage.length)visDropPhotos(visCur,visStage.map(s=>s.id));visCur=null;visStage=[];renderVisit();render()}
+  function visSet(fn){fn(visCur);visPut(visCur);renderVisit()}
+  const visNotes=(v,fid)=>(v.notes||[]).filter(n=>n.flow===fid);
+  const plural=(n,s,p)=>`${n} ${n>1?(p||s+"s"):s}`;
+  function visStatus(){
+    const el=document.querySelector("#visview .visst");if(!el)return;
+    const off=navigator.onLine===false, n=vis.pending;
+    el.className="visst"+(off?" off":n?" wait":" ok");
+    el.innerHTML=MODE!=="cloud"?`<i></i><span>Enregistré sur cet appareil (mode local)</span>`
+      :off?`<i></i><span>Hors ligne · enregistré sur le téléphone</span>${n?`<b>${plural(n,"élément")} en attente</b>`:""}`
+      :n?`<i></i><span>Envoi en cours…</span><b>${plural(n,"élément")} en attente</b>`:`<i></i><span>En ligne · tout est enregistré</span>`;
+  }
+  function renderVisit(){
+    let o=$("#visview");
+    if(!visCur){if(o)o.remove();document.body.classList.remove("visopen");return}
+    if(!o){o=document.createElement("div");o.id="visview";o.setAttribute("role","dialog");o.setAttribute("aria-modal","true");document.body.appendChild(o)}
+    document.body.classList.add("visopen");
+    const v=visCur, p=proj(v.projectId)||{name:""};
+    o.className="visv";o.setAttribute("aria-label",v.title);
+    if(visScreen==="flow"&&!(v.flows||[]).some(f=>f.id===visFlowId))visScreen="home";
+    if(visScreen==="flow")visFlowScreen(o,v,p);else if(visScreen==="end")visEndScreen(o,v,p);else visHomeScreen(o,v,p);
+    visStatus();
+  }
+  const visBack=(label)=>`<button type="button" class="visback" data-back aria-label="${label}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button>`;
+  const CAM_SVG=`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>`;
+  function visHomeScreen(o,v,p){
+    const ns=v.notes||[], nPh=ns.reduce((n,x)=>n+(x.photos||[]).length,0);
+    o.innerHTML=`<header class="vish"><div class="visrow">${visBack("Quitter la visite")}<div class="vist"><b>${esc(v.title)}</b><span>${esc(p.name)} · ${esc(new Date(v.startedAt).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"}))}${v.status==="done"?" · terminée":""}</span></div><button type="button" class="visback" data-vm aria-label="Actions sur la visite">⋯</button></div><div class="visst"></div></header>
+      <main class="vism"><div class="vishd"><h2>Flux</h2><span>${plural(ns.length,"note")} · ${plural(nPh,"photo")}</span></div>
+      <div class="vistiles">${(v.flows||[]).map(f=>{const n=visNotes(v,f.id), ph=n.reduce((k,x)=>k+(x.photos||[]).length,0), q=n.filter(x=>x.type==="question").length;
+        return `<button type="button" class="vistile" data-f="${esc(f.id)}"><b>${esc(f.name)}</b><span>${n.length||ph?`${plural(n.length,"note")} · ${plural(ph,"photo")}`:"Pas encore de note"}</span>${q?`<em>${plural(q,"question")}</em>`:""}</button>`}).join("")}
+      <button type="button" class="vistile add" data-addf><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Ajouter un flux</button></div></main>
+      <footer class="visf"><button type="button" class="btn visend" data-end>${v.status==="done"?"Bilan de la visite":"Terminer la visite"}</button><button type="button" class="visfab" data-quick aria-label="Photo rapide (le flux est choisi ensuite)">${CAM_SVG}</button></footer>`;
+    o.querySelector("[data-back]").onclick=visClose;
+    o.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{visScreen="flow";visFlowId=b.dataset.f;visStage=[];renderVisit()});
+    o.querySelector("[data-vm]").onclick=async()=>{
+      const ch=await visSheet(v.title,[{k:"ren",l:"Renommer la visite"},{k:"pdf",l:"Exporter le compte rendu (PDF)"},{k:"del",l:"Supprimer la visite",danger:true}]);
+      if(ch==="ren"){const t=await uiPrompt("Intitulé de la visite",v.title,{ok:"Renommer"});if(t&&t.trim())visSet(x=>{x.title=t.trim().slice(0,300)})}
+      else if(ch==="pdf")visPdf(visCur);
+      else if(ch==="del")visDelete(visCur);
+    };
+    o.querySelector("[data-addf]").onclick=async()=>{const n=await uiPrompt("Nom du nouveau flux","",{ok:"Ajouter"});if(n&&n.trim())visSet(x=>x.flows.push({id:uid(),name:n.trim().slice(0,60)}))};
+    o.querySelector("[data-end]").onclick=()=>{visScreen="end";renderVisit()};
+    o.querySelector("[data-quick]").onclick=()=>visCapture(async photos=>{
+      if(!photos.length)return;
+      const fid=await visPickFlow("Dans quel flux ranger ces photos ?");
+      if(!fid){visDropPhotos(visCur,photos.map(x=>x.id));return}
+      visSet(x=>x.notes.push({id:uid(),flow:fid,type:"note",text:"",photos,at:Date.now(),conv:null}));
+      toast(`${plural(photos.length,"photo")} ajoutée${photos.length>1?"s":""} au flux « ${(visCur.flows.find(f=>f.id===fid)||{}).name} ».`);
+    });
+  }
+  function visPickFlow(title,except){
+    return new Promise(res=>{
+      const d=document.createElement("dialog");d.className="uidlg vissheet";d.setAttribute("aria-label",title);
+      d.innerHTML=`<form method="dialog"><h3>${esc(title)}</h3><div class="vispick">${visCur.flows.filter(f=>f.id!==except).map(f=>`<button type="button" class="btn" data-f="${esc(f.id)}">${esc(f.name)}</button>`).join("")}</div><div class="uibtns"><button type="button" class="btn ghost" data-x>Annuler</button></div></form>`;
+      document.body.appendChild(d);
+      const close=v=>{try{d.close()}catch(e){}d.remove();res(v)};
+      d.addEventListener("cancel",e=>{e.preventDefault();close(null)});
+      d.querySelector("[data-x]").onclick=()=>close(null);
+      d.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>close(b.dataset.f));
+      if(d.showModal)d.showModal();else d.setAttribute("open","");
+    });
+  }
+  function visNoteHtml(n){
+    const [l,c]=NTYPE[n.type]||NTYPE.note;
+    return `<article class="visnote" data-n="${esc(n.id)}"><div class="visnh"><span class="nt ${c}">${l}</span><span>${hm(n.at)}</span>${n.conv?`<span class="visconv">${n.conv.kind==="point"?"Point ouvert créé":"Tâche créée"}</span>`:""}<span class="sp"></span><button type="button" class="vismore" data-more aria-label="Actions sur la note">⋯</button></div>
+      ${n.text?`<p>${esc(n.text).replace(/\n/g,"<br>")}</p>`:""}
+      ${(n.photos||[]).length?`<div class="visphs">${n.photos.map(ph=>`<button type="button" class="vph" data-view="${esc(ph.id)}" aria-label="Voir la photo${ph.caption?" : "+esc(ph.caption):""}"><img data-ph="${esc(ph.id)}" alt="">${ph.caption?`<span>${esc(ph.caption)}</span>`:""}</button>`).join("")}</div>`:""}</article>`;
+  }
+  function visFlowScreen(o,v,p){
+    const f=v.flows.find(x=>x.id===visFlowId), ns=visNotes(v,f.id), ph=ns.reduce((k,x)=>k+(x.photos||[]).length,0), q=ns.filter(x=>x.type==="question").length;
+    o.innerHTML=`<header class="vish"><div class="visrow">${visBack("Retour aux flux")}<div class="vist"><b>${esc(f.name)}</b><span>${plural(ns.length,"note")} · ${plural(ph,"photo")}${q?` · ${plural(q,"question")}`:""}</span></div><button type="button" class="visback" data-fm aria-label="Actions sur le flux">⋯</button></div>
+      <div class="vischips" role="tablist" aria-label="Changer de flux">${v.flows.map(x=>`<button type="button" role="tab" aria-selected="${x.id===f.id}" data-f="${esc(x.id)}">${esc(x.name)}</button>`).join("")}</div><div class="visst"></div></header>
+      <main class="vism notes">${ns.length?ns.map(visNoteHtml).join(""):`<p class="visempty">Aucune note pour ce flux. Écrivez ou prenez une photo ci-dessous.</p>`}</main>
+      <footer class="viscap">
+        <div class="visseg" role="radiogroup" aria-label="Type de note">${Object.entries(NTYPE).map(([k,[l]])=>`<button type="button" role="radio" aria-checked="${visType===k}" data-t="${k}">${l}</button>`).join("")}</div>
+        ${visStage.length?`<div class="visstage">${visStage.map(s=>`<span class="vph sm"><img data-ph="${esc(s.id)}" alt="Photo jointe"><button type="button" data-unstage="${esc(s.id)}" aria-label="Retirer la photo">✕</button></span>`).join("")}</div>`:""}
+        <div class="visin"><button type="button" class="viscam" data-cam aria-label="Prendre une photo">${CAM_SVG}</button><textarea rows="2" aria-label="Texte de la note" placeholder="Écrire ou dicter (micro du clavier)…">${esc(visText)}</textarea><button type="button" class="visok" data-add aria-label="Ajouter la note"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></button></div>
+      </footer>`;
+    o.querySelector("[data-back]").onclick=()=>{visScreen="home";renderVisit()};
+    o.querySelectorAll(".vischips [data-f]").forEach(b=>b.onclick=()=>{visFlowId=b.dataset.f;renderVisit()});
+    const chip=o.querySelector('.vischips [aria-selected="true"]');if(chip)chip.scrollIntoView({block:"nearest",inline:"center"});
+    o.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{visType=b.dataset.t;o.querySelectorAll("[data-t]").forEach(x=>x.setAttribute("aria-checked",x===b))});
+    const ta=o.querySelector(".visin textarea");ta.oninput=()=>{visText=ta.value};
+    o.querySelectorAll("[data-unstage]").forEach(b=>b.onclick=()=>{const id=b.dataset.unstage;visDropPhotos(visCur,[id]);visStage=visStage.filter(s=>s.id!==id);renderVisit()});
+    o.querySelector("[data-cam]").onclick=()=>visCapture(photos=>{visStage=visStage.concat(photos);renderVisit()});
+    o.querySelector("[data-add]").onclick=()=>{
+      const t=ta.value.trim();if(!t&&!visStage.length){ta.focus();return}
+      const photos=visStage;visStage=[];visText="";
+      visSet(x=>x.notes.push({id:uid(),flow:f.id,type:visType,text:t.slice(0,4000),photos,at:Date.now(),conv:null}));
+      const m=$("#visview .vism");if(m)m.scrollTop=m.scrollHeight;
+    };
+    o.querySelector("[data-fm]").onclick=()=>visFlowMenu(f);
+    o.querySelectorAll("[data-more]").forEach(b=>b.onclick=()=>visNoteMenu(b.closest("[data-n]").dataset.n));
+    o.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>visViewPhoto(b.dataset.view));
+    visFillPhotos(o,v);
+    const m=o.querySelector(".vism");m.scrollTop=m.scrollHeight;
+  }
+  async function visSheet(title,items){
+    if(typeof window.__testDialog==="function"){const r=await window.__testDialog({type:"sheet",message:title,options:items.map(i=>i.l)});const i=items.find(x=>x.l===(r&&r.v));return i?i.k:null}
+    return new Promise(res=>{
+      const d=document.createElement("dialog");d.className="uidlg vissheet";d.setAttribute("aria-label",title);
+      d.innerHTML=`<form method="dialog"><h3>${esc(title)}</h3><div class="vispick">${items.map((i,k)=>`<button type="button" class="btn${i.danger?" danger-t":""}" data-k="${k}">${esc(i.l)}</button>`).join("")}</div><div class="uibtns"><button type="button" class="btn ghost" data-x>Annuler</button></div></form>`;
+      document.body.appendChild(d);
+      const close=v=>{try{d.close()}catch(e){}d.remove();res(v)};
+      d.addEventListener("cancel",e=>{e.preventDefault();close(null)});
+      d.querySelector("[data-x]").onclick=()=>close(null);
+      d.querySelectorAll("[data-k]").forEach(b=>b.onclick=()=>close(items[+b.dataset.k].k));
+      if(d.showModal)d.showModal();else d.setAttribute("open","");
+    });
+  }
+  async function visNoteMenu(nid){
+    const n=visCur.notes.find(x=>x.id===nid);if(!n)return;
+    const items=[{k:"edit",l:"Modifier le texte"},...Object.entries(NTYPE).filter(([k])=>k!==n.type).map(([k,[l]])=>({k:"t:"+k,l:"Changer en « "+l+" »"})),{k:"photo",l:"Ajouter des photos"},...(visCur.flows.length>1?[{k:"move",l:"Déplacer vers un autre flux"}]:[]),{k:"del",l:"Supprimer la note",danger:true}];
+    const ch=await visSheet("Note de "+hm(n.at),items);if(!ch)return;
+    if(ch==="edit"){const t=await uiPrompt("Texte de la note",n.text||"",{ok:"Enregistrer",multiline:true});if(t!=null)visSet(x=>{x.notes.find(y=>y.id===nid).text=t.trim().slice(0,4000)})}
+    else if(ch.startsWith("t:"))visSet(x=>{x.notes.find(y=>y.id===nid).type=ch.slice(2)});
+    else if(ch==="photo")visCapture(photos=>visSet(x=>{const y=x.notes.find(z=>z.id===nid);y.photos=(y.photos||[]).concat(photos)}));
+    else if(ch==="move"){const fid=await visPickFlow("Déplacer la note vers…",n.flow);if(fid)visSet(x=>{x.notes.find(y=>y.id===nid).flow=fid})}
+    else if(ch==="del"){if(!await uiConfirm("Supprimer cette note"+((n.photos||[]).length?` et ses ${plural(n.photos.length,"photo")}`:"")+" ?",{ok:"Supprimer",danger:true}))return;visDropPhotos(visCur,(n.photos||[]).map(p=>p.id));visSet(x=>{x.notes=x.notes.filter(y=>y.id!==nid)})}
+  }
+  async function visFlowMenu(f){
+    const n=visNotes(visCur,f.id).length;
+    const ch=await visSheet("Flux « "+f.name+" »",[{k:"ren",l:"Renommer le flux"},...(n?[]:[{k:"del",l:"Supprimer le flux",danger:true}])]);
+    if(ch==="ren"){const t=await uiPrompt("Nouveau nom du flux",f.name,{ok:"Renommer"});if(t&&t.trim())visSet(x=>{x.flows.find(y=>y.id===f.id).name=t.trim().slice(0,60)})}
+    if(ch==="del")visSet(x=>{x.flows=x.flows.filter(y=>y.id!==f.id)});
+  }
+  async function visViewPhoto(phid){
+    const n=visCur.notes.find(x=>(x.photos||[]).some(p=>p.id===phid)), ph=n&&n.photos.find(p=>p.id===phid);if(!ph)return;
+    const d=document.createElement("dialog");d.className="visphoto";d.setAttribute("aria-label","Photo");
+    d.innerHTML=`<img alt="${esc(ph.caption||"Photo")}"><div class="visphb"><input type="text" maxlength="200" placeholder="Légende" value="${esc(ph.caption||"")}" aria-label="Légende"><button type="button" class="btn danger-t" data-del>Supprimer</button><button type="button" class="btn primary" data-x>Fermer</button></div>`;
+    document.body.appendChild(d);
+    const u=await visPhotoUrl(visCur,phid);if(u)d.querySelector("img").src=u;
+    const close=()=>{const c=d.querySelector("input").value.trim().slice(0,200);try{d.close()}catch(e){}d.remove();if(c!==(ph.caption||""))visSet(x=>{x.notes.find(y=>y.id===n.id).photos.find(p=>p.id===phid).caption=c})};
+    d.addEventListener("cancel",e=>{e.preventDefault();close()});
+    d.querySelector("[data-x]").onclick=close;
+    d.querySelector("[data-del]").onclick=async()=>{try{d.close()}catch(e){}d.remove();if(!await uiConfirm("Supprimer cette photo ?",{ok:"Supprimer",danger:true}))return;visDropPhotos(visCur,[phid]);visSet(x=>{const y=x.notes.find(z=>z.id===n.id);y.photos=y.photos.filter(p=>p.id!==phid);if(!y.photos.length&&!y.text)x.notes=x.notes.filter(z=>z.id!==y.id)})};
+    if(d.showModal)d.showModal();else d.setAttribute("open","");
+  }
+  // ---------- Photo : prise de vue, réduction, annotation, légende, série ----------
+  function visPickFile(){
+    return new Promise(res=>{
+      if(typeof window.__testPhoto==="function"){Promise.resolve(window.__testPhoto()).then(res);return}
+      const inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.setAttribute("capture","environment");
+      inp.onchange=()=>res(inp.files&&inp.files[0]||null);inp.click();
+    });
+  }
+  async function visLoadImage(file){
+    let src;
+    try{src=await createImageBitmap(file,{imageOrientation:"from-image"})}
+    catch(e){src=await new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=URL.createObjectURL(file)})}
+    const w0=src.width, h0=src.height, k=Math.min(1,VIS_MAX/Math.max(w0,h0));
+    const c=document.createElement("canvas");c.width=Math.round(w0*k);c.height=Math.round(h0*k);
+    c.getContext("2d").drawImage(src,0,0,c.width,c.height);
+    return c;
+  }
+  async function visCapture(done){
+    const file=await visPickFile();if(!file)return;
+    let base;try{base=await visLoadImage(file)}catch(e){uiAlert("Photo illisible.");return}
+    visEditor([{base,shapes:[],caption:""}],done);
+  }
+  function visEditor(shots,done){
+    let cur=shots.length-1, tool="circle", color="#F2B705", drawing=null;
+    const d=document.createElement("div");d.className="visedit";d.setAttribute("role","dialog");d.setAttribute("aria-modal","true");d.setAttribute("aria-label","Photo");
+    document.body.appendChild(d);
+    const paint=(cv,s,w)=>{
+      const g=cv.getContext("2d");g.drawImage(s.base,0,0);
+      const lw=Math.max(4,Math.round(cv.width/150));g.lineWidth=lw;g.lineCap="round";g.lineJoin="round";
+      [...s.shapes,...(w?[w]:[])].forEach(sh=>{
+        g.strokeStyle=sh.c;g.beginPath();
+        if(sh.t==="circle"){const [a,b]=sh.p,rx=Math.abs(b[0]-a[0])/2,ry=Math.abs(b[1]-a[1])/2;g.ellipse((a[0]+b[0])/2,(a[1]+b[1])/2,Math.max(rx,1),Math.max(ry,1),0,0,Math.PI*2)}
+        else if(sh.t==="arrow"){const [a,b]=sh.p,an=Math.atan2(b[1]-a[1],b[0]-a[0]),hl=lw*4;g.moveTo(a[0],a[1]);g.lineTo(b[0],b[1]);g.moveTo(b[0]-hl*Math.cos(an-0.5),b[1]-hl*Math.sin(an-0.5));g.lineTo(b[0],b[1]);g.lineTo(b[0]-hl*Math.cos(an+0.5),b[1]-hl*Math.sin(an+0.5))}
+        else sh.p.forEach((pt,i)=>i?g.lineTo(pt[0],pt[1]):g.moveTo(pt[0],pt[1]));
+        g.stroke();
+      });
+    };
+    const draw=()=>{
+      const s=shots[cur];
+      d.innerHTML=`<header><button type="button" class="visround" data-x aria-label="Abandonner les photos">✕</button><div class="vist"><b>Photo ${cur+1} sur ${shots.length}</b><span>Entourez ou fléchez au doigt</span></div><button type="button" class="btn ghost" data-retake>Reprendre</button></header>
+        <div class="visstagecv"><canvas></canvas></div>
+        <div class="vistools" role="toolbar" aria-label="Annotation">${[["circle","Cercle"],["arrow","Flèche"],["pen","Crayon"]].map(([k,l])=>`<button type="button" data-tool="${k}" aria-pressed="${tool===k}">${l}</button>`).join("")}<span class="sp"></span>${[["#F2B705","jaune"],["#E5484D","rouge"],["#FFFFFF","blanc"]].map(([c,l])=>`<button type="button" class="viscol" data-col="${c}" style="background:${c}" aria-label="Couleur ${l}" aria-pressed="${color===c}"></button>`).join("")}<button type="button" class="visround" data-undo aria-label="Annuler le dernier trait">↶</button></div>
+        <input type="text" class="viscapt" maxlength="200" placeholder="Légende (ex. : quai 3, étiquette actuelle)" aria-label="Légende de la photo" value="${esc(s.caption)}">
+        <div class="visstrip">${shots.map((x,i)=>`<button type="button" data-i="${i}" aria-label="Photo ${i+1}" aria-current="${i===cur}"><canvas width="${Math.round(x.base.width/x.base.height*48)}" height="48"></canvas></button>`).join("")}<button type="button" class="add" data-more aria-label="Ajouter une photo à la série">+</button></div>
+        <footer><button type="button" class="btn" data-more>Autre photo</button><button type="button" class="btn primary" data-ok>${shots.length>1?`Ajouter les ${shots.length} photos`:"Ajouter la photo"}</button></footer>`;
+      const cv=d.querySelector(".visstagecv canvas");cv.width=s.base.width;cv.height=s.base.height;paint(cv,s);
+      d.querySelectorAll(".visstrip canvas").forEach((c,i)=>c.getContext("2d").drawImage(shots[i].base,0,0,c.width,c.height));
+      const pt=e=>{const r=cv.getBoundingClientRect();return [(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]};
+      cv.onpointerdown=e=>{e.preventDefault();cv.setPointerCapture&&cv.setPointerCapture(e.pointerId);const p=pt(e);drawing={t:tool,c:color,p:tool==="pen"?[p]:[p,p]}};
+      cv.onpointermove=e=>{if(!drawing)return;const p=pt(e);if(drawing.t==="pen")drawing.p.push(p);else drawing.p[1]=p;paint(cv,s,drawing)};
+      cv.onpointerup=cv.onpointercancel=()=>{if(!drawing)return;const w=drawing;drawing=null;const [a,b]=[w.p[0],w.p[w.p.length-1]];if(w.t==="pen"?w.p.length>1:Math.hypot(b[0]-a[0],b[1]-a[1])>8)s.shapes.push(w);paint(cv,s)};
+      d.querySelector(".viscapt").oninput=e=>{s.caption=e.target.value};
+      d.querySelectorAll("[data-tool]").forEach(b=>b.onclick=()=>{tool=b.dataset.tool;d.querySelectorAll("[data-tool]").forEach(x=>x.setAttribute("aria-pressed",x===b))});
+      d.querySelectorAll("[data-col]").forEach(b=>b.onclick=()=>{color=b.dataset.col;d.querySelectorAll("[data-col]").forEach(x=>x.setAttribute("aria-pressed",x===b))});
+      d.querySelector("[data-undo]").onclick=()=>{s.shapes.pop();paint(cv,s)};
+      d.querySelectorAll("[data-i]").forEach(b=>b.onclick=()=>{cur=+b.dataset.i;draw()});
+      d.querySelector("[data-retake]").onclick=async()=>{const f=await visPickFile();if(!f)return;try{s.base=await visLoadImage(f);s.shapes=[]}catch(e){}draw()};
+      d.querySelectorAll("[data-more]").forEach(b=>b.onclick=async()=>{const f=await visPickFile();if(!f)return;try{shots.push({base:await visLoadImage(f),shapes:[],caption:""});cur=shots.length-1}catch(e){uiAlert("Photo illisible.")}draw()});
+      d.querySelector("[data-x]").onclick=async()=>{if(shots.some(x=>x.shapes.length||x.caption)&&!await uiConfirm("Abandonner ces photos ?",{ok:"Abandonner",danger:true}))return;d.remove();done([])};
+      d.querySelector("[data-ok]").onclick=async()=>{
+        const b=d.querySelector("[data-ok]");b.disabled=true;b.textContent="Enregistrement…";
+        const out=[];
+        for(const x of shots){
+          const c=document.createElement("canvas");c.width=x.base.width;c.height=x.base.height;paint(c,x);
+          const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",VIS_Q));
+          const id=uid()+uid();
+          await idbPut("photos",{id,acct:visAcct(),pid:visCur.projectId,vid:visCur.id,blob,up:false,del:false,at:Date.now()});
+          out.push({id,caption:x.caption.trim().slice(0,200)});
+        }
+        d.remove();done(out);visCount().then(visStatus);
+      };
+    };
+    draw();
+  }
+  // ---------- Fin de visite : bilan, points ouverts, tâches, export ----------
+  function visEndScreen(o,v,p){
+    const ns=v.notes||[], todo=ns.filter(n=>!n.conv&&(n.type==="question"||n.type==="action"));
+    const nq=todo.filter(n=>n.type==="question"), na=todo.filter(n=>n.type==="action");
+    const fname=id=>(v.flows.find(f=>f.id===id)||{name:"?"}).name;
+    o.innerHTML=`<header class="vish"><div class="visrow">${visBack("Retour à la visite")}<div class="vist"><b>${v.status==="done"?"Bilan de la visite":"Fin de visite"}</b><span>${esc(p.name)} · ${hm(v.startedAt)}${v.endedAt?" – "+hm(v.endedAt):""}</span></div></div><div class="visst"></div></header>
+      <main class="vism end">
+        <section class="viscard"><table class="vistab"><thead><tr><th>Flux</th><th>Notes</th><th>Quest.</th><th>Act.</th><th>Photos</th></tr></thead><tbody>${v.flows.map(f=>{const n=visNotes(v,f.id);if(!n.length)return "";return `<tr><td>${esc(f.name)}</td><td>${n.length}</td><td>${n.filter(x=>x.type==="question").length}</td><td>${n.filter(x=>x.type==="action").length}</td><td>${n.reduce((k,x)=>k+(x.photos||[]).length,0)}</td></tr>`}).join("")||`<tr><td colspan="5">Aucune note.</td></tr>`}</tbody></table></section>
+        <section class="viscard"><h3>À créer dans le projet</h3>
+          ${nq.length||na.length?`${nq.length?`<label class="vischk"><input type="checkbox" data-all="question" checked><span><b>${plural(nq.length,"question")}</b> ${nq.length>1?"deviennent":"devient"} des points ouverts, à répondre par le client, rangés par flux (thème)</span></label>`:""}
+          ${na.length?`<label class="vischk"><input type="checkbox" data-all="action" checked><span><b>${plural(na.length,"action")}</b> ${na.length>1?"deviennent":"devient"} des tâches à votre nom, avec la mention « Issu de la visite du ${new Date(v.startedAt).toLocaleDateString("fr-FR")} »</span></label>`:""}
+          <details class="visrev"><summary>Revoir la liste avant de créer</summary>${todo.map(n=>`<label class="vischk sm"><input type="checkbox" data-one="${esc(n.id)}" data-kind="${n.type}" checked><span><em>${n.type==="question"?"Point":"Tâche"} · ${esc(fname(n.flow))}</em>${esc(n.text||"(photo sans texte)")}</span></label>`).join("")}</details>`
+          :`<p class="muted">${ns.some(n=>n.conv)?"Tous les points et tâches de cette visite ont déjà été créés.":"Aucune note de type « Question client » ou « Action »."}</p>`}
+        </section>
+      </main>
+      <footer class="visf col">${nq.length||na.length?`<button type="button" class="btn primary" data-conv>Créer les points et les tâches</button>`:""}<button type="button" class="btn" data-pdf>Exporter le compte rendu de visite (PDF)</button>${v.status==="done"?`<button type="button" class="btn ghost" data-reopen>Reprendre la visite</button>`:`<button type="button" class="btn ghost" data-done>Clôturer la visite</button>`}</footer>`;
+    o.querySelector("[data-back]").onclick=()=>{visScreen="home";renderVisit()};
+    o.querySelectorAll("[data-all]").forEach(cb=>cb.onchange=()=>o.querySelectorAll(`[data-kind="${cb.dataset.all}"]`).forEach(x=>x.checked=cb.checked));
+    const cv=o.querySelector("[data-conv]");if(cv)cv.onclick=()=>{
+      const ids=new Set([...o.querySelectorAll("[data-one]")].filter(x=>x.checked).map(x=>x.dataset.one));
+      visConvert(ids);
+    };
+    o.querySelector("[data-pdf]").onclick=()=>visPdf(visCur);
+    const dn=o.querySelector("[data-done]");if(dn)dn.onclick=()=>{visSet(x=>{x.status="done";x.endedAt=Date.now()});toast("Visite clôturée. Elle reste consultable dans l'onglet Visites du projet.")};
+    const ro=o.querySelector("[data-reopen]");if(ro)ro.onclick=()=>{visSet(x=>{x.status="open";x.endedAt=null});visScreen="home";renderVisit()};
+  }
+  function visConvert(ids){
+    const v=visCur, now=Date.now(), src=`Issu de la visite du ${new Date(v.startedAt).toLocaleDateString("fr-FR")}`;
+    const fname=id=>(v.flows.find(f=>f.id===id)||{name:""}).name;
+    let nP=0,nT=0,k=0;
+    const me=MODE==="cloud"&&cloud.email?resolveWho(nameOf(cloud.email),v.projectId):"";
+    v.notes.filter(n=>ids.has(n.id)&&!n.conv).forEach(n=>{
+      const txt=(n.text||"").trim()||`Voir photo${(n.photos||[]).length>1?"s":""} (${fname(n.flow)})`;
+      if(n.type==="question"){const id=newId();state.points.push({id,projectId:v.projectId,text:txt.slice(0,2000),answer:"",hypothesis:"",erp:"",theme:fname(n.flow).slice(0,80),owner:"client",ownerName:"",status:"open",taskId:null,requestId:null,createdAt:now+(k++),closedAt:null});n.conv={kind:"point",id};nP++}
+      else if(n.type==="action"){const id=newId();state.tasks.push({id,projectId:v.projectId,title:txt.split("\n")[0].slice(0,300),priority:"normale",due:"",status:"todo",note:(txt.includes("\n")?txt+"\n\n":"")+src+(fname(n.flow)?` (${fname(n.flow)})`:""),who:me,createdAt:now+(k++),checklist:[],repeat:null});n.conv={kind:"task",id};nT++}
+    });
+    if(!nP&&!nT){toast("Rien à créer.");return}
+    save();visPut(v);renderVisit();render();
+    toast(`${plural(nP,"point ouvert","points ouverts")} et ${plural(nT,"tâche")} créé${nP+nT>1?"s":""} dans le projet.`);
+  }
+  async function visPdf(v){
+    const p=proj(v.projectId)||{name:""};
+    const urls={};await Promise.all(v.notes.flatMap(n=>(n.photos||[]).map(async ph=>{urls[ph.id]=await visPhotoUrl(v,ph.id)})));
+    const missing=Object.values(urls).filter(u=>!u).length;
+    const sec=v.flows.map(f=>{const ns=visNotes(v,f.id);if(!ns.length)return "";
+      return `<section><h2>${esc(f.name)}</h2>${ns.map(n=>`<div class="n"><div class="h"><span class="t ${n.type}">${(NTYPE[n.type]||NTYPE.note)[0]}</span> ${hm(n.at)}</div>${n.text?`<p>${esc(n.text).replace(/\n/g,"<br>")}</p>`:""}${(n.photos||[]).length?`<div class="ph">${n.photos.map(ph=>urls[ph.id]?`<figure><img src="${urls[ph.id]}" alt=""><figcaption>${esc(ph.caption||"")}</figcaption></figure>`:"").join("")}</div>`:""}</div>`).join("")}</section>`}).join("");
+    const css=`body{font-family:Arial,sans-serif;color:#16232B;margin:0;font-size:11pt}h1{font-size:18pt;margin:0}.sub{color:#51646F;margin:4px 0 16px}h2{font-size:13pt;color:#1D4E78;border-bottom:1px solid #C7D1D8;padding-bottom:3px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.03em}.n{margin:0 0 10px;break-inside:avoid}.h{font-size:9pt;color:#51646F}.t{font-weight:bold;padding:1px 6px;border-radius:8px;background:#EEF1F3}.t.question{background:#DCEAF7;color:#1D4E78}.t.action{background:#FFF4CC;color:#6B5200}p{margin:3px 0}.ph{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}figure{margin:0;width:48%;break-inside:avoid}figure img{width:100%;border-radius:4px}figcaption{font-size:9pt;color:#51646F}@page{margin:15mm}`;
+    const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(v.title)}</title><style>${css}</style></head><body><h1>${esc(v.title)}</h1><p class="sub">${esc(p.name)} · ${esc(new Date(v.startedAt).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))}${v.endedAt?` · ${hm(v.startedAt)} – ${hm(v.endedAt)}`:""}</p>${sec||"<p>Aucune note.</p>"}</body></html>`;
+    if(missing)toast(`${plural(missing,"photo")} non disponible${missing>1?"s":""} hors connexion : absente${missing>1?"s":""} du PDF.`);
+    printHtml(html,`visite-${(p.name||"projet").replace(/[^\wÀ-ÿ-]+/g,"-")}-${iso(new Date(v.startedAt))}`);
+  }
+  // ---------- Onglet Visites d'un projet ----------
+  function visEnsure(){if(vis.loaded&&vis.acct!==visAcct()){vis.loaded=false;vis.map={};vis.urls={}}if(!vis.loaded)visLoad()}
+  function renderVisits(L,p){
+    visEnsure();
+    const top=document.createElement("div");top.className="mtgtop";
+    top.innerHTML=`<button type="button" class="btn primary" data-new>Nouvelle visite</button><span class="muted">Prise de notes par flux sur site, avec photos. Fonctionne sans réseau : l'envoi se fait au retour de la connexion.</span>`;
+    top.querySelector("[data-new]").onclick=()=>visNew(p);
+    L.appendChild(top);
+    const vs=visList(p.id);
+    const g=document.createElement("section");g.className="group";
+    g.innerHTML=`<h2>Visites <span>${vs.length}</span></h2>`;
+    if(!vs.length)g.insertAdjacentHTML("beforeend",`<div class="empty">${vis.loaded?"Aucune visite pour ce projet.":"Chargement…"}</div>`);
+    else{
+      const ul=document.createElement("ul");ul.className="tasks";
+      vs.forEach(v=>{const li=document.createElement("li");li.className="task mtgrow";
+        const ns=v.notes||[], ph=ns.reduce((k,x)=>k+(x.photos||[]).length,0), q=ns.filter(x=>x.type==="question").length;
+        li.innerHTML=`<span class="mtgdate">${esc(new Date(v.startedAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"}))}</span><div><div class="ttl">${esc(v.title)}</div><div class="meta"><span class="tag">${plural(ns.length,"note")}</span><span class="tag">${plural(ph,"photo")}</span>${q?`<span class="tag">${plural(q,"question")}</span>`:""}<span class="tag ${v.status==="done"?"done-t":"wait"}">${v.status==="done"?"Terminée":"En cours"}</span>${vis.map[v.id]&&vis.map[v.id].dirty?`<span class="tag">En attente d'envoi</span>`:""}</div></div><div class="acts"><button type="button" class="sbtn">Ouvrir</button><button type="button" class="sbtn" data-del aria-label="Supprimer la visite ${esc(v.title)}" title="Supprimer">✕</button></div>`;
+        li.querySelector("[data-del]").onclick=e=>{e.stopPropagation();visDelete(v)};
+        li.onclick=()=>visOpen(v);ul.appendChild(li)});
+      g.appendChild(ul);
+    }
+    L.appendChild(g);
+  }
+  window.__visState=()=>({map:vis.map,pending:vis.pending}); // utilisé par les tests
   // ---------- Points ouverts standard (modèle d'AF, stocké en base : réservé aux utilisateurs connectés) ----------
   let tplCache=null;
   async function loadTemplates(){

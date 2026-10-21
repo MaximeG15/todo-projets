@@ -18,7 +18,7 @@ with sync_playwright() as pw:
     pg.goto(APP);pg.wait_for_timeout(800)
     tabs=pg.evaluate("[...new Set(window.__rt.map(h=>h.table))]")
     ok(len(tabs)==11,"11 tables écoutées %s"%tabs)
-    sel=lambda:pg.evaluate("window.__log.filter(l=>l[0]==='select').length")
+    sel=lambda:pg.evaluate("window.__log.filter(l=>l[0]==='select'&&l[1]!=='visits').length")
     n0=sel()
     emit=lambda t,pl:pg.evaluate("([t,pl])=>{if(t!=='tasks'&&pl.eventType!=='DELETE')(window.__db[t]=window.__db[t]||[]).push(pl.new);window.__emit(t,pl)}",[t,pl])
     emit("tasks",{"eventType":"INSERT","new":trow("n1","Nouvelle du collègue")});pg.wait_for_timeout(400)

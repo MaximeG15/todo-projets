@@ -577,3 +577,31 @@ end $$;
 create or replace trigger projects_archived_at before update of archived on public.projects
   for each row execute function public.set_archived_at();
 -- Purge nocturne : voir supabase/conservation.sql
+
+-- ---------- Visites sur site (notes par flux, photos dans le stockage privé « visit-photos ») ----------
+create table if not exists public.visits (
+  id          text primary key,
+  project_id  text not null references public.projects(id) on delete cascade,
+  title       text not null default '' check (length(title) <= 300),
+  started_at  bigint,
+  ended_at    bigint,
+  status      text not null default 'open' check (status in ('open','done')),
+  flows       jsonb not null default '[]'::jsonb,
+  notes       jsonb not null default '[]'::jsonb,
+  created_by  text not null default lower(coalesce(auth.jwt() ->> 'email', '')),
+  created_at  bigint not null default (extract(epoch from now()) * 1000)::bigint,
+  updated_at  bigint not null default (extract(epoch from now()) * 1000)::bigint,
+  deleted_at  bigint
+);
+create index if not exists visits_project_idx on public.visits(project_id);
+alter table public.visits enable row level security;
+create policy visits_all on public.visits for all to authenticated
+  using (public.can_access(project_id)) with check (public.can_access(project_id));
+grant select, insert, update on public.visits to authenticated;
+revoke all on public.visits from anon;
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('visit-photos', 'visit-photos', false, 3145728, array['image/jpeg'])
+on conflict (id) do nothing;
+create policy "visit photos acces projet" on storage.objects for all to authenticated
+  using (bucket_id = 'visit-photos' and public.can_access((storage.foldername(name))[1]))
+  with check (bucket_id = 'visit-photos' and public.can_access((storage.foldername(name))[1]));
