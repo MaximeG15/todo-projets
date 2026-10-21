@@ -1329,8 +1329,8 @@
       sub=cap(longDay(today()))+(others.length?` · partagé avec ${others.map(nameOf).join(", ")}`:"");
     } else if(mode==="visits"){
       title=`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`;
-      const vs=visList(p.id), nOpen=vs.filter(x=>x.status!=="done").length;
-      sub=`${vs.length} visite${vs.length>1?"s":""} sur site`+(nOpen?`, dont ${nOpen} en cours`:"");
+      const vs=visList(p.id), nOpen=vs.filter(x=>x.status==="open").length, nPrep=vs.filter(x=>x.status==="prep").length;
+      sub=`${vs.length} visite${vs.length>1?"s":""} sur site`+(nOpen?`, ${nOpen} en cours`:"")+(nPrep?`, ${nPrep} préparée${nPrep>1?"s":""}`:"");
     } else if(mode==="meetings"){
       title=`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`;
       const ms=mtgList(p.id), nd=ms.filter(x=>x.status==="draft").length;
@@ -3520,9 +3520,22 @@
   const idbGet=(st,k)=>idb(st,"readonly",s=>s.get(k));
   const idbPut=(st,v)=>idb(st,"readwrite",s=>s.put(v));
   const idbDel=(st,k)=>idb(st,"readwrite",s=>s.delete(k));
-  const rowVis=v=>({id:v.id,project_id:v.projectId,title:v.title||"",started_at:v.startedAt||null,ended_at:v.endedAt||null,status:v.status||"open",flows:v.flows||[],notes:v.notes||[],updated_at:v.updatedAt||Date.now(),deleted_at:v.deletedAt||null});
-  const fromVis=r=>({id:r.id,projectId:r.project_id,title:r.title||"",startedAt:r.started_at?Number(r.started_at):null,endedAt:r.ended_at?Number(r.ended_at):null,status:r.status||"open",flows:Array.isArray(r.flows)?r.flows:[],notes:Array.isArray(r.notes)?r.notes:[],createdBy:r.created_by||"",createdAt:Number(r.created_at)||0,updatedAt:Number(r.updated_at)||0,deletedAt:r.deleted_at?Number(r.deleted_at):null});
-  const visList=pid=>Object.values(vis.map).map(x=>x.v).filter(v=>v.projectId===pid&&!v.deletedAt).sort((a,b)=>(b.startedAt||0)-(a.startedAt||0));
+  const rowVis=v=>({id:v.id,project_id:v.projectId,title:v.title||"",started_at:v.startedAt||null,ended_at:v.endedAt||null,status:v.status||"open",flows:v.flows||[],notes:v.notes||[],prep:v.prep||{},items:v.items||[],updated_at:v.updatedAt||Date.now(),deleted_at:v.deletedAt||null});
+  const fromVis=r=>({id:r.id,projectId:r.project_id,title:r.title||"",startedAt:r.started_at?Number(r.started_at):null,endedAt:r.ended_at?Number(r.ended_at):null,status:r.status||"open",flows:Array.isArray(r.flows)?r.flows:[],notes:Array.isArray(r.notes)?r.notes:[],prep:r.prep&&typeof r.prep==="object"?r.prep:{},items:Array.isArray(r.items)?r.items:[],createdBy:r.created_by||"",createdAt:Number(r.created_at)||0,updatedAt:Number(r.updated_at)||0,deletedAt:r.deleted_at?Number(r.deleted_at):null});
+  const visDate=v=>v.startedAt||(v.prep&&v.prep.plannedAt)||v.createdAt||Date.now();
+  const visList=pid=>Object.values(vis.map).map(x=>x.v).filter(v=>v.projectId===pid&&!v.deletedAt).sort((a,b)=>((b.status==="prep")-(a.status==="prep"))||(a.status==="prep"?visDate(a)-visDate(b):visDate(b)-visDate(a)));
+  const visFlows=v=>(v.flows||[]).filter(f=>!f.off);
+  const visItems=(v,fid)=>(v.items||[]).filter(i=>i.flow===fid);
+  const themeKey=x=>norm(x||"").replace(/s$/,"");
+  // Reprend dans « À voir » les points ouverts du projet attendant le client, dont le thème correspond au flux
+  function visSeed(v){
+    let n=0;const have=new Set((v.items||[]).filter(i=>i.ref).map(i=>i.ref));v.items=v.items||[];
+    livePts().filter(o=>o.projectId===v.projectId&&o.status!=="closed"&&o.owner==="client"&&!have.has(o.id)).forEach(o=>{
+      const f=(v.flows||[]).find(f=>!f.off&&themeKey(f.name)===themeKey(o.theme));if(!f)return;
+      v.items.push({id:uid(),flow:f.id,kind:"point",ref:o.id,text:o.text.split("\n")[0].slice(0,300),label:ptNumOf(o)||"Point ouvert",seen:false});n++;
+    });
+    return n;
+  }
   function visLoad(){
     if(vis.loading)return vis.loading;
     if(MODE==="cloud"&&!cloud.user)return Promise.resolve();
@@ -3594,26 +3607,28 @@
   function visFillPhotos(root,v){root.querySelectorAll("img[data-ph]").forEach(async im=>{const u=await visPhotoUrl(v,im.dataset.ph);if(u)im.src=u;else im.closest(".vph")&&im.closest(".vph").classList.add("missing")})}
   function visDropPhotos(v,ids){ids.forEach(async id=>{const r=await idbGet("photos",id);if(MODE!=="cloud"){idbDel("photos",id);return}await idbPut("photos",r?{...r,blob:null,del:true}:{id,acct:visAcct(),pid:v.projectId,vid:v.id,blob:null,up:true,del:true});visFlush()})}
   // ---------- Création, suppression ----------
-  async function visNew(p){
-    const t=await uiPrompt("Intitulé de la visite","Visite d'analyse fonctionnelle",{ok:"Démarrer la visite"});
+  async function visNew(p,prep){
+    const t=await uiPrompt("Intitulé de la visite","Visite d'analyse fonctionnelle",{ok:prep?"Préparer la visite":"Démarrer la visite"});
     if(t==null)return;
     const now=Date.now();
-    const v={id:newId(),projectId:p.id,title:(t.trim()||"Visite sur site").slice(0,300),startedAt:now,endedAt:null,status:"open",flows:VIS_FLOWS.map(n=>({id:uid(),name:n})),notes:[],createdAt:now};
+    const v={id:newId(),projectId:p.id,title:(t.trim()||"Visite sur site").slice(0,300),startedAt:prep?null:now,endedAt:null,status:prep?"prep":"open",flows:VIS_FLOWS.map(n=>({id:uid(),name:n})),notes:[],items:[],prep:{participants:defaultParticipants(p.id)},createdAt:now};
+    if(prep){const n=visSeed(v);if(n)toast(`${plural(n,"point ouvert repris","points ouverts repris")} dans « À voir », par flux.`)}
     visPut(v);visOpen(v);render();
   }
   async function visDelete(v){
     const nP=(v.notes||[]).reduce((n,x)=>n+(x.photos||[]).length,0);
-    if(!await uiConfirm(`Supprimer la visite « ${v.title} » du ${new Date(v.startedAt).toLocaleDateString("fr-FR")} ?\n\n${(v.notes||[]).length} note(s) et ${nP} photo(s) seront supprimées. Les points ouverts et tâches déjà créés restent dans le projet.`,{ok:"Supprimer",danger:true}))return;
+    if(!await uiConfirm(`Supprimer la visite « ${v.title} » du ${new Date(visDate(v)).toLocaleDateString("fr-FR")} ?\n\n${(v.notes||[]).length} note(s) et ${nP} photo(s) seront supprimées. Les points ouverts et tâches déjà créés restent dans le projet.`,{ok:"Supprimer",danger:true}))return;
     const x=JSON.parse(JSON.stringify(v));x.deletedAt=Date.now();
     visDropPhotos(x,(x.notes||[]).flatMap(n=>(n.photos||[]).map(p=>p.id)));
     visPut(x);if(visCur&&visCur.id===v.id){visCur=null;renderVisit()}render();
     toast("Visite supprimée.");
   }
   // ---------- Écran de visite ----------
-  let visCur=null, visScreen="home", visFlowId=null, visType="note", visStage=[], visText="";
-  function visOpen(v,flowId){visCur=JSON.parse(JSON.stringify(v));visScreen=flowId?"flow":"home";visFlowId=flowId||null;visStage=[];visText="";renderVisit()}
+  let visCur=null, visScreen="home", visFlowId=null, visType="note", visStage=[], visText="", visReply=null;
+  function visOpen(v,flowId){visCur=JSON.parse(JSON.stringify(v));visCur.items=visCur.items||[];visCur.prep=visCur.prep||{};visScreen=v.status==="prep"?"prep":flowId?"flow":"home";visFlowId=flowId||null;visStage=[];visText="";visReply=null;renderVisit()}
   function visClose(){if(visStage.length)visDropPhotos(visCur,visStage.map(s=>s.id));visCur=null;visStage=[];renderVisit();render()}
   function visSet(fn){fn(visCur);visPut(visCur);renderVisit()}
+  function visQuiet(fn){fn(visCur);visPut(visCur)} // modification sans redessiner (saisie en cours)
   const visNotes=(v,fid)=>(v.notes||[]).filter(n=>n.flow===fid);
   const plural=(n,s,p)=>`${n} ${n>1?(p||s+"s"):s}`;
   function visStatus(){
@@ -3631,25 +3646,26 @@
     document.body.classList.add("visopen");
     const v=visCur, p=proj(v.projectId)||{name:""};
     o.className="visv";o.setAttribute("aria-label",v.title);
-    if(visScreen==="flow"&&!(v.flows||[]).some(f=>f.id===visFlowId))visScreen="home";
-    if(visScreen==="flow")visFlowScreen(o,v,p);else if(visScreen==="end")visEndScreen(o,v,p);else visHomeScreen(o,v,p);
+    if(visScreen==="flow"&&!visFlows(v).some(f=>f.id===visFlowId))visScreen="home";
+    if(visScreen==="prep")visPrepScreen(o,v,p);else if(visScreen==="flow")visFlowScreen(o,v,p);else if(visScreen==="end")visEndScreen(o,v,p);else visHomeScreen(o,v,p);
     visStatus();
   }
   const visBack=(label)=>`<button type="button" class="visback" data-back aria-label="${label}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button>`;
   const CAM_SVG=`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>`;
   function visHomeScreen(o,v,p){
     const ns=v.notes||[], nPh=ns.reduce((n,x)=>n+(x.photos||[]).length,0);
-    o.innerHTML=`<header class="vish"><div class="visrow">${visBack("Quitter la visite")}<div class="vist"><b>${esc(v.title)}</b><span>${esc(p.name)} · ${esc(new Date(v.startedAt).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"}))}${v.status==="done"?" · terminée":""}</span></div><button type="button" class="visback" data-vm aria-label="Actions sur la visite">⋯</button></div><div class="visst"></div></header>
+    o.innerHTML=`<header class="vish"><div class="visrow">${visBack("Quitter la visite")}<div class="vist"><b>${esc(v.title)}</b><span>${esc(p.name)} · ${esc(new Date(visDate(v)).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"}))}${v.status==="done"?" · terminée":""}</span></div><button type="button" class="visback" data-vm aria-label="Actions sur la visite">⋯</button></div><div class="visst"></div></header>
       <main class="vism"><div class="vishd"><h2>Flux</h2><span>${plural(ns.length,"note")} · ${plural(nPh,"photo")}</span></div>
-      <div class="vistiles">${(v.flows||[]).map(f=>{const n=visNotes(v,f.id), ph=n.reduce((k,x)=>k+(x.photos||[]).length,0), q=n.filter(x=>x.type==="question").length;
-        return `<button type="button" class="vistile" data-f="${esc(f.id)}"><b>${esc(f.name)}</b><span>${n.length||ph?`${plural(n.length,"note")} · ${plural(ph,"photo")}`:"Pas encore de note"}</span>${q?`<em>${plural(q,"question")}</em>`:""}</button>`}).join("")}
+      <div class="vistiles">${visFlows(v).map(f=>{const n=visNotes(v,f.id), ph=n.reduce((k,x)=>k+(x.photos||[]).length,0), q=n.filter(x=>x.type==="question").length, it=visItems(v,f.id), seen=it.filter(i=>i.seen).length;
+        return `<button type="button" class="vistile${it.length&&seen===it.length?" alldone":""}" data-f="${esc(f.id)}"><b>${esc(f.name)}</b><span>${n.length||ph?`${plural(n.length,"note")} · ${plural(ph,"photo")}`:"Pas encore de note"}</span>${it.length?`<i class="visprog">${seen}/${it.length} vus</i>`:""}${q?`<em>${plural(q,"question")}</em>`:""}</button>`}).join("")}
       <button type="button" class="vistile add" data-addf><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Ajouter un flux</button></div></main>
       <footer class="visf"><button type="button" class="btn visend" data-end>${v.status==="done"?"Bilan de la visite":"Terminer la visite"}</button><button type="button" class="visfab" data-quick aria-label="Photo rapide (le flux est choisi ensuite)">${CAM_SVG}</button></footer>`;
     o.querySelector("[data-back]").onclick=visClose;
     o.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{visScreen="flow";visFlowId=b.dataset.f;visStage=[];renderVisit()});
     o.querySelector("[data-vm]").onclick=async()=>{
-      const ch=await visSheet(v.title,[{k:"ren",l:"Renommer la visite"},{k:"pdf",l:"Exporter le compte rendu (PDF)"},{k:"del",l:"Supprimer la visite",danger:true}]);
-      if(ch==="ren"){const t=await uiPrompt("Intitulé de la visite",v.title,{ok:"Renommer"});if(t&&t.trim())visSet(x=>{x.title=t.trim().slice(0,300)})}
+      const ch=await visSheet(v.title,[{k:"prep",l:"Revoir la préparation"},{k:"ren",l:"Renommer la visite"},{k:"pdf",l:"Exporter le compte rendu (PDF)"},{k:"del",l:"Supprimer la visite",danger:true}]);
+      if(ch==="prep"){visScreen="prep";renderVisit()}
+      else if(ch==="ren"){const t=await uiPrompt("Intitulé de la visite",v.title,{ok:"Renommer"});if(t&&t.trim())visSet(x=>{x.title=t.trim().slice(0,300)})}
       else if(ch==="pdf")visPdf(visCur);
       else if(ch==="del")visDelete(visCur);
     };
@@ -3666,7 +3682,7 @@
   function visPickFlow(title,except){
     return new Promise(res=>{
       const d=document.createElement("dialog");d.className="uidlg vissheet";d.setAttribute("aria-label",title);
-      d.innerHTML=`<form method="dialog"><h3>${esc(title)}</h3><div class="vispick">${visCur.flows.filter(f=>f.id!==except).map(f=>`<button type="button" class="btn" data-f="${esc(f.id)}">${esc(f.name)}</button>`).join("")}</div><div class="uibtns"><button type="button" class="btn ghost" data-x>Annuler</button></div></form>`;
+      d.innerHTML=`<form method="dialog"><h3>${esc(title)}</h3><div class="vispick">${visFlows(visCur).filter(f=>f.id!==except).map(f=>`<button type="button" class="btn" data-f="${esc(f.id)}">${esc(f.name)}</button>`).join("")}</div><div class="uibtns"><button type="button" class="btn ghost" data-x>Annuler</button></div></form>`;
       document.body.appendChild(d);
       const close=v=>{try{d.close()}catch(e){}d.remove();res(v)};
       d.addEventListener("cancel",e=>{e.preventDefault();close(null)});
@@ -3678,16 +3694,21 @@
   function visNoteHtml(n){
     const [l,c]=NTYPE[n.type]||NTYPE.note;
     return `<article class="visnote" data-n="${esc(n.id)}"><div class="visnh"><span class="nt ${c}">${l}</span><span>${hm(n.at)}</span>${n.conv?`<span class="visconv">${n.conv.kind==="point"?"Point ouvert créé":"Tâche créée"}</span>`:""}<span class="sp"></span><button type="button" class="vismore" data-more aria-label="Actions sur la note">⋯</button></div>
+      ${n.item&&visCur&&(visCur.items||[]).find(i=>i.id===n.item)?`<div class="visre">Réponse à : ${esc(visCur.items.find(i=>i.id===n.item).text)}</div>`:""}
       ${n.text?`<p>${esc(n.text).replace(/\n/g,"<br>")}</p>`:""}
       ${(n.photos||[]).length?`<div class="visphs">${n.photos.map(ph=>`<button type="button" class="vph" data-view="${esc(ph.id)}" aria-label="Voir la photo${ph.caption?" : "+esc(ph.caption):""}"><img data-ph="${esc(ph.id)}" alt="">${ph.caption?`<span>${esc(ph.caption)}</span>`:""}</button>`).join("")}</div>`:""}</article>`;
   }
   function visFlowScreen(o,v,p){
     const f=v.flows.find(x=>x.id===visFlowId), ns=visNotes(v,f.id), ph=ns.reduce((k,x)=>k+(x.photos||[]).length,0), q=ns.filter(x=>x.type==="question").length;
+    const its=visItems(v,f.id), nSeen=its.filter(i=>i.seen).length, rep=visReply&&its.find(i=>i.id===visReply);
+    if(visReply&&!rep)visReply=null;
     o.innerHTML=`<header class="vish"><div class="visrow">${visBack("Retour aux flux")}<div class="vist"><b>${esc(f.name)}</b><span>${plural(ns.length,"note")} · ${plural(ph,"photo")}${q?` · ${plural(q,"question")}`:""}</span></div><button type="button" class="visback" data-fm aria-label="Actions sur le flux">⋯</button></div>
-      <div class="vischips" role="tablist" aria-label="Changer de flux">${v.flows.map(x=>`<button type="button" role="tab" aria-selected="${x.id===f.id}" data-f="${esc(x.id)}">${esc(x.name)}</button>`).join("")}</div><div class="visst"></div></header>
-      <main class="vism notes">${ns.length?ns.map(visNoteHtml).join(""):`<p class="visempty">Aucune note pour ce flux. Écrivez ou prenez une photo ci-dessous.</p>`}</main>
+      <div class="vischips" role="tablist" aria-label="Changer de flux">${visFlows(v).map(x=>`<button type="button" role="tab" aria-selected="${x.id===f.id}" data-f="${esc(x.id)}">${esc(x.name)}</button>`).join("")}</div><div class="visst"></div></header>
+      <main class="vism notes">${its.length?`<details class="visitems"${ui.visItemsClosed?"":" open"}><summary>À voir <b>${nSeen}/${its.length}</b></summary>${its.map(i=>`<div class="visit${i.seen?" seen":""}" data-i="${esc(i.id)}"><button type="button" class="visseen" data-seen aria-pressed="${!!i.seen}" aria-label="${i.seen?"Marquer comme non vu":"Marquer comme vu"}"></button><span class="vitx">${i.kind==="point"?`<small>${esc(i.label||"Point ouvert")}</small>`:""}${esc(i.text)}${(v.notes||[]).some(n=>n.item===i.id)?`<em>${plural((v.notes||[]).filter(n=>n.item===i.id).length,"réponse")}</em>`:""}</span><button type="button" class="btn visrep" data-rep>Répondre</button></div>`).join("")}</details>`:""}
+        ${ns.length?ns.map(visNoteHtml).join(""):`<p class="visempty">Aucune note pour ce flux. Écrivez ou prenez une photo ci-dessous.</p>`}</main>
       <footer class="viscap">
         <div class="visseg" role="radiogroup" aria-label="Type de note">${Object.entries(NTYPE).map(([k,[l]])=>`<button type="button" role="radio" aria-checked="${visType===k}" data-t="${k}">${l}</button>`).join("")}</div>
+        ${rep?`<div class="visreply"><span>Réponse à : <b>${esc(rep.text)}</b></span><button type="button" data-unrep aria-label="Ne plus répondre à cet élément">✕</button></div>`:""}
         ${visStage.length?`<div class="visstage">${visStage.map(s=>`<span class="vph sm"><img data-ph="${esc(s.id)}" alt="Photo jointe"><button type="button" data-unstage="${esc(s.id)}" aria-label="Retirer la photo">✕</button></span>`).join("")}</div>`:""}
         <div class="visin"><button type="button" class="viscam" data-cam aria-label="Prendre une photo">${CAM_SVG}</button><textarea rows="2" aria-label="Texte de la note" placeholder="Écrire ou dicter (micro du clavier)…">${esc(visText)}</textarea><button type="button" class="visok" data-add aria-label="Ajouter la note"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></button></div>
       </footer>`;
@@ -3701,14 +3722,19 @@
     o.querySelector("[data-add]").onclick=()=>{
       const t=ta.value.trim();if(!t&&!visStage.length){ta.focus();return}
       const photos=visStage;visStage=[];visText="";
-      visSet(x=>x.notes.push({id:uid(),flow:f.id,type:visType,text:t.slice(0,4000),photos,at:Date.now(),conv:null}));
+      const item=visReply;visReply=null;
+      visSet(x=>{x.notes.push({id:uid(),flow:f.id,type:visType,text:t.slice(0,4000),photos,at:Date.now(),conv:null,...(item?{item}:{})});if(item){const i=x.items.find(y=>y.id===item);if(i)i.seen=true}});
       const m=$("#visview .vism");if(m)m.scrollTop=m.scrollHeight;
     };
     o.querySelector("[data-fm]").onclick=()=>visFlowMenu(f);
+    const det=o.querySelector(".visitems");if(det)det.ontoggle=()=>{ui.visItemsClosed=!det.open;saveUi()};
+    o.querySelectorAll("[data-seen]").forEach(b=>b.onclick=()=>{const id=b.closest("[data-i]").dataset.i;visSet(x=>{const i=x.items.find(y=>y.id===id);if(i)i.seen=!i.seen})});
+    o.querySelectorAll("[data-rep]").forEach(b=>b.onclick=()=>{visReply=b.closest("[data-i]").dataset.i;renderVisit();const t=$("#visview .visin textarea");if(t)t.focus()});
+    const ur=o.querySelector("[data-unrep]");if(ur)ur.onclick=()=>{visReply=null;renderVisit()};
     o.querySelectorAll("[data-more]").forEach(b=>b.onclick=()=>visNoteMenu(b.closest("[data-n]").dataset.n));
     o.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>visViewPhoto(b.dataset.view));
     visFillPhotos(o,v);
-    const m=o.querySelector(".vism");m.scrollTop=m.scrollHeight;
+    const m=o.querySelector(".vism");if(!visReply)m.scrollTop=m.scrollHeight;
   }
   async function visSheet(title,items){
     if(typeof window.__testDialog==="function"){const r=await window.__testDialog({type:"sheet",message:title,options:items.map(i=>i.l)});const i=items.find(x=>x.l===(r&&r.v));return i?i.k:null}
@@ -3725,7 +3751,7 @@
   }
   async function visNoteMenu(nid){
     const n=visCur.notes.find(x=>x.id===nid);if(!n)return;
-    const items=[{k:"edit",l:"Modifier le texte"},...Object.entries(NTYPE).filter(([k])=>k!==n.type).map(([k,[l]])=>({k:"t:"+k,l:"Changer en « "+l+" »"})),{k:"photo",l:"Ajouter des photos"},...(visCur.flows.length>1?[{k:"move",l:"Déplacer vers un autre flux"}]:[]),{k:"del",l:"Supprimer la note",danger:true}];
+    const items=[{k:"edit",l:"Modifier le texte"},...Object.entries(NTYPE).filter(([k])=>k!==n.type).map(([k,[l]])=>({k:"t:"+k,l:"Changer en « "+l+" »"})),{k:"photo",l:"Ajouter des photos"},...(visFlows(visCur).length>1?[{k:"move",l:"Déplacer vers un autre flux"}]:[]),{k:"del",l:"Supprimer la note",danger:true}];
     const ch=await visSheet("Note de "+hm(n.at),items);if(!ch)return;
     if(ch==="edit"){const t=await uiPrompt("Texte de la note",n.text||"",{ok:"Enregistrer",multiline:true});if(t!=null)visSet(x=>{x.notes.find(y=>y.id===nid).text=t.trim().slice(0,4000)})}
     else if(ch.startsWith("t:"))visSet(x=>{x.notes.find(y=>y.id===nid).type=ch.slice(2)});
@@ -3737,7 +3763,7 @@
     const n=visNotes(visCur,f.id).length;
     const ch=await visSheet("Flux « "+f.name+" »",[{k:"ren",l:"Renommer le flux"},...(n?[]:[{k:"del",l:"Supprimer le flux",danger:true}])]);
     if(ch==="ren"){const t=await uiPrompt("Nouveau nom du flux",f.name,{ok:"Renommer"});if(t&&t.trim())visSet(x=>{x.flows.find(y=>y.id===f.id).name=t.trim().slice(0,60)})}
-    if(ch==="del")visSet(x=>{x.flows=x.flows.filter(y=>y.id!==f.id)});
+    if(ch==="del")visSet(x=>{x.flows=x.flows.filter(y=>y.id!==f.id);x.items=(x.items||[]).filter(i=>i.flow!==f.id)});
   }
   async function visViewPhoto(phid){
     const n=visCur.notes.find(x=>(x.photos||[]).some(p=>p.id===phid)), ph=n&&n.photos.find(p=>p.id===phid);if(!ph)return;
@@ -3825,63 +3851,148 @@
     };
     draw();
   }
+  // ---------- Préparation de la visite (au bureau, sur ordinateur ou téléphone) ----------
+  const dtLocal=ms=>{if(!ms)return "";const d=new Date(ms);const z=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`};
+  function visPrepScreen(o,v,p){
+    const pr=v.prep||(v.prep={}), live=v.status!=="prep";
+    const parts=pr.participants||[], cand=[], seen=new Set();
+    const addC=(name,side,extra)=>{const k=norm(name);if(!name||seen.has(k))return;seen.add(k);cand.push({name,side,...extra})};
+    parts.forEach(x=>addC(x.name,x.side));ctList(v.projectId).forEach(c=>addC(c.name,c.side,{role:c.role}));memberEmails(v.projectId).forEach(e=>addC(nameOf(e),"mecalux",{email:e}));
+    const on=new Set(parts.map(x=>norm(x.name)));
+    const usedPts=new Set((v.items||[]).filter(i=>i.ref).map(i=>i.ref));
+    const freePts=livePts().filter(x=>x.projectId===v.projectId&&x.status!=="closed"&&!usedPts.has(x.id));
+    const fl=v.flows||[];
+    o.innerHTML=`<header class="vish"><div class="visrow">${visBack(live?"Retour à la visite":"Fermer la préparation")}<div class="vist"><b>${esc(v.title)}</b><span>${esc(p.name)} · ${live?"préparation (visite en cours)":"visite préparée"}</span></div><button type="button" class="visback" data-pm aria-label="Actions sur la visite">⋯</button></div></header>
+      <main class="vism prep">
+        <section class="viscard"><h3>Informations</h3>
+          <div class="visgrid"><label class="uifld"><span>Date et heure</span><input type="datetime-local" data-k="plannedAt" value="${dtLocal(pr.plannedAt)}"></label>
+          <label class="uifld"><span>Lieu</span><input type="text" data-k="location" maxlength="300" placeholder="Site, adresse" value="${esc(pr.location||"")}"></label></div>
+          <label class="uifld"><span>Objectif de la visite</span><textarea rows="2" data-k="goal" maxlength="2000" placeholder="Ex. : analyser les flux de réception et d'expédition">${esc(pr.goal||"")}</textarea></label>
+          <label class="uifld"><span>Infos utiles</span><textarea rows="2" data-k="info" maxlength="2000" placeholder="Contact sur place, horaires, équipements de sécurité…">${esc(pr.info||"")}</textarea></label>
+        </section>
+        <section class="viscard"><h3>Participants</h3>
+          ${cand.length?`<div class="mtgppl">${cand.map((x,i)=>`<label><input type="checkbox" data-pp="${i}" ${on.has(norm(x.name))?"checked":""}><span>${esc(x.name)}${x.role?` <small>${esc(x.role)}</small>`:""}</span><em>${esc(SIDE[x.side]||"")}</em></label>`).join("")}</div>`:`<p class="muted">Aucun contact pour ce projet.</p>`}
+          <form class="mtgadd" data-padd autocomplete="off"><input type="text" placeholder="Nom ou fonction" aria-label="Nom ou fonction" maxlength="120"><select aria-label="Côté">${Object.entries(SIDE).map(([k,l])=>`<option value="${k}">${l}</option>`).join("")}</select><button class="btn" type="submit">Ajouter</button></form>
+        </section>
+        <section class="viscard"><div class="vishrow"><h3>Flux et éléments à voir</h3><button type="button" class="btn ghost" data-seed title="Ajoute les points ouverts attendant le client dont le thème correspond à un flux">Reprendre les points ouverts</button></div>
+          <p class="muted">Les points ouverts attendant une réponse du client sont repris automatiquement dans le flux de même thème. Ajoutez ce que vous voulez voir, photographier ou demander sur place.</p>
+          <div class="visflows">${fl.map((f,k)=>{const it=visItems(v,f.id);return `<div class="visfl${f.off?" off":""}" data-f="${esc(f.id)}">
+            <div class="visflh"><label><input type="checkbox" data-on ${f.off?"":"checked"} aria-label="Flux ${esc(f.name)} couvert pendant la visite"><b>${esc(f.name)}</b></label><span class="muted">${f.off?"non couvert":plural(it.length,"élément")}</span><span class="sp"></span>
+              <button type="button" class="visround sm" data-up ${k?"":"disabled"} aria-label="Monter ${esc(f.name)}">↑</button><button type="button" class="visround sm" data-down ${k<fl.length-1?"":"disabled"} aria-label="Descendre ${esc(f.name)}">↓</button></div>
+            ${f.off?"":`${it.map(i=>`<div class="visprepi" data-i="${esc(i.id)}"><span>${i.kind==="point"?`<small>${esc(i.label||"Point ouvert")}</small>`:""}${esc(i.text)}</span><button type="button" class="vismore" data-del aria-label="Retirer « ${esc(i.text)} »">✕</button></div>`).join("")}
+              <form class="visprepadd" autocomplete="off"><input type="text" maxlength="300" placeholder="Ajouter un élément à voir…" aria-label="Élément à voir pour ${esc(f.name)}"><button class="btn" type="submit">Ajouter</button></form>
+              ${freePts.length?`<select data-addpt aria-label="Ajouter un point ouvert à ${esc(f.name)}"><option value="">Ajouter un point ouvert…</option>${freePts.map(x=>`<option value="${esc(x.id)}">${esc((ptNumOf(x)?ptNumOf(x)+" – ":"")+short(x.text))}</option>`).join("")}</select>`:""}`}
+          </div>`}).join("")}</div>
+          <button type="button" class="btn ghost" data-addf>+ Ajouter un flux</button>
+        </section>
+      </main>
+      <footer class="visf">${live?`<button type="button" class="btn primary visend" data-go>Revenir à la visite</button>`:`<button type="button" class="btn visend" data-x>Fermer</button><button type="button" class="btn primary visend" data-start>Démarrer la visite</button>`}</footer>`;
+    const back=()=>{if(live){visScreen="home";renderVisit()}else visClose()};
+    o.querySelector("[data-back]").onclick=back;
+    const x=o.querySelector("[data-x]");if(x)x.onclick=back;
+    const g=o.querySelector("[data-go]");if(g)g.onclick=back;
+    const st=o.querySelector("[data-start]");if(st)st.onclick=()=>{visSet(y=>{y.status="open";y.startedAt=Date.now()});visScreen="home";renderVisit();render();toast("Visite démarrée : bonne visite !")};
+    o.querySelector("[data-pm]").onclick=async()=>{const ch=await visSheet(v.title,[{k:"ren",l:"Renommer la visite"},{k:"del",l:"Supprimer la visite",danger:true}]);
+      if(ch==="ren"){const t=await uiPrompt("Intitulé de la visite",v.title,{ok:"Renommer"});if(t&&t.trim())visSet(y=>{y.title=t.trim().slice(0,300)})}else if(ch==="del")visDelete(visCur)};
+    o.querySelectorAll("[data-k]").forEach(el=>el.onchange=()=>visQuiet(y=>{const k=el.dataset.k;y.prep=y.prep||{};y.prep[k]=k==="plannedAt"?(el.value?new Date(el.value).getTime():null):el.value.trim()}));
+    o.querySelectorAll("[data-pp]").forEach(cb=>cb.onchange=()=>visQuiet(y=>{const c=cand[+cb.dataset.pp];y.prep.participants=(y.prep.participants||[]).filter(z=>norm(z.name)!==norm(c.name));if(cb.checked)y.prep.participants.push({name:c.name,side:c.side,...(c.email?{email:c.email}:{})})}));
+    const pa=o.querySelector("[data-padd]");pa.onsubmit=async e=>{e.preventDefault();const name=pa.querySelector("input").value.trim(),side=pa.querySelector("select").value;if(!name)return;
+      if(!ctList(v.projectId).some(c=>norm(c.name)===norm(name)))await ctAdd(v.projectId,{name,side});
+      visSet(y=>{y.prep.participants=(y.prep.participants||[]).filter(z=>norm(z.name)!==norm(name));y.prep.participants.push({name,side})})};
+    o.querySelector("[data-seed]").onclick=()=>{let n=0;visSet(y=>{n=visSeed(y)});toast(n?`${plural(n,"point ouvert ajouté","points ouverts ajoutés")} à « À voir ».`:"Aucun nouveau point ouvert à reprendre.")};
+    o.querySelector("[data-addf]").onclick=async()=>{const n=await uiPrompt("Nom du nouveau flux","",{ok:"Ajouter"});if(n&&n.trim())visSet(y=>y.flows.push({id:uid(),name:n.trim().slice(0,60)}))};
+    o.querySelectorAll(".visfl").forEach(box=>{
+      const fid=box.dataset.f, idx=()=>visCur.flows.findIndex(z=>z.id===fid);
+      box.querySelector("[data-on]").onchange=e=>visSet(y=>{y.flows.find(z=>z.id===fid).off=!e.target.checked});
+      box.querySelector("[data-up]").onclick=()=>visSet(y=>{const i=idx();if(i>0)[y.flows[i-1],y.flows[i]]=[y.flows[i],y.flows[i-1]]});
+      box.querySelector("[data-down]").onclick=()=>visSet(y=>{const i=idx();if(i<y.flows.length-1)[y.flows[i+1],y.flows[i]]=[y.flows[i],y.flows[i+1]]});
+      box.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{const id=b.closest("[data-i]").dataset.i;visSet(y=>{y.items=y.items.filter(z=>z.id!==id);y.notes.forEach(n=>{if(n.item===id)delete n.item})})});
+      const fa=box.querySelector(".visprepadd");if(fa)fa.onsubmit=e=>{e.preventDefault();const t=fa.querySelector("input").value.trim();if(t){visSet(y=>{y.items=y.items||[];y.items.push({id:uid(),flow:fid,kind:"free",text:t.slice(0,300),seen:false})});const n=$(`#visview .visfl[data-f="${fid}"] .visprepadd input`);if(n)n.focus()}};
+      const sp=box.querySelector("[data-addpt]");if(sp)sp.onchange=()=>{const x=livePts().find(z=>z.id===sp.value);if(x)visSet(y=>{y.items=y.items||[];y.items.push({id:uid(),flow:fid,kind:"point",ref:x.id,text:x.text.split("\n")[0].slice(0,300),label:ptNumOf(x)||"Point ouvert",seen:false})})};
+    });
+  }
   // ---------- Fin de visite : bilan, points ouverts, tâches, export ----------
   function visEndScreen(o,v,p){
-    const ns=v.notes||[], todo=ns.filter(n=>!n.conv&&(n.type==="question"||n.type==="action"));
-    const nq=todo.filter(n=>n.type==="question"), na=todo.filter(n=>n.type==="action");
+    const ns=v.notes||[], its=v.items||[];
     const fname=id=>(v.flows.find(f=>f.id===id)||{name:"?"}).name;
-    o.innerHTML=`<header class="vish"><div class="visrow">${visBack("Retour à la visite")}<div class="vist"><b>${v.status==="done"?"Bilan de la visite":"Fin de visite"}</b><span>${esc(p.name)} · ${hm(v.startedAt)}${v.endedAt?" – "+hm(v.endedAt):""}</span></div></div><div class="visst"></div></header>
+    const itemOf=n=>n.item?its.find(i=>i.id===n.item):null;
+    // notes à transformer : questions et actions, sauf les réponses à un point ouvert existant
+    const todo=ns.filter(n=>!n.conv&&(n.type==="question"||n.type==="action")&&!((itemOf(n)||{}).kind==="point"));
+    const nq=todo.filter(n=>n.type==="question"), na=todo.filter(n=>n.type==="action");
+    const answered=its.filter(i=>i.kind==="point"&&!i.applied&&ns.some(n=>n.item===i.id));
+    const left=its.filter(i=>!i.seen&&!i.applied&&!ns.some(n=>n.item===i.id)), leftFree=left.filter(i=>i.kind!=="point"), leftPts=left.filter(i=>i.kind==="point");
+    const ansTxt=i=>ns.filter(n=>n.item===i.id).map(n=>n.text||"(photos)").join(" / ");
+    const seenN=its.filter(i=>i.seen).length;
+    const dstr=new Date(visDate(v)).toLocaleDateString("fr-FR");
+    const anything=todo.length||answered.length||leftFree.length;
+    o.innerHTML=`<header class="vish"><div class="visrow">${visBack("Retour à la visite")}<div class="vist"><b>${v.status==="done"?"Bilan de la visite":"Fin de visite"}</b><span>${esc(p.name)} · ${hm(visDate(v))}${v.endedAt?" – "+hm(v.endedAt):""}</span></div></div><div class="visst"></div></header>
       <main class="vism end">
-        <section class="viscard"><table class="vistab"><thead><tr><th>Flux</th><th>Notes</th><th>Quest.</th><th>Act.</th><th>Photos</th></tr></thead><tbody>${v.flows.map(f=>{const n=visNotes(v,f.id);if(!n.length)return "";return `<tr><td>${esc(f.name)}</td><td>${n.length}</td><td>${n.filter(x=>x.type==="question").length}</td><td>${n.filter(x=>x.type==="action").length}</td><td>${n.reduce((k,x)=>k+(x.photos||[]).length,0)}</td></tr>`}).join("")||`<tr><td colspan="5">Aucune note.</td></tr>`}</tbody></table></section>
+        <section class="viscard">${its.length?`<p class="viscov"><b>${seenN}/${its.length}</b> éléments prévus vus</p>`:""}<table class="vistab"><thead><tr><th>Flux</th><th>Notes</th><th>Quest.</th><th>Act.</th><th>Photos</th></tr></thead><tbody>${v.flows.map(f=>{const n=visNotes(v,f.id);if(!n.length)return "";return `<tr><td>${esc(f.name)}</td><td>${n.length}</td><td>${n.filter(x=>x.type==="question").length}</td><td>${n.filter(x=>x.type==="action").length}</td><td>${n.reduce((k,x)=>k+(x.photos||[]).length,0)}</td></tr>`}).join("")||`<tr><td colspan="5">Aucune note.</td></tr>`}</tbody></table></section>
+        ${answered.length?`<section class="viscard"><h3>Points ouverts répondus sur site</h3><p class="muted">La réponse est ajoutée au point. Cochez ceux qui peuvent être levés.</p>${answered.map(i=>`<label class="vischk sm"><input type="checkbox" data-close="${esc(i.id)}"><span><em>Lever le point ${esc(i.label||"")} (${esc(fname(i.flow))})</em>${esc(i.text)}<small class="visans">Réponse : ${esc(ansTxt(i))}</small></span></label>`).join("")}</section>`:""}
         <section class="viscard"><h3>À créer dans le projet</h3>
           ${nq.length||na.length?`${nq.length?`<label class="vischk"><input type="checkbox" data-all="question" checked><span><b>${plural(nq.length,"question")}</b> ${nq.length>1?"deviennent":"devient"} des points ouverts, à répondre par le client, rangés par flux (thème)</span></label>`:""}
-          ${na.length?`<label class="vischk"><input type="checkbox" data-all="action" checked><span><b>${plural(na.length,"action")}</b> ${na.length>1?"deviennent":"devient"} des tâches à votre nom, avec la mention « Issu de la visite du ${new Date(v.startedAt).toLocaleDateString("fr-FR")} »</span></label>`:""}
+          ${na.length?`<label class="vischk"><input type="checkbox" data-all="action" checked><span><b>${plural(na.length,"action")}</b> ${na.length>1?"deviennent":"devient"} des tâches à votre nom, avec la mention « Issu de la visite du ${dstr} »</span></label>`:""}
           <details class="visrev"><summary>Revoir la liste avant de créer</summary>${todo.map(n=>`<label class="vischk sm"><input type="checkbox" data-one="${esc(n.id)}" data-kind="${n.type}" checked><span><em>${n.type==="question"?"Point":"Tâche"} · ${esc(fname(n.flow))}</em>${esc(n.text||"(photo sans texte)")}</span></label>`).join("")}</details>`
           :`<p class="muted">${ns.some(n=>n.conv)?"Tous les points et tâches de cette visite ont déjà été créés.":"Aucune note de type « Question client » ou « Action »."}</p>`}
         </section>
+        ${left.length?`<section class="viscard"><h3>Restant à voir</h3>${leftFree.map(i=>`<div class="visleft"><span><em>${esc(fname(i.flow))}</em>${esc(i.text)}</span><select data-left="${esc(i.id)}" aria-label="Que faire de « ${esc(i.text)} » ?"><option value="">Ignorer</option><option value="point">Point ouvert</option><option value="task">Tâche</option></select></div>`).join("")}${leftPts.map(i=>`<div class="visleft"><span><em>${esc(i.label||"Point ouvert")} · ${esc(fname(i.flow))}</em>${esc(i.text)}</span><span class="muted">reste ouvert</span></div>`).join("")}</section>`:""}
       </main>
-      <footer class="visf col">${nq.length||na.length?`<button type="button" class="btn primary" data-conv>Créer les points et les tâches</button>`:""}<button type="button" class="btn" data-pdf>Exporter le compte rendu de visite (PDF)</button>${v.status==="done"?`<button type="button" class="btn ghost" data-reopen>Reprendre la visite</button>`:`<button type="button" class="btn ghost" data-done>Clôturer la visite</button>`}</footer>`;
+      <footer class="visf col">${anything?`<button type="button" class="btn primary" data-apply>Appliquer au projet</button>`:""}<button type="button" class="btn" data-pdf>Exporter le compte rendu de visite (PDF)</button>${v.status==="done"?`<button type="button" class="btn ghost" data-reopen>Reprendre la visite</button>`:`<button type="button" class="btn ghost" data-done>Clôturer la visite</button>`}</footer>`;
     o.querySelector("[data-back]").onclick=()=>{visScreen="home";renderVisit()};
     o.querySelectorAll("[data-all]").forEach(cb=>cb.onchange=()=>o.querySelectorAll(`[data-kind="${cb.dataset.all}"]`).forEach(x=>x.checked=cb.checked));
-    const cv=o.querySelector("[data-conv]");if(cv)cv.onclick=()=>{
-      const ids=new Set([...o.querySelectorAll("[data-one]")].filter(x=>x.checked).map(x=>x.dataset.one));
-      visConvert(ids);
-    };
+    const ap=o.querySelector("[data-apply]");if(ap)ap.onclick=()=>visApply(
+      new Set([...o.querySelectorAll("[data-one]")].filter(x=>x.checked).map(x=>x.dataset.one)),
+      new Set([...o.querySelectorAll("[data-close]")].filter(x=>x.checked).map(x=>x.dataset.close)),
+      Object.fromEntries([...o.querySelectorAll("[data-left]")].map(x=>[x.dataset.left,x.value])));
     o.querySelector("[data-pdf]").onclick=()=>visPdf(visCur);
     const dn=o.querySelector("[data-done]");if(dn)dn.onclick=()=>{visSet(x=>{x.status="done";x.endedAt=Date.now()});toast("Visite clôturée. Elle reste consultable dans l'onglet Visites du projet.")};
     const ro=o.querySelector("[data-reopen]");if(ro)ro.onclick=()=>{visSet(x=>{x.status="open";x.endedAt=null});visScreen="home";renderVisit()};
   }
-  function visConvert(ids){
-    const v=visCur, now=Date.now(), src=`Issu de la visite du ${new Date(v.startedAt).toLocaleDateString("fr-FR")}`;
+  function visApply(ids,closeIds,leftChoice){
+    const v=visCur, now=Date.now(), dstr=new Date(visDate(v)).toLocaleDateString("fr-FR"), src=`Issu de la visite du ${dstr}`;
     const fname=id=>(v.flows.find(f=>f.id===id)||{name:""}).name;
-    let nP=0,nT=0,k=0;
+    let nP=0,nT=0,nA=0,nC=0,k=0;
     const me=MODE==="cloud"&&cloud.email?resolveWho(nameOf(cloud.email),v.projectId):"";
+    const mkPoint=(txt,flow)=>{const id=newId();state.points.push({id,projectId:v.projectId,text:txt.slice(0,2000),answer:"",hypothesis:"",erp:"",theme:fname(flow).slice(0,80),owner:"client",ownerName:"",status:"open",taskId:null,requestId:null,createdAt:now+(k++),closedAt:null});nP++;return id};
+    const mkTask=(txt,flow)=>{const id=newId();state.tasks.push({id,projectId:v.projectId,title:txt.split("\n")[0].slice(0,300),priority:"normale",due:"",status:"todo",note:(txt.includes("\n")?txt+"\n\n":"")+src+(fname(flow)?` (${fname(flow)})`:""),who:me,createdAt:now+(k++),checklist:[],repeat:null});nT++;return id};
+    // 1. notes « Question client » et « Action »
     v.notes.filter(n=>ids.has(n.id)&&!n.conv).forEach(n=>{
       const txt=(n.text||"").trim()||`Voir photo${(n.photos||[]).length>1?"s":""} (${fname(n.flow)})`;
-      if(n.type==="question"){const id=newId();state.points.push({id,projectId:v.projectId,text:txt.slice(0,2000),answer:"",hypothesis:"",erp:"",theme:fname(n.flow).slice(0,80),owner:"client",ownerName:"",status:"open",taskId:null,requestId:null,createdAt:now+(k++),closedAt:null});n.conv={kind:"point",id};nP++}
-      else if(n.type==="action"){const id=newId();state.tasks.push({id,projectId:v.projectId,title:txt.split("\n")[0].slice(0,300),priority:"normale",due:"",status:"todo",note:(txt.includes("\n")?txt+"\n\n":"")+src+(fname(n.flow)?` (${fname(n.flow)})`:""),who:me,createdAt:now+(k++),checklist:[],repeat:null});n.conv={kind:"task",id};nT++}
+      if(n.type==="question")n.conv={kind:"point",id:mkPoint(txt,n.flow)};
+      else if(n.type==="action")n.conv={kind:"task",id:mkTask(txt,n.flow)};
     });
-    if(!nP&&!nT){toast("Rien à créer.");return}
+    // 2. réponses apportées sur site aux points ouverts existants
+    (v.items||[]).filter(i=>i.kind==="point"&&!i.applied&&v.notes.some(n=>n.item===i.id)).forEach(i=>{
+      const o=(state.points||[]).find(x=>x.id===i.ref&&!x.deletedAt);i.applied=true;if(!o)return;
+      const t=v.notes.filter(n=>n.item===i.id).map(n=>(n.text||"").trim()||"voir les photos du compte rendu de visite").join(" / ");
+      o.answer=(o.answer?o.answer+"\n":"")+`Visite du ${dstr} : ${t}`;nA++;
+      if(closeIds.has(i.id)&&o.status!=="closed"){o.status="closed";o.closedAt=now;nC++}
+    });
+    // 3. éléments prévus non vus
+    (v.items||[]).filter(i=>!i.applied&&leftChoice[i.id]).forEach(i=>{i.applied=true;i.conv={kind:leftChoice[i.id],id:leftChoice[i.id]==="point"?mkPoint(i.text,i.flow):mkTask(i.text,i.flow)}});
+    if(!nP&&!nT&&!nA){toast("Rien à appliquer.");return}
     save();visPut(v);renderVisit();render();
-    toast(`${plural(nP,"point ouvert","points ouverts")} et ${plural(nT,"tâche")} créé${nP+nT>1?"s":""} dans le projet.`);
+    toast([nP?plural(nP,"point ouvert créé","points ouverts créés"):"",nT?plural(nT,"tâche créée","tâches créées"):"",nA?`${plural(nA,"réponse ajoutée","réponses ajoutées")} aux points${nC?` (${plural(nC,"levé","levés")})`:""}`:""].filter(Boolean).join(", ")+".");
   }
   async function visPdf(v){
     const p=proj(v.projectId)||{name:""};
     const urls={};await Promise.all(v.notes.flatMap(n=>(n.photos||[]).map(async ph=>{urls[ph.id]=await visPhotoUrl(v,ph.id)})));
     const missing=Object.values(urls).filter(u=>!u).length;
-    const sec=v.flows.map(f=>{const ns=visNotes(v,f.id);if(!ns.length)return "";
-      return `<section><h2>${esc(f.name)}</h2>${ns.map(n=>`<div class="n"><div class="h"><span class="t ${n.type}">${(NTYPE[n.type]||NTYPE.note)[0]}</span> ${hm(n.at)}</div>${n.text?`<p>${esc(n.text).replace(/\n/g,"<br>")}</p>`:""}${(n.photos||[]).length?`<div class="ph">${n.photos.map(ph=>urls[ph.id]?`<figure><img src="${urls[ph.id]}" alt=""><figcaption>${esc(ph.caption||"")}</figcaption></figure>`:"").join("")}</div>`:""}</div>`).join("")}</section>`}).join("");
-    const css=`body{font-family:Arial,sans-serif;color:#16232B;margin:0;font-size:11pt}h1{font-size:18pt;margin:0}.sub{color:#51646F;margin:4px 0 16px}h2{font-size:13pt;color:#1D4E78;border-bottom:1px solid #C7D1D8;padding-bottom:3px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.03em}.n{margin:0 0 10px;break-inside:avoid}.h{font-size:9pt;color:#51646F}.t{font-weight:bold;padding:1px 6px;border-radius:8px;background:#EEF1F3}.t.question{background:#DCEAF7;color:#1D4E78}.t.action{background:#FFF4CC;color:#6B5200}p{margin:3px 0}.ph{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}figure{margin:0;width:48%;break-inside:avoid}figure img{width:100%;border-radius:4px}figcaption{font-size:9pt;color:#51646F}@page{margin:15mm}`;
-    const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(v.title)}</title><style>${css}</style></head><body><h1>${esc(v.title)}</h1><p class="sub">${esc(p.name)} · ${esc(new Date(v.startedAt).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))}${v.endedAt?` · ${hm(v.startedAt)} – ${hm(v.endedAt)}`:""}</p>${sec||"<p>Aucune note.</p>"}</body></html>`;
+    const its=v.items||[], pr=v.prep||{};
+    const sec=visFlows(v).map(f=>{const ns=visNotes(v,f.id), it=visItems(v,f.id);if(!ns.length&&!it.length)return "";
+      return `<section><h2>${esc(f.name)}</h2>${it.length?`<ul class="it">${it.map(i=>`<li class="${i.seen?"ok":"ko"}">${i.seen?"Vu":"Non vu"} · ${i.kind==="point"?esc(i.label||"Point ouvert")+" – ":""}${esc(i.text)}</li>`).join("")}</ul>`:""}${ns.map(n=>`<div class="n"><div class="h"><span class="t ${n.type}">${(NTYPE[n.type]||NTYPE.note)[0]}</span> ${hm(n.at)}${n.item&&its.find(i=>i.id===n.item)?` · réponse à : ${esc(its.find(i=>i.id===n.item).text)}`:""}</div>${n.text?`<p>${esc(n.text).replace(/\n/g,"<br>")}</p>`:""}${(n.photos||[]).length?`<div class="ph">${n.photos.map(ph=>urls[ph.id]?`<figure><img src="${urls[ph.id]}" alt=""><figcaption>${esc(ph.caption||"")}</figcaption></figure>`:"").join("")}</div>`:""}</div>`).join("")}</section>`}).join("");
+    const css=`body{font-family:Arial,sans-serif;color:#16232B;margin:0;font-size:11pt}h1{font-size:18pt;margin:0}.sub{color:#51646F;margin:4px 0 16px}h2{font-size:13pt;color:#1D4E78;border-bottom:1px solid #C7D1D8;padding-bottom:3px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.03em}.n{margin:0 0 10px;break-inside:avoid}.h{font-size:9pt;color:#51646F}.t{font-weight:bold;padding:1px 6px;border-radius:8px;background:#EEF1F3}.t.question{background:#DCEAF7;color:#1D4E78}.t.action{background:#FFF4CC;color:#6B5200}p{margin:3px 0}.ph{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}figure{margin:0;width:48%;break-inside:avoid}figure img{width:100%;border-radius:4px}figcaption{font-size:9pt;color:#51646F}.it{margin:0 0 10px;padding-left:18px;font-size:10pt}.it li.ok{color:#1F5C43}.it li.ko{color:#9A3412}.meta{display:grid;grid-template-columns:110px 1fr;gap:3px 10px;margin:0 0 14px;font-size:10pt}.meta b{color:#51646F;font-weight:normal}@page{margin:15mm}`;
+    const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(v.title)}</title><style>${css}</style></head><body><h1>${esc(v.title)}</h1><p class="sub">${esc(p.name)} · ${esc(new Date(visDate(v)).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))}${v.endedAt&&v.startedAt?` · ${hm(v.startedAt)} – ${hm(v.endedAt)}`:""}</p>${pr.location||pr.goal||(pr.participants||[]).length?`<div class="meta">${pr.location?`<b>Lieu</b><span>${esc(pr.location)}</span>`:""}${pr.goal?`<b>Objectif</b><span>${esc(pr.goal)}</span>`:""}${(pr.participants||[]).length?`<b>Participants</b><span>${esc(pr.participants.map(x=>x.name+(SIDE[x.side]?` (${SIDE[x.side]})`:"")).join(", "))}</span>`:""}</div>`:""}${sec||"<p>Aucune note.</p>"}</body></html>`;
     if(missing)toast(`${plural(missing,"photo")} non disponible${missing>1?"s":""} hors connexion : absente${missing>1?"s":""} du PDF.`);
-    printHtml(html,`visite-${(p.name||"projet").replace(/[^\wÀ-ÿ-]+/g,"-")}-${iso(new Date(v.startedAt))}`);
+    printHtml(html,`visite-${(p.name||"projet").replace(/[^\wÀ-ÿ-]+/g,"-")}-${iso(new Date(visDate(v)))}`);
   }
   // ---------- Onglet Visites d'un projet ----------
   function visEnsure(){if(vis.loaded&&vis.acct!==visAcct()){vis.loaded=false;vis.map={};vis.urls={}}if(!vis.loaded)visLoad()}
   function renderVisits(L,p){
     visEnsure();
     const top=document.createElement("div");top.className="mtgtop";
-    top.innerHTML=`<button type="button" class="btn primary" data-new>Nouvelle visite</button><span class="muted">Prise de notes par flux sur site, avec photos. Fonctionne sans réseau : l'envoi se fait au retour de la connexion.</span>`;
+    top.innerHTML=`<button type="button" class="btn primary" data-prep>Préparer une visite</button><button type="button" class="btn" data-new>Démarrer une visite maintenant</button><span class="muted">Préparez au bureau, puis « Démarrer la visite » sur site. Fonctionne sans réseau : l'envoi se fait au retour de la connexion.</span>`;
+    top.querySelector("[data-prep]").onclick=()=>visNew(p,true);
     top.querySelector("[data-new]").onclick=()=>visNew(p);
     L.appendChild(top);
     const vs=visList(p.id);
@@ -3892,7 +4003,8 @@
       const ul=document.createElement("ul");ul.className="tasks";
       vs.forEach(v=>{const li=document.createElement("li");li.className="task mtgrow";
         const ns=v.notes||[], ph=ns.reduce((k,x)=>k+(x.photos||[]).length,0), q=ns.filter(x=>x.type==="question").length;
-        li.innerHTML=`<span class="mtgdate">${esc(new Date(v.startedAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"}))}</span><div><div class="ttl">${esc(v.title)}</div><div class="meta"><span class="tag">${plural(ns.length,"note")}</span><span class="tag">${plural(ph,"photo")}</span>${q?`<span class="tag">${plural(q,"question")}</span>`:""}<span class="tag ${v.status==="done"?"done-t":"wait"}">${v.status==="done"?"Terminée":"En cours"}</span>${vis.map[v.id]&&vis.map[v.id].dirty?`<span class="tag">En attente d'envoi</span>`:""}</div></div><div class="acts"><button type="button" class="sbtn">Ouvrir</button><button type="button" class="sbtn" data-del aria-label="Supprimer la visite ${esc(v.title)}" title="Supprimer">✕</button></div>`;
+        const its=v.items||[], pl=v.prep&&v.prep.plannedAt;
+        li.innerHTML=`<span class="mtgdate">${v.status==="prep"&&!pl?"À dater":esc(new Date(visDate(v)).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"}))}</span><div><div class="ttl">${esc(v.title)}</div><div class="meta">${v.status==="prep"?`<span class="tag">${plural(its.length,"élément")} à voir</span>${pl?`<span class="tag">${hm(pl)}</span>`:""}${v.prep.location?`<span class="tag">${esc(v.prep.location)}</span>`:""}`:`<span class="tag">${plural(ns.length,"note")}</span><span class="tag">${plural(ph,"photo")}</span>${q?`<span class="tag">${plural(q,"question")}</span>`:""}`}<span class="tag ${v.status==="done"?"done-t":"wait"}">${v.status==="done"?"Terminée":v.status==="prep"?"Préparée":"En cours"}</span>${vis.map[v.id]&&vis.map[v.id].dirty?`<span class="tag">En attente d'envoi</span>`:""}</div></div><div class="acts"><button type="button" class="sbtn">Ouvrir</button><button type="button" class="sbtn" data-del aria-label="Supprimer la visite ${esc(v.title)}" title="Supprimer">✕</button></div>`;
         li.querySelector("[data-del]").onclick=e=>{e.stopPropagation();visDelete(v)};
         li.onclick=()=>visOpen(v);ul.appendChild(li)});
       g.appendChild(ul);
@@ -3928,13 +4040,13 @@
     const late=open.filter(isLate), relance=open.filter(t=>t.status==="waiting"&&t.due&&parseD(t.due)<=today());
     const pts=livePts().filter(o=>o.projectId===p.id), po=pts.filter(o=>o.status!=="closed"), pcli=po.filter(o=>o.owner==="client").length;
     const ms=mtgList(p.id), drafts=ms.filter(m=>m.status==="draft").length;
-    visEnsure();const vs=visList(p.id), vOpen=vs.filter(v=>v.status!=="done").length;
+    visEnsure();const vs=visList(p.id), vOpen=vs.filter(v=>v.status==="open").length, vPrep=vs.filter(v=>v.status==="prep");
     const dshort=ms=>new Date(ms).toLocaleDateString("fr-FR",{day:"numeric",month:"long"});
     const tiles=[
       ["list","Tâches","tasks","t-tasks",open.length,open.length>1?"ouvertes":"ouverte",late.length?`${late.length} en retard`:"Rien en retard",!!late.length],
       ["points","Points ouverts","points","t-points",po.length,po.length>1?"ouverts":"ouvert",po.length?`${pcli} à répondre par le client`:"Aucun point ouvert",false],
       ["meetings","Réunions","meetings","t-mtg",ms.length,ms.length>1?"comptes rendus":"compte rendu",drafts?`${drafts} brouillon${drafts>1?"s":""} à finaliser`:ms.length?`Dernier : ${dshort(ms[0].startsAt||ms[0].createdAt)}`:"Aucun compte rendu",false],
-      ["visits","Visites","visits","t-vis",vs.length,vs.length>1?"visites":"visite",vOpen?`${vOpen} en cours`:vs.length?`Dernière : ${dshort(vs[0].startedAt)}`:"Aucune visite",false]];
+      ["visits","Visites","visits","t-vis",vs.length,vs.length>1?"visites":"visite",vOpen?`${vOpen} en cours`:vPrep.length?`Préparée${vPrep[0].prep&&vPrep[0].prep.plannedAt?" : "+dshort(vPrep[0].prep.plannedAt):""}`:vs.length?`Dernière : ${dshort(visDate(vs[0]))}`:"Aucune visite",false]];
     const nxt=open.filter(t=>t.due).sort((a,b)=>(isLate(b)-isLate(a))||(a.due<b.due?-1:1)).slice(0,3);
     const alert=late.length||relance.length?`<button type="button" class="phalert" data-go="list">${svgI("M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2")}<span>${[late.length?`<b>${late.length} tâche${late.length>1?"s":""} en retard</b>`:"",relance.length?`${relance.length} relance${relance.length>1?"s":""} à faire`:""].filter(Boolean).join(" · ")}</span>${svgI("M9 6l6 6-6 6")}</button>`:"";
     L.innerHTML=`${alert}<section class="phtiles" aria-label="Rubriques du projet">${tiles.map(([m,t,ic,c,n,u,s,w])=>`<button type="button" class="phtile ${c}" data-go="${m}"><span class="phic">${svgI(ICO[ic])}</span><b>${t}</b><span class="phn"><strong>${n}</strong> ${u}</span><span class="phs${w?" warn":""}">${esc(s)}</span></button>`).join("")}</section>

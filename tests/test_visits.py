@@ -28,7 +28,7 @@ with sync_playwright() as pw:
     pg.locator(".bnav [data-b=menu]").click();pg.wait_for_timeout(200)
     pg.locator(".pjt",has_text="Projet Alpha").click();pg.wait_for_timeout(300)
     pg.locator(".phtile",has_text="Visites").click();pg.wait_for_timeout(300)
-    ok("Nouvelle visite" in pg.locator("#lists").inner_text(),"onglet Visites")
+    ok("Préparer une visite" in pg.locator("#lists").inner_text(),"onglet Visites")
     pg.locator("#lists [data-new]").click();pg.wait_for_timeout(500)
     v=pg.locator("#visview")
     ok(v.is_visible() and v.locator(".vistile:not(.add)").count()==8,"nouvelle visite : 8 flux par défaut")
@@ -93,7 +93,7 @@ with sync_playwright() as pw:
     v.locator("[data-end]").click();pg.wait_for_timeout(300)
     ok("1 question" in v.inner_text() and "1 action" in v.inner_text(),"bilan : questions et actions à créer")
     pg.screenshot(path=OUT+"visit_end.png")
-    v.locator("[data-conv]").click();pg.wait_for_timeout(1500)
+    v.locator("[data-apply]").click();pg.wait_for_timeout(1500)
     pts=[o for o in pg.evaluate("window.__db.open_points||[]") if o["project_id"]=="p1"]
     tks=[t for t in pg.evaluate("window.__db.tasks") if "Issu de la visite" in (t.get("note") or "")]
     ok(any(o["text"].startswith("Question test") and o["theme"]=="Réception" and o["owner"]=="client" for o in pts),"question devenue point ouvert (thème = flux)")

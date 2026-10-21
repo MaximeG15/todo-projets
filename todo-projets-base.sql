@@ -605,3 +605,8 @@ on conflict (id) do nothing;
 create policy "visit photos acces projet" on storage.objects for all to authenticated
   using (bucket_id = 'visit-photos' and public.can_access((storage.foldername(name))[1]))
   with check (bucket_id = 'visit-photos' and public.can_access((storage.foldername(name))[1]));
+-- Préparation des visites (infos, participants, éléments à voir) ; statut « prep » = préparée
+alter table public.visits add column if not exists prep jsonb not null default '{}'::jsonb;
+alter table public.visits add column if not exists items jsonb not null default '[]'::jsonb;
+alter table public.visits drop constraint if exists visits_status_check;
+alter table public.visits add constraint visits_status_check check (status in ('prep','open','done'));
