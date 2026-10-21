@@ -1105,7 +1105,7 @@
   function addProject(name){
     name=name.trim(); if(!name)return;
     const p={id:uid(),name,color:nextColor()};
-    state.projects.push(p); view=p.id; save(); render();
+    state.projects.push(p); view=p.id; if(isPhone())ui.mode="home"; save(); render();
     if(MODE==="cloud")setTimeout(()=>tplDialog(p,true),400);
   }
   async function renameProject(p){
@@ -1207,7 +1207,9 @@
     if(view!=="all"&&!proj(view))view="all";
     if(ui.mode==="kanban")ui.mode="list"; // ancien mode Kanban (retiré)
     if(ui.taskMode==="kanban")ui.taskMode="list";
-    if(!["list","agenda","dash","trash","requests","points","meetings","visits"].includes(ui.mode))ui.mode="list";
+    if(!["list","agenda","dash","trash","requests","points","meetings","visits","home","projects"].includes(ui.mode))ui.mode="list";
+    if(ui.mode==="projects"){if(isPhone())view="all";else ui.mode="list"}
+    if(ui.mode==="home"&&(view==="all"||!isPhone()))ui.mode="list";
     if((ui.mode==="points"||ui.mode==="meetings"||ui.mode==="visits")&&view==="all")ui.mode="list";
     if(ui.mode==="requests"&&view!=="all")ui.mode="list"; // les demandes client se consultent depuis la vue globale
     if(["list","agenda"].includes(ui.mode))ui.taskMode=ui.mode;
@@ -1239,9 +1241,9 @@
     {const bn=$("#bnav");if(bn){
       const mine=MODE==="cloud";
       bn.querySelector('[data-b="mine"] .bl').textContent=mine?"Mes tâches":"Toutes";
-      const act={today:view==="all"&&mode==="list"&&ui.scope==="today",mine:view==="all"&&mode==="list"&&ui.scope==="all"&&(mine?ui.who==="__me":true),agenda:mode==="agenda",menu:false};
+      const act={today:view==="all"&&mode==="list"&&ui.scope==="today",mine:view==="all"&&mode==="list"&&ui.scope==="all"&&(mine?ui.who==="__me":true),agenda:mode==="agenda",menu:mode==="projects"||view!=="all"};
       bn.querySelectorAll("[data-b]").forEach(x=>{const k=x.dataset.b;x.setAttribute("aria-current",!!act[k]);
-        x.onclick=k==="menu"?()=>{const sd=$("#side");const o=sd.classList.toggle("open");$("#menubtn").setAttribute("aria-expanded",o);window.scrollTo({top:0,behavior:"smooth"})}
+        x.onclick=k==="menu"?()=>{closeMenu();query="";$("#search").value="";ui.mode="projects";view="all";editing=null;saveUi();render();window.scrollTo({top:0})}
           :k==="today"?()=>{if(ui.who==="__me")ui.who="";go("list","today")()}
           :k==="agenda"?()=>{go("agenda","all")()}
           :()=>{ui.who=mine?"__me":"";go("list","all")()}});
@@ -1268,7 +1270,7 @@
       const badge=m?(m.owner!==cloud.user.id?`<span class="pshared" title="Partagé par ${esc(nameOf(m.ownerEmail))}">invité</span>`:(m.members.length?`<span class="pshared" title="Partagé avec ${esc(m.members.map(nameOf).join(", "))}">partagé</span>`:"")):"";
       const li=document.createElement("li");
       li.innerHTML=`<button class="pbtn${p.archived?" arch":""}" type="button" aria-current="${view===p.id}"><span class="dot" style="background:${p.color}"></span><span class="pname">${esc(p.name)}</span>${badge}<span class="count">${nOpen}</span><span class="pbar" title="${pct} % terminé"><i style="width:${pct}%;background:${p.color}"></i></span></button>`;
-      li.firstChild.onclick=()=>{if(view!==p.id)shareOpen=false;view=p.id;if(ui.scope==="today")ui.scope="all";if(ui.mode==="dash"||ui.mode==="trash")ui.mode="list";saveUi();editing=null;closeMenu();render()};
+      li.firstChild.onclick=()=>openProject(p.id);
       pl.appendChild(li);
     };
     const actP=state.projects.filter(p=>!p.archived), archP=state.projects.filter(p=>p.archived);
@@ -1285,7 +1287,7 @@
     // en-tête
     const p=view==="all"?null:proj(view);
     const agenda=mode==="agenda";
-    $("#quick").hidden=mode==="dash"||mode==="trash"||mode==="requests"||mode==="points";
+    $("#quick").hidden=mode==="dash"||mode==="trash"||mode==="requests"||mode==="points"||mode==="home"||mode==="projects";
     $("#wrap").classList.toggle("wide",agenda||mode==="dash");
     // onglets du projet : tâches / demandes client
     const tabs=$("#ptabs");$("#stucklbl").textContent=p?p.name:"";
@@ -1318,6 +1320,13 @@
       const ps=livePts().filter(o=>o.projectId===p.id), no=ps.filter(o=>o.status!=="closed");
       const byO=k=>no.filter(o=>o.owner===k).length;
       sub=`${no.length} point${no.length>1?"s":""} ouvert${no.length>1?"s":""}`+(ps.length-no.length?`, ${ps.length-no.length} levé${ps.length-no.length>1?"s":""}`:"")+([["client","côté client"],["mecalux","côté Mecalux"],["tiers","côté tiers"]].filter(([k])=>byO(k)).map(([k,l])=>` · ${byO(k)} ${l}`).join(""));
+    } else if(mode==="projects"){
+      const na=state.projects.filter(x=>!x.archived).length;
+      title="Projets";sub=`${na} projet${na>1?"s":""} en cours`;
+    } else if(mode==="home"){
+      title=`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`;
+      const m=MODE==="cloud"?cloud.meta[p.id]:null, others=m?[m.ownerEmail,...m.members].filter(e=>e!==cloud.email):[];
+      sub=cap(longDay(today()))+(others.length?` · partagé avec ${others.map(nameOf).join(", ")}`:"");
     } else if(mode==="visits"){
       title=`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`;
       const vs=visList(p.id), nOpen=vs.filter(x=>x.status!=="done").length;
@@ -1336,7 +1345,13 @@
       sub=`${cap(longDay(today()))} · ${poolOpen.length} tâche${poolOpen.length>1?"s":""} ouverte${poolOpen.length>1?"s":""}`+(pToday?`, ${pToday} pour aujourd'hui`:"")+(pLate?`, ${pLate} en retard`:"")+(pWait?`, ${pWait} en attente`:"");
     }
     {const fa=$("#fav");if(fa){const nm=MODE==="cloud"&&cloud.email?nameOf(cloud.email):"";fa.hidden=!nm;fa.textContent=initialsOf(nm)}}
+    // Téléphone : dans une rubrique, le titre est celui de la rubrique (le projet figure dans le lien de retour)
+    if(p&&mode!=="home"&&!query.trim()&&isPhone()){const lb={list:"Tâches",agenda:"Agenda du projet",points:"Points ouverts",meetings:"Réunions",visits:"Visites"}[mode];if(lb)title=lb}
     $("#ptitle").innerHTML=title; $("#psub").textContent=sub;
+    if(document.body.dataset.mode&&document.body.dataset.mode!==mode&&document.body.classList.contains("addopen")){document.body.classList.remove("addopen");const fb=$("#fab");if(fb){fb.setAttribute("aria-expanded","false");fb.setAttribute("aria-label","Ajouter")}}
+    document.body.dataset.mode=mode;
+    // Téléphone : retour à l'accueil du projet depuis une rubrique
+    {const pb=$("#pback");if(pb){const on=!!p&&mode!=="home"&&!query.trim();pb.hidden=!on;if(on){pb.innerHTML=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>${esc(p.name)}`;pb.onclick=()=>{ui.mode="home";saveUi();editing=null;editingPt=null;render();window.scrollTo({top:0})}}}}
     // ---- Indicateurs du projet (bandeau sous le titre) ----
     const K=$("#kpis");K.innerHTML="";K.hidden=true;
     if(p&&!query.trim()&&["list","agenda","requests"].includes(mode)){
@@ -1474,6 +1489,8 @@
     // contenu
     const L=$("#lists"); L.innerHTML="";$("#addslot").innerHTML="";$("#wrap").classList.remove("twocol");
     if(mode==="trash"&&!query.trim()){renderTrash(L);return}
+    if(mode==="projects"&&!query.trim()){renderProjects(L);return}
+    if(mode==="home"&&p&&!query.trim()){renderProjHome(L,p);return}
     if(!state.projects.length){
       L.innerHTML=`<div class="empty">Commencez par créer un projet (« + Nouveau projet » dans la colonne de gauche), puis ajoutez vos tâches ici.</div>`;return;
     }
@@ -3883,6 +3900,56 @@
     L.appendChild(g);
   }
   window.__visState=()=>({map:vis.map,pending:vis.pending}); // utilisé par les tests
+  // ---------- Téléphone : écran Projets (icônes) et accueil du projet ----------
+  // Sur téléphone, « Projets » (barre du bas) ouvre la grille des projets ; un projet s'ouvre sur son accueil
+  // (alerte, quatre rubriques, prochaines échéances) et chaque rubrique s'affiche en plein écran avec un retour.
+  const isPhone=()=>window.matchMedia("(max-width:760px)").matches;
+  const projIni=n=>{const w=String(n||"").replace(/[^\p{L}\p{N}\s/'-]/gu," ").split(/[\s/'-]+/).filter(Boolean);return ((w.length>1?w[0][0]+w[1][0]:(w[0]||"?").slice(0,2))||"?").toUpperCase()};
+  const ICO={tasks:"M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2",points:"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5M12 16v.5",meetings:"M3 5h18v16H3zM3 10h18M8 3v4M16 3v4",visits:"M4 8h3l2-3h6l2 3h3v11H4zM12 10a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"};
+  const svgI=d=>`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"></path></svg>`;
+  function openProject(id){if(view!==id)shareOpen=false;view=id;if(ui.scope==="today")ui.scope="all";ui.mode=isPhone()?"home":(["dash","trash","requests","projects","home"].includes(ui.mode)?"list":ui.mode);saveUi();editing=null;query="";$("#search").value="";closeMenu();render();window.scrollTo({top:0})}
+  function renderProjects(L){
+    const alive=live(), act=state.projects.filter(p=>!p.archived), arch=state.projects.filter(p=>p.archived);
+    const tile=p=>{const open=alive.filter(t=>t.projectId===p.id&&t.status!=="done"), late=open.filter(isLate).length;
+      return `<button type="button" class="pjt" data-p="${esc(p.id)}"><span class="pjic" style="background:${esc(p.color||"#999")}">${esc(projIni(p.name))}${late?`<em aria-label="${late} en retard">${late}</em>`:""}</span><b>${esc(p.name)}</b><span>${open.length} tâche${open.length>1?"s":""}</span></button>`};
+    L.innerHTML=`<section class="pjgrid" aria-label="Projets en cours">${act.map(tile).join("")}<button type="button" class="pjt" data-newp><span class="pjic add">${svgI("M12 5v14M5 12h14")}</span><b>Nouveau</b></button></section>
+      ${arch.length?`<details class="pjarch"${ui.showArch?" open":""}><summary>Projets archivés <span>${arch.length}</span></summary><section class="pjgrid">${arch.map(tile).join("")}</section></details>`:""}
+      <section class="pjviews" aria-label="Autres vues"></section>`;
+    L.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>openProject(b.dataset.p));
+    L.querySelector("[data-newp]").onclick=async()=>{const n=await uiPrompt("Nom du nouveau projet","",{ok:"Créer"});if(n&&n.trim())addProject(n)};
+    const ad=L.querySelector(".pjarch");if(ad)ad.ontoggle=()=>{ui.showArch=ad.open;saveUi()};
+    const V=L.querySelector(".pjviews"), nReq=liveReq().filter(r=>reqOpen(r)&&!isArch(r.projectId)).length, nTrash=state.tasks.filter(t=>t.deletedAt).length+(state.requests||[]).filter(r=>r.deletedAt).length+(state.points||[]).filter(o=>o.deletedAt).length;
+    const go=(m,s)=>()=>{ui.mode=m;ui.scope=s||"all";if(m==="list"&&ui.who==="__me")ui.who="";view="all";saveUi();render();window.scrollTo({top:0})};
+    [["Toutes les tâches",alive.filter(t=>t.status!=="done"&&!isArch(t.projectId)).length,go("list","all")],["Demandes client",nReq||"",go("requests")],["Tableau de bord","",go("dash")],["Corbeille",nTrash||"",go("trash")],["Compte, sauvegarde et confidentialité","",()=>{const s=$("#side");s.classList.add("open");$("#menubtn").setAttribute("aria-expanded","true");const tb=$("#toolsbox");if(tb)tb.open=true;window.scrollTo({top:0})}]]
+      .forEach(([l,n,fn],i)=>{const b=document.createElement("button");b.type="button";b.className="pjv"+(i===4?" sub":"");b.innerHTML=`<span>${esc(l)}</span>${n!==""?`<span class="n">${n}</span>`:""}`;b.onclick=fn;V.appendChild(b)});
+  }
+  function renderProjHome(L,p){
+    const alive=live(), open=alive.filter(t=>t.projectId===p.id&&t.status!=="done");
+    const late=open.filter(isLate), relance=open.filter(t=>t.status==="waiting"&&t.due&&parseD(t.due)<=today());
+    const pts=livePts().filter(o=>o.projectId===p.id), po=pts.filter(o=>o.status!=="closed"), pcli=po.filter(o=>o.owner==="client").length;
+    const ms=mtgList(p.id), drafts=ms.filter(m=>m.status==="draft").length;
+    visEnsure();const vs=visList(p.id), vOpen=vs.filter(v=>v.status!=="done").length;
+    const dshort=ms=>new Date(ms).toLocaleDateString("fr-FR",{day:"numeric",month:"long"});
+    const tiles=[
+      ["list","Tâches","tasks","t-tasks",open.length,open.length>1?"ouvertes":"ouverte",late.length?`${late.length} en retard`:"Rien en retard",!!late.length],
+      ["points","Points ouverts","points","t-points",po.length,po.length>1?"ouverts":"ouvert",po.length?`${pcli} à répondre par le client`:"Aucun point ouvert",false],
+      ["meetings","Réunions","meetings","t-mtg",ms.length,ms.length>1?"comptes rendus":"compte rendu",drafts?`${drafts} brouillon${drafts>1?"s":""} à finaliser`:ms.length?`Dernier : ${dshort(ms[0].startsAt||ms[0].createdAt)}`:"Aucun compte rendu",false],
+      ["visits","Visites","visits","t-vis",vs.length,vs.length>1?"visites":"visite",vOpen?`${vOpen} en cours`:vs.length?`Dernière : ${dshort(vs[0].startedAt)}`:"Aucune visite",false]];
+    const nxt=open.filter(t=>t.due).sort((a,b)=>(isLate(b)-isLate(a))||(a.due<b.due?-1:1)).slice(0,3);
+    const alert=late.length||relance.length?`<button type="button" class="phalert" data-go="list">${svgI("M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2")}<span>${[late.length?`<b>${late.length} tâche${late.length>1?"s":""} en retard</b>`:"",relance.length?`${relance.length} relance${relance.length>1?"s":""} à faire`:""].filter(Boolean).join(" · ")}</span>${svgI("M9 6l6 6-6 6")}</button>`:"";
+    L.innerHTML=`${alert}<section class="phtiles" aria-label="Rubriques du projet">${tiles.map(([m,t,ic,c,n,u,s,w])=>`<button type="button" class="phtile ${c}" data-go="${m}"><span class="phic">${svgI(ICO[ic])}</span><b>${t}</b><span class="phn"><strong>${n}</strong> ${u}</span><span class="phs${w?" warn":""}">${esc(s)}</span></button>`).join("")}</section>
+      ${nxt.length?`<section class="phnext" aria-label="Prochaines échéances"><h3>Prochaines échéances</h3>${nxt.map(t=>`<button type="button" class="phrow" data-t="${esc(t.id)}"><span class="phck" aria-hidden="true"></span><span class="pht">${esc(t.title)}</span><span class="phd${isLate(t)?" late":""}">${isLate(t)?"En retard":esc(shortDay(t.due))}</span></button>`).join("")}</section>`:""}`;
+    L.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{ui.mode=b.dataset.go;if(ui.mode==="list")ui.scope="all";saveUi();editing=null;render();window.scrollTo({top:0})});
+    L.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{ui.mode="list";ui.scope="all";saveUi();editing=b.dataset.t;render();const el=document.querySelector(`.task[data-id="${b.dataset.t}"]`);if(el)el.scrollIntoView({block:"center"})});
+  }
+  // Bouton + de l'accueil du projet : choix de ce qu'on ajoute
+  async function phoneAdd(p){
+    const ch=await visSheet("Ajouter au projet",[{k:"t",l:"Une tâche"},{k:"o",l:"Un point ouvert"},{k:"m",l:"Une réunion (compte rendu)"},{k:"v",l:"Une visite sur site"}]);
+    if(ch==="t"){ui.mode="list";ui.scope="all";saveUi();render();setTimeout(()=>$("#fab").click(),50)}
+    else if(ch==="o"){ui.mode="points";saveUi();render();setTimeout(()=>{const el=document.querySelector("#addslot input[type=text],#ptadd input[type=text],#ptadd textarea");document.body.classList.add("addopen");if(el){window.scrollTo({top:0});el.focus()}},80)}
+    else if(ch==="m"){const r=await mtgNewDialog({projectId:p.id});if(r){ui.mode="meetings";saveUi();render();mtgOpen(r,"prep")}}
+    else if(ch==="v"){ui.mode="visits";saveUi();render();visNew(p)}
+  }
   // ---------- Points ouverts standard (modèle d'AF, stocké en base : réservé aux utilisateurs connectés) ----------
   let tplCache=null;
   async function loadTemplates(){
@@ -4184,6 +4251,7 @@
   $("#menubtn").onclick=()=>{const o=$("#side").classList.toggle("open");$("#menubtn").setAttribute("aria-expanded",o)};
   // Mobile : la barre d'ajout est repliée ; le bouton + l'ouvre (et la referme)
   $("#fab").onclick=()=>{
+    if(ui.mode==="home"&&view!=="all"&&proj(view)){phoneAdd(proj(view));return}
     const open=!document.body.classList.contains("addopen");
     document.body.classList.toggle("addopen",open);
     $("#fab").setAttribute("aria-expanded",open);$("#fab").setAttribute("aria-label",open?"Fermer la saisie":"Ajouter");

@@ -123,7 +123,7 @@ with sync_playwright() as pw:
     pg.locator("#expdlg .btn.ghost").click()
     # mobile
     pg.set_viewport_size({"width":390,"height":844})
-    pg.locator("#bnav [data-b=menu]").click();pg.locator(".vbtn",has_text="Tableau de bord").click(); pg.wait_for_timeout(200)
+    pg.locator("#bnav [data-b=menu]").click();pg.locator(".pjv",has_text="Tableau de bord").click(); pg.wait_for_timeout(200)
     ok(pg.evaluate("document.documentElement.scrollWidth")<=390,"mobile : pas de débordement (dash)")
     pg.screenshot(path=S+"v3_dash_m.png",full_page=True)
     b.close()

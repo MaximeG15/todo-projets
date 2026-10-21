@@ -117,7 +117,7 @@ with sync_playwright() as pw:
     pg.locator("#expdlg .btn.ghost").click()
     pg.locator(".vbtn",has_text="Tableau de bord").click()
     ok("Points ouverts" in pg.locator(".dtable").first.inner_text(),"colonne Points ouverts au tableau de bord")
-    pg.set_viewport_size({"width":390,"height":844});pg.locator(".bnav [data-b=menu]").click();pg.locator(".pbtn",has_text="Projet Bêta").click();pg.locator('#ptabs [data-tab="points"]').click();pg.wait_for_timeout(200)
+    pg.set_viewport_size({"width":390,"height":844});pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Bêta").click();pg.locator(".phtile",has_text="Points ouverts").click();pg.wait_for_timeout(200)
     ok(pg.evaluate("document.documentElement.scrollWidth")<=390,"mobile : pas de débordement")
     pg.screenshot(path=S+"pts_m.png",full_page=True)
     b.close()

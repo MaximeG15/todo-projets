@@ -63,7 +63,7 @@ with sync_playwright() as pw:
     pg.locator('.pbtn',has_text="Projet Bêta").click()
     ok(pg.locator("#selbar").count()==0,"changement de projet : sélection quittée")
     m=pg;m.set_viewport_size({"width":390,"height":800})
-    m.reload();m.wait_for_timeout(300);m.evaluate("document.querySelector('.pbtn').click()");m.wait_for_timeout(100)
+    m.reload();m.wait_for_timeout(300);m.evaluate("document.querySelector('.pbtn').click()");m.wait_for_timeout(100);m.locator(".phtile",has_text="Tâches").click();m.wait_for_timeout(100)
     m.locator("#viewbar .vbfilt").click();m.locator("#viewbar button",has_text="Sélectionner").click();m.locator(".task").first.click()
     ok(m.evaluate("document.documentElement.scrollWidth<=390"),"mobile : pas de débordement horizontal")
     m.screenshot(path=OUT+"selection_mobile.png")
