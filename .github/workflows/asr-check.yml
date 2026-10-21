@@ -1,0 +1,57 @@
+name: asr-check
+on:
+  push:
+    branches: [vendor-files]
+jobs:
+  asr:
+    if: "contains(github.event.head_commit.message, '[asr]')"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main, path: app }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Outils
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq espeak-ng >/dev/null
+          pip install -q playwright==1.56.0 && python -m playwright install --with-deps chromium >/dev/null
+      - name: Phrase de test en français
+        run: espeak-ng -v fr -s 140 -w app/fr.wav "Bonjour. Nous sommes sur le quai de réception. Les palettes arrivent avec une étiquette fournisseur, puis passent au contrôle qualité avant le stockage."
+      - name: Transcription réelle dans Chromium
+        run: |
+          cat > asr.py <<'PY'
+          import http.server, threading, functools, time, json, sys
+          from playwright.sync_api import sync_playwright
+          H=functools.partial(http.server.SimpleHTTPRequestHandler,directory="app")
+          class Q(http.server.ThreadingHTTPServer): pass
+          srv=Q(("127.0.0.1",8765),H);threading.Thread(target=srv.serve_forever,daemon=True).start()
+          JS="""async ([model])=>{
+            const t0=performance.now();
+            const ab=await (await fetch('fr.wav')).arrayBuffer();
+            const ac=new AudioContext();const buf=await ac.decodeAudioData(ab);
+            const off=new OfflineAudioContext(1,Math.ceil(buf.duration*16000),16000);const s=off.createBufferSource();s.buffer=buf;s.connect(off.destination);s.start();
+            const audio=(await off.startRendering()).getChannelData(0);
+            const w=new Worker('js/transcribe-worker.js',{type:'module'});const log=[];
+            return await new Promise(res=>{w.onmessage=e=>{const m=e.data;if(m.t==='dl'){if(Math.round(m.pct)%25===0)log.push('dl '+Math.round(m.pct)+'% '+m.mb+'Mo')}else log.push(m.t+(m.pct!=null?' '+Math.round(m.pct):''));
+              if(m.t==='loaded')log.push('charge en '+Math.round((performance.now()-t0)/1000)+'s');
+              if(m.t==='done'||m.t==='err')res({res:m,secs:Math.round((performance.now()-t0)/1000),dur:buf.duration,log})};
+              w.onerror=e=>res({res:{t:'err',msg:'worker '+e.message},log});
+              w.postMessage({t:'run',job:'x',model,audio},[audio.buffer])})}"""
+          ok=True
+          with sync_playwright() as pw:
+              b=pw.chromium.launch();pg=b.new_page()
+              pg.on("console",lambda m:print("console:",m.text[:300]))
+              pg.on("pageerror",lambda e:print("pageerror:",e))
+              pg.goto("http://127.0.0.1:8765/index.html");time.sleep(2)
+              for model in sys.argv[1:]:
+                  r=pg.evaluate(JS,[model])
+                  print("=== "+model);print(json.dumps(r,ensure_ascii=False,indent=1))
+                  if r["res"]["t"]!="done":ok=False
+              b.close()
+          sys.exit(0 if ok else 1)
+          PY
+          python asr.py onnx-community/whisper-small
+      - name: Modèle précis
+        continue-on-error: true
+        run: python asr.py onnx-community/whisper-large-v3-turbo
