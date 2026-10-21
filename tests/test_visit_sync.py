@@ -6,7 +6,7 @@ def ok(c,m):
     print(("OK   " if c else "FAIL ")+m)
     if not c: errs.append(m)
 PHOTO="""window.__testPhoto=()=>new Promise(r=>{const c=document.createElement('canvas');c.width=800;c.height=600;const g=c.getContext('2d');g.fillStyle='#6E7E88';g.fillRect(0,0,800,600);c.toBlob(b=>r(new File([b],'p.jpg',{type:'image/jpeg'})),'image/jpeg',0.9)});"""
-SCAN="""(()=>{let n=0;window.BarcodeDetector=class{static async getSupportedFormats(){return ['code_128','data_matrix']}constructor(){}async detect(){n++;return n>2?[{format:'data_matrix',rawValue:'A-01-02-03'}]:[]}};
+SCAN="""(()=>{let n=0;window.BarcodeDetector=class{static async getSupportedFormats(){return ['code_128','data_matrix']}constructor(){}async detect(){n++;return n>2?[window.__bcVal||{format:'data_matrix',rawValue:'A-01-02-03'}]:[]}};
  window.__persist=0;try{Object.defineProperty(navigator,'storage',{value:{persisted:async()=>false,persist:async()=>{window.__persist++;return true}},configurable:true})}catch(e){}})();"""
 with sync_playwright() as pw:
     b=pw.chromium.launch(args=["--use-fake-ui-for-media-stream","--use-fake-device-for-media-stream"])
@@ -53,8 +53,11 @@ with sync_playwright() as pw:
     v.locator(".vistile",has_text="Réception").click();pg.wait_for_timeout(300)
     ok(v.locator(".visnote",has_text="Note D").count()==1,"A : ouverture de la visite — version du serveur récupérée")
     # --- scan de code-barres
+    pg.evaluate("window.__bcVal={format:'code_128',rawValue:'0103760123456784'+'10LOT2026A\\u001d17271231'}")
     v.locator("[data-scan]").click();pg.wait_for_timeout(1800)
     sc=pg.locator(".visscan")
+    ok("GS1-128" in sc.inner_text() and "(01)03760123456784(10)LOT2026A(17)271231" in sc.inner_text(),"scan : GS1-128 décodé en identifiants d'application")
+    pg.evaluate("window.__bcVal=null");sc.locator("[data-again]").click();pg.wait_for_timeout(1800)
     ok("Datamatrix" in sc.inner_text() and "A-01-02-03" in sc.inner_text(),"scan : format et contenu détectés")
     pg.screenshot(path=OUT+"visit_scan.png")
     sc.locator("[data-use]").click();pg.wait_for_timeout(500)

@@ -1121,3 +1121,4 @@ body.visopen{overflow:hidden}
 .visscanb .btn{flex:1;height:50px;font-size:16px}
 .visscanb .btn:not(.primary){background:transparent;color:#E8EEF2;border:1px solid #4A6577}
 .visscanv canvas.visshot{width:100%;height:100%;object-fit:cover}
+.visscan header .vistorch{margin-left:auto;color:#E8EEF2;border:1px solid #4A6577;background:transparent}.visscan header .vistorch[aria-pressed="true"]{background:var(--signal);color:#16232B;border-color:var(--signal)}

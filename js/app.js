@@ -4018,12 +4018,36 @@
   const BC_FMT={ean_13:"EAN-13",ean_8:"EAN-8",upc_a:"UPC-A",upc_e:"UPC-E",code_128:"Code 128",code_39:"Code 39",code_93:"Code 93",codabar:"Codabar",itf:"ITF (2 parmi 5 entrelacé)",data_matrix:"Datamatrix",qr_code:"QR code",pdf417:"PDF417",aztec:"Aztec"};
   const bcOk=()=>typeof window.BarcodeDetector==="function"&&!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);
   const BC_SVG=`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 7V4h3M21 7V4h-3M3 17v3h3M21 17v3h-3M7 8v8M10 8v8M13 8v8M17 8v8"></path></svg>`;
+  // Lecture GS1 : (01)03760123456784(10)LOT… à partir du contenu brut (séparateur FNC1 = caractère GS)
+  const GS1_FIX={"00":18,"01":14,"02":14,"11":6,"12":6,"13":6,"15":6,"16":6,"17":6,"20":2};
+  function gs1Parse(raw){
+    let s=String(raw||"");const sym=/^\](C1|d2|Q3|e0)/.test(s);s=s.replace(/^\][A-Za-z]\d/,"").replace(/^\u001d/,"");
+    if(!sym&&!s.includes("\u001d")&&!/^(00\d{18}|01\d{14})/.test(s))return null;
+    const out=[];let i=0;
+    while(i<s.length){
+      if(s[i]==="\u001d"){i++;continue}
+      const two=s.substr(i,2), three=s.substr(i,3), four=s.substr(i,4);let ai,len=null;
+      if(GS1_FIX[two]){ai=two;len=GS1_FIX[two]}
+      else if(/^3[1-6]\d\d$/.test(four)){ai=four;len=6}
+      else if(/^41[0-7]$/.test(three)){ai=three;len=13}
+      else if(/^(24[0-3]|25[0-5]|40[0-3]|42[0-2])$/.test(three)){ai=three}
+      else if(/^(70[0-3]\d|8\d\d\d)$/.test(four)){ai=four}
+      else if(/^(10|21|22|30|37|9\d)$/.test(two)){ai=two}
+      else return null;
+      i+=ai.length;let v;
+      if(len){v=s.substr(i,len);if(v.length!==len)return null;i+=len}
+      else{const e=s.indexOf("\u001d",i);v=e<0?s.slice(i):s.slice(i,e);i=e<0?s.length:e+1}
+      if(!v)return null;out.push(`(${ai})${v}`);
+    }
+    return out.length?out.join(""):null;
+  }
   async function visScan(done){
-    let stream=null, timer=null, det=null, found=null, shot=null;
+    let stream=null, timer=null, det=null, found=null, shot=null, cand=null, torch=false;
     const d=document.createElement("div");d.className="visscan";d.setAttribute("role","dialog");d.setAttribute("aria-modal","true");d.setAttribute("aria-label","Scanner un code-barres");
     d.innerHTML=`<header><button type="button" class="visround" data-x aria-label="Fermer le scan">✕</button><div class="vist"><b>Scanner un code-barres</b><span>Étiquette fournisseur, emplacement, support…</span></div></header>
       <div class="visscanv"><video playsinline muted autoplay></video><div class="visscanf" aria-hidden="true"></div></div>
       <div class="visscanr" aria-live="polite"><p class="muted">Visez le code-barres, il est lu automatiquement.</p></div>`;
+    d.querySelector("header").insertAdjacentHTML("beforeend",`<button type="button" class="btn ghost vistorch" data-torch hidden aria-pressed="false">Lampe</button>`);
     document.body.appendChild(d);
     const video=d.querySelector("video"), out=d.querySelector(".visscanr");
     const stop=()=>{clearInterval(timer);timer=null;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null};
@@ -4031,22 +4055,34 @@
     d.querySelector("[data-x]").onclick=()=>close(null);
     const start=async()=>{
       if(shot&&shot.parentNode)shot.remove();video.hidden=false;
-      found=null;shot=null;
-      out.innerHTML=`<p class="muted">Visez le code-barres, il est lu automatiquement.</p>`;
-      try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false})}
+      found=null;shot=null;cand=null;
+      out.innerHTML=`<p class="muted">Visez le code-barres, il est lu automatiquement. Pour un code long, approchez-vous jusqu'à ce qu'il remplisse la largeur.</p>`;
+      // haute résolution : indispensable pour les codes 1D longs (GS1-128), dont les barres sont fines
+      try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}},audio:false})}
       catch(e){out.innerHTML=`<p class="uierr">Accès à l'appareil photo refusé ou impossible. Autorisez la caméra pour ce site dans les réglages du navigateur.</p>`;return}
       video.srcObject=stream;try{await video.play()}catch(e){}
+      const track=stream.getVideoTracks()[0];
+      try{await track.applyConstraints({advanced:[{focusMode:"continuous"}]})}catch(e){}
+      const tb=d.querySelector("[data-torch]");
+      try{const cp=track.getCapabilities?track.getCapabilities():{};if(cp.torch){tb.hidden=false;tb.onclick=async()=>{torch=!torch;try{await track.applyConstraints({advanced:[{torch}]});tb.setAttribute("aria-pressed",torch)}catch(e){}}}}catch(e){}
       if(!det){let fm;try{fm=await window.BarcodeDetector.getSupportedFormats()}catch(e){}det=new window.BarcodeDetector(fm&&fm.length?{formats:fm}:undefined)}
       timer=setInterval(async()=>{
         if(!video.videoWidth||found)return;
         let r;try{r=await det.detect(video)}catch(e){return}
-        if(!r||!r.length||found)return;
-        found=r[0];
+        if(!r||!r.length||found){if(!r||!r.length)cand=null;return}
+        // plusieurs codes visibles : on retient celui le plus proche du centre de l'image
+        const cx=video.videoWidth/2, cy=video.videoHeight/2, dist=x=>{const b=x.boundingBox||{x:cx,y:cy,width:0,height:0};return Math.hypot(b.x+b.width/2-cx,b.y+b.height/2-cy)};
+        const best=r.slice().sort((a,b)=>dist(a)-dist(b))[0], key=best.format+"|"+best.rawValue;
+        // confirmation : la même lecture doit revenir deux fois de suite (évite les fausses lectures)
+        if(!cand||cand.key!==key){cand={key,n:1};return}
+        if(++cand.n<2)return;
+        found=best;
         const c=document.createElement("canvas"), k=Math.min(1,VIS_MAX/Math.max(video.videoWidth,video.videoHeight));
         c.width=Math.round(video.videoWidth*k);c.height=Math.round(video.videoHeight*k);c.getContext("2d").drawImage(video,0,0,c.width,c.height);shot=c;
         stop();c.className="visshot";video.hidden=true;d.querySelector(".visscanv").appendChild(c);
-        const raw=String(found.rawValue||""), gs1=raw.includes("\u001d"), fmt=(BC_FMT[found.format]||found.format||"Code-barres")+(gs1?" (données GS1)":"");
-        out.innerHTML=`<div class="visbc"><span class="muted">Format</span><b>${esc(fmt)}</b><span class="muted">Contenu</span><code>${esc(raw.replace(/\u001d/g," | "))||"(vide)"}</code></div>
+        const raw0=String(found.rawValue||""), g=gs1Parse(raw0), raw=g||raw0.replace(/\u001d/g," | ");
+        const fmt=g?(found.format==="code_128"?"GS1-128":found.format==="data_matrix"?"GS1 Datamatrix":found.format==="qr_code"?"GS1 QR code":(BC_FMT[found.format]||found.format)+" (GS1)"):(BC_FMT[found.format]||found.format||"Code-barres");
+        out.innerHTML=`<div class="visbc"><span class="muted">Format</span><b>${esc(fmt)}</b><span class="muted">Contenu</span><code>${esc(raw)||"(vide)"}</code></div>
           <label class="vischk"><input type="checkbox" data-shot checked><span>Joindre la photo de l'étiquette</span></label>
           <div class="visscanb"><button type="button" class="btn" data-again>Scanner à nouveau</button><button type="button" class="btn primary" data-use>Ajouter à la note</button></div>`;
         out.querySelector("[data-again]").onclick=start;
@@ -4057,7 +4093,7 @@
             await idbPut("photos",{id,acct:visAcct(),pid:visCur.projectId,vid:visCur.id,blob,up:false,del:false,at:Date.now()});
             photo={id,caption:`Code-barres ${fmt}`.slice(0,200)};
           }
-          close({text:`Code-barres ${fmt} : ${raw.replace(/\u001d/g," | ")}`,photo});
+          close({text:`Code-barres ${fmt} : ${raw}`,photo});
         };
       },250);
     };
