@@ -4009,7 +4009,7 @@
     };
     const draw=()=>{
       const s=shots[cur];
-      d.innerHTML=`<header><button type="button" class="visround" data-x aria-label="Abandonner les photos">✕</button><div class="vist"><b>Photo ${cur+1} sur ${shots.length}</b><span>Entourez ou fléchez au doigt</span></div><button type="button" class="btn ghost" data-retake>Reprendre</button></header>
+      d.innerHTML=`<header><button type="button" class="visround" data-x aria-label="Abandonner les photos">✕</button><div class="vist"><b>Photo ${cur+1} sur ${shots.length}</b><span>Entourez ou fléchez au doigt</span></div><button type="button" class="visround" data-rot aria-label="Pivoter la photo d'un quart de tour" title="Pivoter"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.4 5.7"></path><path d="M20 4v7h-7"></path></svg></button><button type="button" class="btn ghost" data-retake>Reprendre</button></header>
         <div class="visstagecv"><canvas></canvas></div>
         <div class="vistools" role="toolbar" aria-label="Annotation">${[["circle","Cercle"],["arrow","Flèche"],["pen","Crayon"]].map(([k,l])=>`<button type="button" data-tool="${k}" aria-pressed="${tool===k}">${l}</button>`).join("")}<span class="sp"></span>${[["#F2B705","jaune"],["#E5484D","rouge"],["#FFFFFF","blanc"]].map(([c,l])=>`<button type="button" class="viscol" data-col="${c}" style="background:${c}" aria-label="Couleur ${l}" aria-pressed="${color===c}"></button>`).join("")}<button type="button" class="visround" data-undo aria-label="Annuler le dernier trait">↶</button></div>
         <input type="text" class="viscapt" maxlength="200" placeholder="Légende (ex. : quai 3, étiquette actuelle)" aria-label="Légende de la photo" value="${esc(s.caption)}">
@@ -4025,6 +4025,12 @@
       d.querySelectorAll("[data-tool]").forEach(b=>b.onclick=()=>{tool=b.dataset.tool;d.querySelectorAll("[data-tool]").forEach(x=>x.setAttribute("aria-pressed",x===b))});
       d.querySelectorAll("[data-col]").forEach(b=>b.onclick=()=>{color=b.dataset.col;d.querySelectorAll("[data-col]").forEach(x=>x.setAttribute("aria-pressed",x===b))});
       d.querySelector("[data-undo]").onclick=()=>{s.shapes.pop();paint(cv,s)};
+      // rotation d'un quart de tour (sens horaire) : l'image et les annotations déjà tracées tournent ensemble
+      d.querySelector("[data-rot]").onclick=()=>{
+        const b=s.base, c=document.createElement("canvas");c.width=b.height;c.height=b.width;
+        const g=c.getContext("2d");g.translate(c.width,0);g.rotate(Math.PI/2);g.drawImage(b,0,0);
+        const H=b.height;s.shapes.forEach(sh=>{sh.p=sh.p.map(([x,y])=>[H-y,x])});s.base=c;draw();
+      };
       d.querySelectorAll("[data-i]").forEach(b=>b.onclick=()=>{cur=+b.dataset.i;draw()});
       d.querySelector("[data-retake]").onclick=async()=>{const f=await visPickFile();if(!f)return;try{s.base=await visLoadImage(f);s.shapes=[]}catch(e){}draw()};
       d.querySelector("[data-galm]").onclick=async()=>{const fs=await visPickFiles("gallery");if(!fs.length)return;const add=await visLoadShots(fs);if(!add.length){uiAlert("Images illisibles.");return}cur=shots.length;shots.push(...add);draw()};
