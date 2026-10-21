@@ -4529,8 +4529,8 @@
   // ---------- Transcription sur l'ordinateur (Whisper, dans le navigateur) ----------
   // Bibliothèque transformers.js hébergée avec l'appli (vendor/transformers) ; le modèle est téléchargé une fois
   // depuis huggingface.co puis gardé dans le cache du navigateur. Le son ne quitte jamais l'ordinateur.
-  const TR_MODELS={standard:{id:"onnx-community/whisper-small",l:"Standard (conseillé)",d:"Téléchargement plus léger, transcription plus rapide. Adapté à un PC portable courant."},
-    precis:{id:"onnx-community/whisper-large-v3-turbo",l:"Précis",d:"Meilleur sur le bruit d'entrepôt et les termes techniques ; plus lourd à télécharger et plus lent."}};
+  const TR_MODELS={standard:{id:"onnx-community/whisper-small",l:"Standard (conseillé)",d:"Téléchargement d'environ 240 Mo, transcription plus rapide. Adapté à un PC portable courant."},
+    precis:{id:"onnx-community/whisper-large-v3-turbo",l:"Précis",d:"Meilleur sur le bruit d'entrepôt et les termes techniques. Téléchargement d'environ 1 Go, transcription nettement plus lente."}};
   const tr={q:[],busy:null,worker:null,dl:null,ready:{},err:""};
   const trOk=()=>!isPhone()&&typeof Worker!=="undefined"&&typeof WebAssembly!=="undefined"&&!!(window.AudioContext||window.webkitAudioContext);
   const trModel=()=>TR_MODELS[ui.trModel]?ui.trModel:"standard";
@@ -4616,7 +4616,7 @@
       const d=document.createElement("dialog");d.className="uidlg trdlg";d.setAttribute("aria-label","Transcription sur cet ordinateur");
       const cur=trModel();
       d.innerHTML=`<form method="dialog"><h3>Transcription sur cet ordinateur</h3>
-        <p class="uimsg">Pour transcrire, l'appli télécharge une seule fois un modèle de reconnaissance vocale (quelques centaines de Mo). Il reste ensuite sur cet ordinateur : les enregistrements ne sont jamais envoyés sur Internet.</p>
+        <p class="uimsg">Pour transcrire, l'appli télécharge une seule fois un modèle de reconnaissance vocale. Il reste ensuite sur cet ordinateur : les enregistrements ne sont jamais envoyés sur Internet.</p>
         <fieldset class="trq"><legend>Qualité de transcription</legend>${Object.entries(TR_MODELS).map(([k,m])=>`<label><input type="radio" name="trq" value="${k}" ${k===cur?"checked":""}><span><b>${m.l}</b><small>${m.d}</small></span></label>`).join("")}</fieldset>
         <div class="trdl" hidden><div class="trdlh"><span>Téléchargement du modèle…</span><span data-trp>0 %</span></div><div class="trbar"><i></i></div><small>Vous pouvez continuer à travailler dans l'appli pendant le téléchargement.</small></div>
         <p class="trnote">Fonctionne sur ordinateur, dans Chrome ou Edge. Sur le téléphone, les enregistrements attendent d'être transcrits depuis le PC.</p>
