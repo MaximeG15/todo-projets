@@ -17,5 +17,8 @@ for t in tests:
     if code:
         failed.append(t.stem)
         print("\n".join("    " + l for l in out.strip().splitlines()[-25:]))
+        # dans GitHub Actions : le détail apparaît aussi dans les annotations du traitement
+        bad = [l.strip() for l in out.splitlines() if l.startswith("FAIL") or "Error" in l][-6:] or out.strip().splitlines()[-3:]
+        print(f"::error title={t.stem}::" + " | ".join(bad).replace("\n", " ")[:900])
 print(f"\n{len(tests) - len(failed)}/{len(tests)} tests réussis")
 sys.exit(1 if failed else 0)
