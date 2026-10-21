@@ -1,0 +1,6 @@
+ok code128
+ok gs1-128
+ok ean13
+ok datamatrix
+ok gs1datamatrix
+ok qrcode
