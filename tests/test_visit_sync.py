@@ -49,7 +49,7 @@ with sync_playwright() as pw:
     # --- A : rafraîchissement à l'ouverture d'une visite
     pg.evaluate("""()=>{const r=window.__db.visits[0],f=r.notes[0].flow,now=Date.now();r.notes.push({id:'nd',flow:f,type:'note',text:'Note D',photos:[],at:now,u:now});r.updated_at=now+10}""")
     v.locator("[data-back]").click();v.locator("[data-back]").click();pg.wait_for_timeout(200)
-    pg.locator("#lists .mtgrow").first.click();pg.wait_for_timeout(800)
+    pg.locator("#lists .mtgrow .ttl").first.click();pg.wait_for_timeout(800)
     v.locator(".vistile",has_text="Réception").click();pg.wait_for_timeout(300)
     ok(v.locator(".visnote",has_text="Note D").count()==1,"A : ouverture de la visite — version du serveur récupérée")
     # --- scan de code-barres

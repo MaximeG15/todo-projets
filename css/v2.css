@@ -276,3 +276,270 @@ dialog.cmdk::backdrop{background:rgba(15,30,40,.42)}
   #lists .task.sw-l::before{content:"Reporter à demain";right:16px}
   #lists .task.swiping > *{background:var(--panel);border-radius:var(--r)}
 }
+
+/* =====================================================================
+   Visites 2.0 : barre claire, accueil guidé, saisie expliquée, bilan lisible,
+   ordinateur en trois colonnes
+   ===================================================================== */
+.tag.vt-n{background:var(--chip);color:var(--chipink);font-weight:600}
+.tag.vt-cli{background:var(--clisoft);color:var(--cli);font-weight:600}
+.tag.vt-act{background:var(--signalsoft);color:var(--signalink);font-weight:600}
+.tag.vt-au{background:var(--waitsoft);color:var(--wait);font-weight:600}
+.vsr{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.vbar{display:block;height:8px;border-radius:4px;background:var(--line2);overflow:hidden}
+.vbar.sm{height:5px;border-radius:3px}
+.vbar i{display:block;height:100%;border-radius:inherit;background:var(--signal)}
+.vbar.ok i{background:var(--ok)}
+.vislink{display:inline-flex;align-items:center;gap:4px;height:34px;padding:0 6px;border:0;background:transparent;color:var(--steel);font:inherit;font-size:14.5px;font-weight:600;cursor:pointer;border-radius:8px}
+.vislink:hover{background:var(--soft)}
+.vissh{display:flex;align-items:center;gap:8px}
+.vissh h3{margin:0;flex:1;font-size:16px;font-weight:700}
+.vissh b,.vissh .muted{font-size:13.5px;font-weight:600;color:var(--muted)}
+
+/* barre du haut */
+.visv{background:var(--bg)}
+.vish{background:var(--panel);color:var(--ink);border-bottom:1px solid var(--line);padding:calc(6px + env(safe-area-inset-top,0px)) 16px 10px;gap:8px}
+.visrow{flex-wrap:wrap;row-gap:4px}
+.visback{color:var(--steel);margin-left:-8px;width:auto;min-width:44px;padding:0 6px;gap:2px;display:inline-flex;align-items:center;font-size:15px;font-weight:600}
+.visback span{white-space:nowrap}
+.visback.vismb{margin:0;width:40px;min-width:40px;height:40px;padding:0;justify-content:center;border:1px solid var(--line);border-radius:11px;color:var(--chipink);background:var(--panel)}
+.visback:last-child{margin-right:0}
+.vist{order:9;flex:1 0 100%;line-height:1.15;gap:2px}
+.vist b{font-size:26px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.vist span{color:var(--muted);font-size:13.5px}
+.vsp{flex:1}
+.visst{flex:none;padding:0 10px;height:28px;border-radius:14px;gap:6px;background:var(--oksoft,#E7F5EE);color:var(--okink,#1F6B47);font-size:13px;font-weight:600;max-width:180px}
+.visst span{flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.visst i{background:var(--ok)}
+.visst.wait{background:var(--signalsoft);color:var(--signalink)}.visst.wait i{background:#D99A00}
+.visst.off,.visst.loc{background:var(--chip);color:var(--chipink)}.visst.off i,.visst.loc i{background:var(--faint)}
+.visendh{height:40px;padding:0 12px;border-radius:11px;font-weight:600;font-size:14.5px}
+.vischips{padding-top:2px}
+.vischips button{border-color:var(--line);color:var(--chipink);background:var(--panel)}
+.vischips button[aria-selected="true"]{background:var(--ink);border-color:var(--ink);color:var(--panel)}
+.recpill{order:8}
+
+/* accueil de la visite */
+.vism{gap:12px}
+.vism.vhome{padding-bottom:24px}
+.visgoal{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.visgi{width:36px;height:36px;border-radius:10px;background:var(--sel);color:var(--steel);display:grid;place-items:center;flex:none}
+.visgt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.visgt b{font-size:15px;font-weight:600}
+.visgt small{font-size:13px;color:var(--muted)}
+.visgoal > svg{color:var(--faint);flex:none}
+.visprogc{display:flex;flex-direction:column;gap:10px;padding:14px 16px;border:1px solid var(--line);border-radius:16px;background:var(--panel)}
+.vpch{display:flex;align-items:baseline;gap:6px}
+.vpcl{flex:1;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.vpch b{font:700 22px "Barlow Condensed","Arial Narrow",sans-serif}
+.vpch span:last-child{font-size:13.5px;color:var(--muted)}
+.vpct{display:flex;gap:6px;flex-wrap:wrap}
+.vpct:empty{display:none}
+.vishd{align-items:center;padding:4px 2px 0}
+.vishd h2{flex:1;font:700 18px Barlow,"Segoe UI",sans-serif}
+.vishd span{font-size:13.5px}
+.vislist{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.vislist .vistile{min-height:62px;flex-direction:row;align-items:center;gap:12px;padding:10px 14px;border:0;border-bottom:1px solid var(--line2);border-radius:0;background:transparent}
+.vislist .vistile:last-child{border-bottom:0}
+.vislist .vistile:hover{background:var(--soft)}
+.vislist .vistile.on{background:var(--signalsoft)}
+.vtt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.vtt b{font-size:16px;font-weight:600}
+.vtt span{font-size:13.5px;color:var(--muted)}
+.vtt .vtodo{color:var(--faint)}
+.vtp{display:flex;align-items:center;gap:8px;flex:none}
+.vtp .vbar{width:60px}
+.vistile .visprog{font-size:12.5px;font-weight:600;color:var(--muted);white-space:nowrap}
+.vistile.alldone .visprog{color:var(--ok)}
+.vtc{color:var(--faint);display:grid;flex:none}
+/* barre d'actions rapides : galerie, photo, enregistrer */
+.visf.vqf{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding-left:20px;padding-right:20px}
+.visqb{display:flex;flex-direction:column;align-items:center;gap:3px;width:84px;border:0;background:transparent;color:var(--chipink);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;padding:4px 0}
+.visqb:first-child{justify-self:start}.visqb:last-child{justify-self:end}
+.visqb.rec{color:var(--late)}
+.visfab{width:66px;height:66px}
+
+/* notes d'un flux */
+.vism.notes{gap:10px}
+.visitems{display:flex;flex-direction:column;gap:4px;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:16px}
+.visitems .vissh{margin-bottom:4px}
+.visit{border-top:0;padding:8px 10px;margin:0 -10px;border-radius:12px}
+.visit.next{background:var(--signalsoft)}
+.visit .visnext{color:var(--signalink);font-size:12px;font-weight:700}
+.visit .visrep{height:34px;border-radius:10px;font-weight:600;background:var(--panel)}
+.visit.seen .visrep{display:none}
+.visseen{width:26px;height:26px}
+.visseen[aria-pressed="true"]::after{left:7px;top:3px;width:6px;height:11px}
+.visseenl summary{display:flex;align-items:center;gap:6px;color:var(--ok);font-size:14px;font-weight:600;cursor:pointer;padding:6px 0;list-style:none}
+.visseenl summary::-webkit-details-marker{display:none}
+.visnote{border-radius:14px;padding:12px 14px;gap:8px}
+.visnh{font-size:13px}
+.visnh .nt{font-size:12.5px;padding:3px 8px;border-radius:6px}
+.nt-q{background:var(--clisoft);color:var(--cli)}
+.nt-act{background:var(--signalsoft);color:var(--signalink)}
+.nt.nt-au{background:var(--waitsoft);color:var(--wait)}
+.vismore{display:grid;place-items:center;width:34px;height:32px}
+.vph{border-radius:10px;width:96px;height:76px}
+.visfut{font-size:13px;color:var(--muted)}
+/* saisie : type expliqué, outils libellés */
+.viscap{gap:10px;padding:12px 16px calc(14px + env(safe-area-inset-bottom,0px));box-shadow:0 -6px 18px rgba(15,30,40,.06)}
+.viscap .visseg{display:flex;gap:6px;padding:0;background:transparent;flex-wrap:wrap}
+.viscap .visseg button{height:34px;padding:0 12px;border:1px solid var(--line);border-radius:17px;background:var(--panel);color:var(--chipink);font-weight:500}
+.viscap .visseg button[aria-checked="true"]{background:var(--ink);border-color:var(--ink);color:var(--panel);font-weight:600;box-shadow:none}
+.viscap .visseg button[data-t="question"][aria-checked="true"]{background:var(--cli);border-color:var(--cli);color:var(--panel)}
+.viscap .visseg button[data-t="action"][aria-checked="true"]{background:var(--signal);border-color:var(--signal);color:#16232B}
+.vishint{margin:-2px 0 0;font-size:13px;color:var(--muted)}
+.viscap[data-vt="question"] .vishint{color:var(--cli)}
+.viscap[data-vt="action"] .vishint{color:var(--signalink)}
+.viscap[data-vt="question"] .visin textarea{border:2px solid var(--cli)}
+.viscap[data-vt="action"] .visin textarea{border:2px solid var(--signal)}
+.viskit{order:9;display:flex;gap:6px;flex-wrap:wrap}
+.viskb{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 10px;border:0;border-radius:10px;background:var(--chip);color:var(--chipink);font:inherit;font-size:14px;font-weight:500;cursor:pointer}
+.viskb svg{width:18px;height:18px}
+.viskb.rec{color:var(--late)}
+.visin textarea{border-radius:14px}
+.viscam,.visok{border-radius:14px}
+.visok{background:var(--ink);color:var(--panel)}
+.visv.recording .viscap,.visv.recording .visf{display:none}
+
+/* bilan */
+.vism.end{gap:12px}
+.viscard{border-radius:16px;padding:14px 16px;gap:10px}
+.viscard h3{font-size:16px}
+.viskpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.viskpi{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;border-radius:12px;background:var(--chip);color:var(--chipink)}
+.viskpi b{font:700 26px/1 "Barlow Condensed","Arial Narrow",sans-serif}
+.viskpi span{font-size:12.5px;font-weight:600}
+.viskpi.vt-cli{background:var(--clisoft);color:var(--cli)}
+.viskpi.vt-act{background:var(--signalsoft);color:var(--signalink)}
+.viscov{display:flex;align-items:center;gap:10px;margin:0}
+.viscov .vbar{flex:1}
+.viscov b{font-size:13.5px;white-space:nowrap}
+.visflsum{display:flex;flex-direction:column;gap:4px;font-size:13.5px;color:var(--muted)}
+.visflsum b{color:var(--ink);font-weight:600}
+.vckh{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.vckh em{font-style:normal;font-size:13px;color:var(--muted)}
+.vischk.sm{padding:9px 0}
+.vischk input{accent-color:var(--steel)}
+.visleft{flex-wrap:wrap}
+.visseg3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px;padding:3px;border-radius:10px;background:var(--chip);flex:1 1 100%}
+.visseg3 label{position:relative;display:block}
+.visseg3 input{position:absolute;opacity:0;inset:0;margin:0}
+.visseg3 span{display:grid;place-items:center;height:32px;border-radius:8px;font-size:14px;color:var(--muted);cursor:pointer}
+.visseg3 input:checked + span{background:var(--panel);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(15,30,40,.12)}
+.visseg3 input:focus-visible + span{outline:2px solid var(--steel);outline-offset:1px}
+.visf.vendf{gap:8px}
+.visf2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.visf2 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:46px;font-weight:600}
+.vendf > [data-apply]{height:52px;font-weight:700}
+
+/* préparation */
+.visprepg{display:flex;flex-direction:column;gap:14px}
+.vpc1,.vpc2,.vpc3{display:flex;flex-direction:column;gap:12px;min-width:0}
+.visfl{background:var(--panel);border-radius:14px;padding:10px 12px}
+.visflh input{width:18px;height:18px;margin:0;accent-color:var(--steel)}
+.visflt{flex:1;min-width:0;display:flex;align-items:center;gap:8px;height:36px;border:0;background:transparent;font:inherit;color:var(--ink);cursor:pointer;text-align:left;padding:0}
+.visflt b{flex:1;font-size:16px;font-weight:600}
+.visflt svg{color:var(--faint);transition:transform .15s}
+.visfl.open .visflt svg{transform:rotate(90deg)}
+.visflt:disabled{cursor:default}
+.visfl.off .visflt b{color:var(--faint)}
+.visprepi{background:var(--soft);border-radius:10px;padding:8px 10px}
+.visppl{display:flex!important;flex-wrap:wrap;gap:8px}
+.visppl label{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 12px;border:1px solid var(--line);border-radius:18px;background:var(--panel);font-size:14.5px;cursor:pointer}
+.visppl label:has(input:checked){border-color:var(--steel);background:var(--sel)}
+.visppl input{width:16px;height:16px;margin:0;accent-color:var(--steel)}
+.visppl em{font-style:normal;font-size:12.5px;color:var(--muted)}
+.vispt{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line2)}
+.vispt > span{flex:1;min-width:0;font-size:14.5px}
+.vispt small{display:block;font-size:12.5px;color:var(--muted)}
+.vispt .btn,.vpc3 [data-seed]{height:34px;padding:0 10px;font-size:13.5px;font-weight:600;border-radius:9px}
+.vpc3 [data-seed]{align-self:flex-start}
+
+/* onglet Visites du projet */
+.vistopbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 6px}
+.vistopbar .btn{display:inline-flex;align-items:center;gap:8px;height:40px;font-weight:600;border-radius:11px}
+.vistopbar .btn svg{width:18px;height:18px}
+.vistopbar .muted{flex:1 1 280px;font-size:13.5px}
+.vislst{display:flex;flex-direction:column;gap:8px}
+.task.vrow{display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer}
+.task.vrow > .vbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.task.vrow .ttl{font-size:16px;font-weight:600}
+.task.vrow .meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.vmeta{font-size:13.5px;color:var(--muted)}
+.vdd{width:52px;flex:none;display:flex;flex-direction:column;align-items:center;line-height:1}
+.vdd b{font:700 26px "Barlow Condensed","Arial Narrow",sans-serif}
+.vdd small{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;text-align:center}
+.vprog{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.vprog .vbar{width:160px}
+.vacts{display:flex;align-items:center;gap:6px;flex:none}
+.vacts .btn{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;border-radius:10px;font-weight:600;font-size:14px}
+.vacts .btn svg{width:16px;height:16px}
+.vacts .vmore{width:36px;padding:0;justify-content:center}
+.task.vr-open{border:2px solid var(--signal)}
+@media (max-width:760px){
+  .task.vrow{flex-wrap:wrap;gap:10px 12px}
+  .task.vrow > .vbody{flex:1 1 calc(100% - 70px)}
+  .vacts{flex:1 1 100%;justify-content:flex-end}
+  .vacts [data-pdfl] span{display:none}
+  .vprog .vbar{width:110px}
+}
+
+/* ---------- Ordinateur ---------- */
+@media (min-width:900px){
+  .vish{padding:12px 28px}
+  .visv > .visf.vendf{justify-content:flex-end}
+}
+@media (min-width:1100px){
+  .visv > *{max-width:none}
+  .vish > *{max-width:none}
+  .vish{padding:0 28px;min-height:72px;justify-content:center}
+  .visrow{flex-wrap:nowrap;gap:14px}
+  .visrow > .visback[data-back]{padding-right:14px;border-right:1px solid var(--line);border-radius:0;margin-left:0;height:40px}
+  .vist{order:0;flex:1 1 auto;min-width:0}
+  .vist b{-webkit-line-clamp:1}
+  .vsp{display:none}
+  .visdesk{flex:1;min-height:0;display:grid;grid-template-columns:300px minmax(0,1fr) 340px}
+  .visdl,.visdr{min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:20px 18px;background:var(--panel)}
+  .visdl{border-right:1px solid var(--line)}
+  .visdr{border-left:1px solid var(--line)}
+  .visdl .visprogc{border:0;padding:0;border-radius:0}
+  .visdl .vislist{border:0;border-radius:0;margin:0 -18px;border-top:1px solid var(--line2)}
+  .visdl .vislist .vistile{padding:10px 18px}
+  .visdl .vishd{padding:0}
+  .visdl .vishd h2{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+  .visdc{min-width:0;min-height:0;display:flex;flex-direction:column}
+  .visdc > .vism{flex:1;padding:12px 28px 20px}
+  .visdch{display:flex;align-items:center;gap:12px;padding:18px 28px 4px}
+  .visdch > div{flex:1;display:flex;flex-direction:column;gap:2px}
+  .visdch h2{margin:0;font-size:22px;font-weight:700}
+  .visdch span{font-size:13.5px;color:var(--muted)}
+  .visdc > .viscap{margin:0 28px 20px;border:1px solid var(--line);border-radius:16px;padding:14px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;row-gap:10px;max-width:none}
+  .visdc > .viscap > *{grid-column:1 / -1}
+  .visdc > .viscap > .visseg{grid-column:1}
+  .visdc > .viscap > .viskit{grid-column:2;grid-row:1;order:0}
+  .visdc > .visf.vqf{margin:0 28px 20px;border:1px solid var(--line);border-radius:16px;max-width:none}
+  .visdc > .visrec{margin:0 28px 20px;border-radius:16px;max-width:none}
+  .visdr .visitems,.visdr .visinfo{border:0;padding:0;border-radius:0}
+  .visdr .visitems + .visinfo{border-top:1px solid var(--line2);padding-top:14px}
+  .visdr .trban{flex-direction:column;align-items:flex-start;background:var(--waitsoft);border:0}
+  .visdr .trbt{flex:none}
+  .visinfo{display:flex;flex-direction:column;gap:10px}
+  .visinfo p{margin:0;display:flex;gap:10px;align-items:flex-start;font-size:14.5px}
+  .visinfo p > svg{color:var(--muted);flex:none;margin-top:1px}
+  .vispp{display:flex;flex-wrap:wrap;gap:6px}
+  /* préparation : trois colonnes */
+  .vism.prep{padding:22px 28px}
+  .visprepg{display:grid;grid-template-columns:400px minmax(0,1fr) 340px;gap:18px;align-items:start}
+}
+@media (max-width:1099px){ .visinfo{display:flex;flex-direction:column;gap:8px;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:16px}.visinfo p{margin:0;display:flex;gap:8px;font-size:14.5px} }
+.vism.prep{display:flex!important;flex-direction:column;align-items:stretch!important}
+.vish .btn svg{width:18px;height:18px}
+.vish .btn{display:inline-flex;align-items:center;gap:8px}
+.task.vrow > div.vacts.vacts{flex-direction:row;align-items:center}
+
+:root{--oksoft:#E7F5EE;--okink:#1F6B47}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--oksoft:#1D3329;--okink:#6CC59A}}
+:root[data-theme="dark"]{--oksoft:#1D3329;--okink:#6CC59A}
+.viscard p.muted{margin:0}
+.visf2 .btn{white-space:nowrap;font-size:14.5px;padding:0 8px}

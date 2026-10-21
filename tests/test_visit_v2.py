@@ -1,0 +1,92 @@
+import os,sys;sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
+from helpers import APP,OUT,on_dialog
+import json
+from playwright.sync_api import sync_playwright
+# Visites 2.0 : barre claire, accueil guidé, saisie expliquée, bilan, liste par statut, ordinateur en trois colonnes
+errs=[]
+def ok(c,m):
+    print(("OK   " if c else "FAIL ")+m)
+    if not c: errs.append(m)
+P=[{"id":"o1","projectId":"p","text":"Format des étiquettes de réception ?","answer":"","hypothesis":"","erp":"","theme":"Réception","owner":"client","ownerName":"","status":"open","createdAt":1},
+   {"id":"o2","projectId":"p","text":"Zones de stockage ?","answer":"","hypothesis":"","erp":"","theme":"Stockage","owner":"client","ownerName":"","status":"open","createdAt":2},
+   {"id":"o3","projectId":"p","text":"Interface ERP des réceptions","answer":"","hypothesis":"","erp":"","theme":"Réception","owner":"mecalux","ownerName":"","status":"open","createdAt":3}]
+data={"projects":[{"id":"p","name":"Projet Alpha","color":"#E0703A"}],"tasks":[],"requests":[],"points":P,"deleted":[]}
+INIT="if(!localStorage.getItem('__seed')){localStorage.setItem('todo-projets',%s);localStorage.setItem('todo-mode','local');localStorage.setItem('__seed','1')}"%json.dumps(json.dumps(data))
+SHEET={}
+with sync_playwright() as pw:
+    b=pw.chromium.launch()
+    # ---------- Ordinateur : préparation, visite en trois colonnes ----------
+    pg=b.new_page(viewport={"width":1440,"height":900})
+    pg.on("pageerror",lambda e:errs.append("JS: "+str(e)))
+    on_dialog(pg,lambda d:d.accept(SHEET.get(d.type)))
+    pg.add_init_script(INIT)
+    pg.goto(APP);pg.wait_for_timeout(500)
+    pg.locator(".pbtn",has_text="Projet Alpha").click();pg.locator('#ptabs [data-tab="visits"]').click();pg.wait_for_timeout(300)
+    ok(pg.locator("#quick").is_hidden(),"onglet Visites : pas de barre « Ajouter une tâche »")
+    pg.locator("#lists [data-prep]").click();pg.wait_for_timeout(400)
+    v=pg.locator("#visview")
+    ok(v.locator(".vish [data-start]").is_visible() and v.locator(".vpc3 [data-addpt]").count()==1,"préparation (ordinateur) : Démarrer dans la barre du haut, point non repris proposé à droite")
+    ok(v.locator(".visfl.open").count()==2 and v.locator(".visfl:not(.open)",has=pg.locator("b",has_text="Expédition")).count()==1,"préparation : flux avec éléments dépliés, flux vides repliés")
+    v.locator(".visfl",has=pg.locator("b",has_text="Expédition")).locator("[data-tog]").click();pg.wait_for_timeout(200)
+    ex=v.locator(".visfl.open",has=pg.locator("b",has_text="Expédition"))
+    ok(ex.locator(".visprepadd input").is_visible(),"préparation : déplier un flux pour y ajouter un élément")
+    ex.locator(".visprepadd input").fill("Photographier les quais");ex.locator(".visprepadd button").click();pg.wait_for_timeout(200)
+    SHEET["sheet"]=None
+    v.locator(".vpc3 [data-addpt]").click();pg.wait_for_timeout(300)
+    ok(v.locator(".visfl",has=pg.locator("b",has_text="Réception")).locator(".visprepi").count()==2,"point Mecalux ajouté au flux de même thème")
+    v.locator('[data-k="goal"]').fill("Analyser réception et stockage");v.locator('[data-k="goal"]').dispatch_event("change")
+    v.locator("[data-start]").click();pg.wait_for_timeout(400)
+    ok(v.locator(".visdl").is_visible() and v.locator(".visdc").is_visible() and v.locator(".visdr").is_visible(),"ordinateur : trois colonnes (flux, notes, infos)")
+    ok("Analyser réception et stockage" in v.locator(".visdr .visinfo").inner_text(),"colonne de droite : objectif de la visite")
+    v.locator(".visdl .vistile",has_text="Réception").click();pg.wait_for_timeout(300)
+    ok(v.locator(".visdl .vistile.on",has_text="Réception").count()==1 and v.locator(".visdr .visitems .visit.next").count()==1,"flux ouvert : sélectionné à gauche, « À voir » à droite avec l'élément suivant")
+    v.locator('button[data-t="question"]').click()
+    ok("point ouvert" in v.locator(".vishint").inner_text(),"type « Question client » : conséquence expliquée")
+    v.locator(".visin textarea").click();pg.wait_for_timeout(100)
+    ok(v.locator('button[data-t="question"]').get_attribute("aria-checked")=="true","cliquer dans la saisie garde le type choisi")
+    v.locator(".visin textarea").fill("Faut-il gérer les réceptions sans bon de livraison ?");v.locator("[data-add]").click();pg.wait_for_timeout(300)
+    ok("Deviendra un point ouvert" in v.locator(".visnote").last.inner_text(),"note : ce qu'elle deviendra")
+    pg.screenshot(path=OUT+"visit2_pc.png")
+    v.locator(".visdl .vistile",has_text="Stockage").click();pg.wait_for_timeout(300)
+    ok(v.locator(".visdc h2").inner_text()=="Stockage","changer de flux depuis la colonne de gauche")
+    v.locator("[data-back]").click();pg.wait_for_timeout(200);v.locator("[data-back]").click();pg.wait_for_timeout(300)
+    # ---------- Téléphone ----------
+    pg.set_viewport_size({"width":390,"height":844});pg.wait_for_timeout(300)
+    pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.locator(".phtile",has_text="Visites").click();pg.wait_for_timeout(400)
+    ok(pg.locator("#lists .visgrp h2",has_text="En cours").count()==1,"liste : rubrique « En cours »")
+    ok(pg.locator("#lists .mtgrow [data-del]").count()==0 and pg.locator("#lists .mtgrow [data-vmore]").count()==1,"liste : suppression rangée dans le menu ⋯")
+    pg.locator("#lists .mtgrow [data-open]").click();pg.wait_for_timeout(400)
+    v=pg.locator("#visview")
+    ok(v.locator(".vish [data-end]").is_visible() and v.locator(".visst").is_visible(),"accueil : « Terminer » et état d'enregistrement dans la barre du haut")
+    ok(v.locator(".visgoal").is_visible() and "Analyser réception" in v.locator(".visgoal").inner_text(),"accueil : objectif rappelé")
+    ok("0 / 4" in v.locator(".visprogc").inner_text(),"accueil : avancement « 0 / 4 éléments vus »")
+    ok(v.locator(".vqf [data-qgal]").is_visible() and v.locator(".vqf [data-quick]").is_visible(),"accueil : galerie et photo dans la barre du bas")
+    pg.screenshot(path=OUT+"visit2_home.png")
+    v.locator(".vistile",has_text="Réception").click();pg.wait_for_timeout(300)
+    ok(v.locator(".visit.next").count()==1 and "Prochain" in v.locator(".visit.next").inner_text(),"flux : élément suivant mis en avant")
+    v.locator(".visit.next [data-seen]").click();pg.wait_for_timeout(200)
+    ok(v.locator(".visseenl").count()==1 and "1 élément vu" in v.locator(".visseenl summary").inner_text(),"éléments vus regroupés")
+    ok(v.locator(".viskit [data-gal]").inner_text().strip()=="Galerie","outils libellés")
+    v.locator('button[data-t="action"]').click();v.locator(".visin textarea").fill("Récupérer un exemple de bon de livraison");v.locator("[data-add]").click();pg.wait_for_timeout(300)
+    pg.screenshot(path=OUT+"visit2_flow.png")
+    v.locator("[data-back]").click();v.locator("[data-end]").click();pg.wait_for_timeout(300)
+    ok(v.locator(".viskpi").count()==4 and "2 / 4" not in v.inner_text() and "1 / 4" in v.inner_text(),"bilan : chiffres clés et avancement")
+    ap=v.locator("[data-apply]")
+    ok(ap.inner_text()=="Créer 1 point ouvert et 1 tâche","bilan : bouton « Créer 1 point ouvert et 1 tâche »")
+    v.locator("[data-one]").first.uncheck();pg.wait_for_timeout(100)
+    ok(ap.inner_text()=="Créer 1 tâche","bilan : le bouton suit les cases cochées")
+    v.locator(".visseg3 label",has_text="Tâche").first.click();pg.wait_for_timeout(100)
+    ok(ap.inner_text()=="Créer 2 tâches","restant à voir : choix en trois boutons")
+    pg.screenshot(path=OUT+"visit2_end.png")
+    ap.click();pg.wait_for_timeout(500)
+    st=pg.evaluate("JSON.parse(localStorage.getItem('todo-projets'))")
+    tk=[t for t in st["tasks"] if "Issu de la visite" in (t.get("note") or "")]
+    ok(len(tk)==2 and not any(o["text"].startswith("Faut-il") for o in st["points"]),"bilan appliqué : 2 tâches, la question décochée n'est pas créée")
+    v.locator("[data-done]").click();pg.wait_for_timeout(500)
+    ok(pg.locator("#lists .visgrp h2",has_text="Terminées").count()==1,"liste : visite rangée dans « Terminées »")
+    SHEET["sheet"]="Supprimer la visite"
+    pg.locator("#lists .mtgrow [data-vmore]").click();pg.wait_for_timeout(800)
+    ok(pg.locator("#lists .mtgrow").count()==0,"menu ⋯ de la liste : visite supprimée")
+    b.close()
+print("ERREURS :",errs or "aucune")
+sys.exit(1 if errs else 0)

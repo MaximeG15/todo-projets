@@ -45,7 +45,7 @@ with sync_playwright() as pw:
     pg.set_viewport_size({"width":390,"height":844});pg.wait_for_timeout(200)
     pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.wait_for_timeout(200)
     ok("Préparée" in pg.locator(".phtile",has_text="Visites").inner_text(),"accueil du projet : visite préparée")
-    pg.locator(".phtile",has_text="Visites").click();pg.locator("#lists .mtgrow").first.click();pg.wait_for_timeout(300)
+    pg.locator(".phtile",has_text="Visites").click();pg.locator("#lists .mtgrow .ttl").first.click();pg.wait_for_timeout(300)
     v.locator("[data-start]").click();pg.wait_for_timeout(300)
     ok(v.locator(".vistile:not(.add)").count()==6 and v.locator(".vistile",has_text="Inventaire").count()==0,"visite démarrée : flux non couverts masqués")
     ok("0/2 vus" in v.locator(".vistile",has_text="Réception").inner_text(),"avancement sur la tuile")

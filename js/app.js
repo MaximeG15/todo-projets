@@ -1394,7 +1394,7 @@
     // en-tête
     const p=view==="all"?null:proj(view);
     const agenda=mode==="agenda";
-    $("#quick").hidden=mode==="dash"||mode==="trash"||mode==="requests"||mode==="points"||mode==="home"||mode==="projects"||mode==="overview";
+    $("#quick").hidden=mode==="dash"||mode==="trash"||mode==="requests"||mode==="points"||mode==="home"||mode==="projects"||mode==="overview"||mode==="visits";
     $("#wrap").classList.toggle("wide",agenda||mode==="dash");
     // onglets du projet : tâches / demandes client
     const tabs=$("#ptabs");$("#stucklbl").textContent=p?p.name:"";
@@ -3912,10 +3912,10 @@
   function visStatus(){
     const el=document.querySelector("#visview .visst");if(!el)return;
     const off=navigator.onLine===false, n=vis.pending;
-    el.className="visst"+(off?" off":n?" wait":" ok");
-    el.innerHTML=MODE!=="cloud"?`<i></i><span>Enregistré sur cet appareil (mode local)</span>`
-      :off?`<i></i><span>Hors ligne · enregistré sur le téléphone</span>${n?`<b>${plural(n,"élément")} en attente</b>`:""}`
-      :n?`<i></i><span>Envoi en cours…</span><b>${plural(n,"élément")} en attente</b>`:`<i></i><span>En ligne · tout est enregistré</span>`;
+    el.className="visst"+(MODE!=="cloud"?" loc":off?" off":n?" wait":" ok");
+    const long=MODE!=="cloud"?"Enregistré sur cet appareil (mode local)":off?`Hors ligne · enregistré sur le téléphone${n?` · ${plural(n,"élément")} en attente`:""}`:n?`Envoi en cours · ${plural(n,"élément")} en attente`:"En ligne · tout est enregistré";
+    const sh=MODE!=="cloud"?"Sur cet appareil":off?`Hors ligne${n?` · ${n} en attente`:""}`:n?`${n} en attente`:"Enregistré";
+    el.title=long;el.innerHTML=`<i></i><span aria-hidden="true">${sh}</span><span class="vsr">${long}</span>`;
   }
   function renderVisit(){
     let o=$("#visview");
@@ -3952,17 +3952,84 @@
       toast(`${plural(photos.length,"photo")} ajoutée${photos.length>1?"s":""} au flux « ${(visCur.flows.find(f=>f.id===fid)||{}).name} ».`);
     },src);
   }
-  function visHomeScreen(o,v,p){
-    const ns=v.notes||[], nPh=ns.reduce((n,x)=>n+(x.photos||[]).length,0);
-    o.innerHTML=`<header class="vish"><div class="visrow">${visBack("Quitter la visite")}<div class="vist"><b>${esc(v.title)}</b><span>${esc(p.name)} · ${esc(new Date(visDate(v)).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"}))}${v.status==="done"?" · terminée":""}</span></div><button type="button" class="visback" data-vm aria-label="Actions sur la visite">⋯</button></div><div class="visst"></div></header>
-      <main class="vism">${trBanner(v)}<div class="vishd"><h2>Flux</h2><span>${plural(ns.length,"note")} · ${plural(nPh,"photo")}</span></div>
-      <div class="vistiles">${visFlows(v).map(f=>{const n=visNotes(v,f.id), ph=n.reduce((k,x)=>k+(x.photos||[]).length,0), q=n.filter(x=>x.type==="question").length, it=visItems(v,f.id), seen=it.filter(i=>i.seen).length;
-        return `<button type="button" class="vistile${it.length&&seen===it.length?" alldone":""}" data-f="${esc(f.id)}"><b>${esc(f.name)}</b><span>${n.length||ph?`${plural(n.length,"note")} · ${plural(ph,"photo")}`:"Pas encore de note"}</span>${it.length?`<i class="visprog">${seen}/${it.length} vus</i>`:""}${q?`<em>${plural(q,"question")}</em>`:""}</button>`}).join("")}
-      <button type="button" class="vistile add" data-addf><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Ajouter un flux</button></div></main>
-      <footer class="visf"><button type="button" class="btn visend" data-end>${v.status==="done"?"Bilan de la visite":"Terminer la visite"}</button><button type="button" class="visgal" data-qgal aria-label="Importer des photos de la galerie (le flux est choisi ensuite)">${GAL_SVG}</button><button type="button" class="visfab" data-quick aria-label="Photo rapide (le flux est choisi ensuite)">${CAM_SVG}</button></footer>`;
-    o.querySelector("[data-back]").onclick=visClose;
-    o.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{visScreen="flow";visFlowId=b.dataset.f;visStage=[];renderVisit()});
-    o.querySelector("[data-vm]").onclick=async()=>{
+  // ---------- Visite 2.0 : en-tête clair, accueil, flux, vue ordinateur en trois colonnes ----------
+  const visWide=()=>window.matchMedia("(min-width:1100px)").matches;
+  try{window.matchMedia("(min-width:1100px)").addEventListener("change",()=>{if(visCur)renderVisit()})}catch(e){}
+  const VI={
+    chev:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>`,
+    back:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>`,
+    more:`<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.9"></circle><circle cx="12" cy="12" r="1.9"></circle><circle cx="19" cy="12" r="1.9"></circle></svg>`,
+    plus:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>`,
+    check:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg>`,
+    target:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="4"></circle></svg>`,
+    pin:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"></path><circle cx="12" cy="9.5" r="2.5"></circle></svg>`,
+    users:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 4a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM22 19v-1a4 4 0 0 0-3-3.9M16 4.1a3.5 3.5 0 0 1 0 6.8"></path></svg>`,
+    doc:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 13h6M9 17h6"></path></svg>`
+  };
+  const visMoreBtn=(attr,label)=>`<button type="button" class="visback vismb" ${attr} aria-label="${label}">${VI.more}</button>`;
+  // En-tête : retour, titre, pastille d'enregistrement, actions ; la pastille (.visst) est remplie par visStatus()
+  const visHead=(backAria,backTxt,title,sub,acts,below)=>`<header class="vish"><div class="visrow"><button type="button" class="visback" data-back aria-label="${backAria}">${VI.back}<span>${esc(backTxt)}</span></button><div class="vist"><b>${esc(title)}</b><span>${sub}</span></div><span class="vsp"></span><div class="visst" role="status"></div>${acts||""}</div>${below||""}</header>`;
+  const visDay=v=>new Date(visDate(v)).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
+  const visSub=(v,p)=>`${esc(p.name)} · ${esc(visDay(v))}${v.startedAt&&v.status!=="prep"?` · démarrée à ${hm(v.startedAt)}`:""}${v.status==="done"?" · terminée":""}`;
+  const visItemsOn=v=>{const on=new Set(visFlows(v).map(f=>f.id));return (v.items||[]).filter(i=>on.has(i.flow))};
+  function visCounts(ns){
+    const ph=ns.reduce((k,x)=>k+(x.photos||[]).length,0), q=ns.filter(x=>x.type==="question").length, a=ns.filter(x=>x.type==="action").length, au=ns.filter(x=>x.audio).length;
+    return {n:ns.length,ph,q,a,au};
+  }
+  function visGoalCard(v){
+    const pr=v.prep||{}, parts=pr.participants||[];
+    if(!pr.goal&&!pr.location&&!parts.length)return "";
+    const sub=[pr.location||"",parts.length?plural(parts.length,"participant"):""].filter(Boolean).map(esc).join(" · ");
+    return `<button type="button" class="visgoal" data-prepv aria-label="Voir la préparation de la visite"><span class="visgi">${VI.target}</span><span class="visgt"><b>${esc(pr.goal||"Objectif à préciser")}</b>${sub?`<small>${sub}</small>`:""}</span>${VI.chev}</button>`;
+  }
+  function visProgCard(v){
+    const ns=v.notes||[], c=visCounts(ns), its=visItemsOn(v), seen=its.filter(i=>i.seen).length;
+    if(!its.length&&!ns.length)return "";
+    const pct=its.length?Math.round(100*seen/its.length):0;
+    const tg=(n,s,p,k)=>n?`<span class="tag vt-${k}">${plural(n,s,p)}</span>`:"";
+    return `<section class="visprogc">${its.length?`<div class="vpch"><span class="vpcl">Avancement</span><b>${seen} / ${its.length}</b><span>éléments vus</span></div><span class="vbar${seen===its.length?" ok":""}"><i style="width:${pct}%"></i></span>`:""}
+      <div class="vpct">${tg(c.n,"note","notes","n")}${tg(c.ph,"photo","photos","n")}${tg(c.q,"question client","questions client","cli")}${tg(c.a,"action","actions","act")}${tg(c.au,"enregistrement","enregistrements","au")}</div></section>`;
+  }
+  function visFlowRows(v,sel){
+    return visFlows(v).map(f=>{
+      const c=visCounts(visNotes(v,f.id)), it=visItems(v,f.id), seen=it.filter(i=>i.seen).length;
+      const bits=[];if(c.n)bits.push(plural(c.n,"note"));if(c.ph)bits.push(plural(c.ph,"photo"));if(c.q)bits.push(plural(c.q,"question"));if(c.au&&!c.n)bits.push(plural(c.au,"enregistrement"));
+      const done=it.length&&seen===it.length;
+      return `<button type="button" class="vistile${done?" alldone":""}${sel===f.id?" on":""}" data-f="${esc(f.id)}"${sel===f.id?` aria-current="true"`:""}><span class="vtt"><b>${esc(f.name)}</b><span${bits.length?"":` class="vtodo"`}>${bits.join(" · ")||"À visiter"}</span></span>${it.length?`<span class="vtp"><span class="vbar sm${done?" ok":""}"><i style="width:${Math.round(100*seen/it.length)}%"></i></span><i class="visprog">${seen}/${it.length} vus</i></span>`:""}<span class="vtc">${VI.chev}</span></button>`;
+    }).join("");
+  }
+  function visInfoBox(v){
+    const pr=v.prep||{}, parts=pr.participants||[];
+    return `<section class="visinfo"><div class="vissh"><h3>La visite</h3><button type="button" class="vislink" data-prepv>Préparation</button></div>
+      ${pr.goal?`<p>${VI.target}<span>${esc(pr.goal)}</span></p>`:""}${pr.location?`<p>${VI.pin}<span>${esc(pr.location)}</span></p>`:""}
+      ${parts.length?`<p>${VI.users}<span class="vispp">${parts.map(x=>`<span class="tag${x.side==="client"?" vt-cli":""}">${esc(x.name)}</span>`).join("")}</span></p>`:""}
+      ${!pr.goal&&!pr.location&&!parts.length?`<p class="muted">Objectif, lieu et participants se renseignent dans la préparation.</p>`:""}</section>`;
+  }
+  // « À voir » : l'élément suivant est mis en avant, les éléments vus sont regroupés
+  function visSeeBox(v,f){
+    const its=visItems(v,f.id);if(!its.length)return "";
+    const un=its.filter(i=>!i.seen), sn=its.filter(i=>i.seen);
+    const row=(i,first)=>{const nr=(v.notes||[]).filter(n=>n.item===i.id).length;
+      return `<div class="visit${i.seen?" seen":""}${first?" next":""}" data-i="${esc(i.id)}"><button type="button" class="visseen" data-seen aria-pressed="${!!i.seen}" aria-label="${i.seen?"Marquer comme non vu":"Marquer comme vu"}"></button><span class="vitx">${first?`<small class="visnext">Prochain</small>`:""}${i.kind==="point"?`<small>${esc(i.label||"Point ouvert")}</small>`:""}${esc(i.text)}${nr?`<em>${plural(nr,"réponse")}</em>`:""}</span><button type="button" class="btn visrep" data-rep>Répondre</button></div>`};
+    return `<section class="visitems"><div class="vissh"><h3>À voir</h3><b>${sn.length} / ${its.length} vus</b></div>${un.map((i,k)=>row(i,k===0)).join("")}${sn.length?`<details class="visseenl"${ui.visSeenOpen?" open":""}><summary>${VI.check}${plural(sn.length,"élément vu","éléments vus")}</summary>${sn.map(i=>row(i,false)).join("")}</details>`:""}</section>`;
+  }
+  const VIS_HINT={note:"",question:"À la fin de la visite, deviendra un point ouvert pour le client.",action:"À la fin de la visite, deviendra une tâche à votre nom."};
+  function visComposer(rep){
+    return `<footer class="viscap" data-vt="${visType}">
+        <div class="visseg" role="radiogroup" aria-label="Type de note">${Object.entries(NTYPE).map(([k,[l]])=>`<button type="button" role="radio" aria-checked="${visType===k}" data-t="${k}">${l}</button>`).join("")}</div>
+        <div class="viskit"><button type="button" class="viskb" data-gal aria-label="Ajouter des photos de la galerie">${GAL_SVG}<span>Galerie</span></button>${bcOk()?`<button type="button" class="viskb" data-scan aria-label="Scanner un code-barres">${BC_SVG}<span>Scanner</span></button>`:""}${recOk()?`<button type="button" class="viskb rec" data-rec aria-label="Enregistrer la conversation">${MIC_SVG}<span>Enregistrer</span></button>`:""}</div>
+        <p class="vishint"${VIS_HINT[visType]?"":" hidden"}>${VIS_HINT[visType]}</p>
+        ${rep?`<div class="visreply"><span>Réponse à : <b>${esc(rep.text)}</b></span><button type="button" data-unrep aria-label="Ne plus répondre à cet élément">✕</button></div>`:""}
+        ${visStage.length?`<div class="visstage">${visStage.map(s=>`<span class="vph sm"><img data-ph="${esc(s.id)}" alt="Photo jointe"><button type="button" data-unstage="${esc(s.id)}" aria-label="Retirer la photo">✕</button></span>`).join("")}</div>`:""}
+        <div class="visin"><button type="button" class="viscam" data-cam aria-label="Prendre une photo">${CAM_SVG}</button><textarea rows="2" aria-label="Texte de la note" placeholder="Écrire ou dicter (micro du clavier)…">${esc(visText)}</textarea><button type="button" class="visok" data-add aria-label="Ajouter la note"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></button></div>
+      </footer>`;
+  }
+  const visQuickBar=()=>`<footer class="visf vqf"><button type="button" class="visqb" data-qgal aria-label="Importer des photos de la galerie (le flux est choisi ensuite)">${GAL_SVG}<span>Galerie</span></button><button type="button" class="visfab" data-quick aria-label="Photo rapide (le flux est choisi ensuite)">${CAM_SVG}</button>${recOk()?`<button type="button" class="visqb rec" data-qrec aria-label="Enregistrer la conversation (le flux est choisi ensuite)">${MIC_SVG}<span>Enregistrer</span></button>`:`<span class="visqb" aria-hidden="true"></span>`}</footer>`;
+  const visHomeActs=v=>`<button type="button" class="btn visendh" data-end>${v.status==="done"?"Bilan":"Terminer"}</button>${visMoreBtn("data-vm","Actions sur la visite")}`;
+  // liaisons communes à l'accueil, au flux et à la vue ordinateur
+  function visBindCommon(o,v){
+    o.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{visScreen="flow";visFlowId=b.dataset.f;renderVisit()});
+    const vm=o.querySelector("[data-vm]");if(vm)vm.onclick=async()=>{
       const ch=await visSheet(v.title,[...(v.status==="done"?[{k:"reopen",l:"Reprendre la visite"}]:[{k:"finish",l:"Clôturer la visite"}]),{k:"gal",l:"Importer des photos de la galerie"},{k:"prep",l:"Revoir la préparation"},{k:"ren",l:"Renommer la visite"},{k:"pdf",l:"Exporter le compte rendu (PDF)"},{k:"del",l:"Supprimer la visite",danger:true}]);
       if(ch==="finish")visFinish(visCur);
       else if(ch==="reopen")visSet(x=>{x.status="open";x.endedAt=null});
@@ -3972,11 +4039,45 @@
       else if(ch==="pdf")visPdf(visCur);
       else if(ch==="del")visDelete(visCur);
     };
-    o.querySelector("[data-addf]").onclick=async()=>{const n=await uiPrompt("Nom du nouveau flux","",{ok:"Ajouter"});if(n&&n.trim())visSet(x=>x.flows.push({id:uid(),name:n.trim().slice(0,60)}))};
-    o.querySelector("[data-end]").onclick=()=>{visScreen="end";renderVisit()};
-    o.querySelector("[data-quick]").onclick=()=>visQuick("camera");
-    trBind(o,v);
-    o.querySelector("[data-qgal]").onclick=()=>visQuick("gallery");
+    const af=o.querySelector("[data-addf]");if(af)af.onclick=async()=>{const n=await uiPrompt("Nom du nouveau flux","",{ok:"Ajouter"});if(n&&n.trim())visSet(x=>x.flows.push({id:uid(),name:n.trim().slice(0,60)}))};
+    const en=o.querySelector("[data-end]");if(en)en.onclick=()=>{visScreen="end";renderVisit()};
+    o.querySelectorAll("[data-prepv]").forEach(b=>b.onclick=()=>{visScreen="prep";renderVisit()});
+    const qk=o.querySelector("[data-quick]");if(qk)qk.onclick=()=>visQuick("camera");
+    const qg=o.querySelector("[data-qgal]");if(qg)qg.onclick=()=>visQuick("gallery");
+    const qr=o.querySelector("[data-qrec]");if(qr)qr.onclick=async()=>{const fid=await visPickFlow("Dans quel flux ranger l'enregistrement ?");if(!fid)return;visScreen="flow";visFlowId=fid;renderVisit();recStart(fid)};
+    o.querySelectorAll(".visnote [data-more]").forEach(b=>b.onclick=()=>visNoteMenu(b.closest("[data-n]").dataset.n));
+    o.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>visViewPhoto(b.dataset.view));
+    recFillPlayers(o,v);trBind(o,v);visFillPhotos(o,v);
+  }
+  function visBindFlow(o,v,f){
+    o.querySelectorAll("button[data-t]").forEach(b=>b.onclick=()=>{visType=b.dataset.t;o.querySelectorAll("button[data-t]").forEach(x=>x.setAttribute("aria-checked",x===b));const cp=o.querySelector(".viscap");if(cp)cp.dataset.vt=visType;const h=o.querySelector(".vishint");if(h){h.textContent=VIS_HINT[visType];h.hidden=!VIS_HINT[visType]}});
+    const ta=o.querySelector(".visin textarea");ta.oninput=()=>{visText=ta.value};
+    o.querySelectorAll("[data-unstage]").forEach(b=>b.onclick=()=>{const id=b.dataset.unstage;visDropPhotos(visCur,[id]);visStage=visStage.filter(s=>s.id!==id);renderVisit()});
+    o.querySelector("[data-cam]").onclick=()=>visCapture(photos=>{visStage=visStage.concat(photos);renderVisit()});
+    o.querySelector("[data-gal]").onclick=()=>visCapture(photos=>{visStage=visStage.concat(photos);renderVisit()},"gallery");
+    const rb=o.querySelector("[data-rec]");if(rb)rb.onclick=()=>recStart(f.id);
+    const sc=o.querySelector("[data-scan]");if(sc)sc.onclick=()=>visScan(r=>{if(!r)return;visText=(ta.value.trim()?ta.value.trim()+"\n":"")+r.text;if(r.photo)visStage=visStage.concat([r.photo]);renderVisit();const t=$("#visview .visin textarea");if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length)}});
+    o.querySelector("[data-add]").onclick=()=>{
+      const t=ta.value.trim();if(!t&&!visStage.length){ta.focus();return}
+      const photos=visStage;visStage=[];visText="";
+      const item=visReply;visReply=null;
+      visSet(x=>{x.notes.push({id:uid(),flow:f.id,type:visType,text:t.slice(0,4000),photos,at:Date.now(),conv:null,...(item?{item}:{})});if(item){const i=x.items.find(y=>y.id===item);if(i)i.seen=true}});
+      const m=$("#visview .vism.notes");if(m)m.scrollTop=m.scrollHeight;
+    };
+    const fm=o.querySelector("[data-fm]");if(fm)fm.onclick=()=>visFlowMenu(f);
+    const sl=o.querySelector(".visseenl");if(sl)sl.ontoggle=()=>{ui.visSeenOpen=sl.open;saveUi()};
+    o.querySelectorAll("[data-seen]").forEach(b=>b.onclick=()=>{const id=b.closest("[data-i]").dataset.i;visSet(x=>{const i=x.items.find(y=>y.id===id);if(i)i.seen=!i.seen})});
+    o.querySelectorAll("[data-rep]").forEach(b=>b.onclick=()=>{visReply=b.closest("[data-i]").dataset.i;renderVisit();const t=$("#visview .visin textarea");if(t)t.focus()});
+    const ur=o.querySelector("[data-unrep]");if(ur)ur.onclick=()=>{visReply=null;renderVisit()};
+    const m=o.querySelector(".vism.notes");if(m&&!visReply)m.scrollTop=m.scrollHeight;
+  }
+  function visHomeScreen(o,v,p){
+    if(visWide())return visDesk(o,v,p,null);
+    o.innerHTML=visHead("Quitter la visite","Projet",v.title,visSub(v,p),visHomeActs(v))+`<main class="vism vhome">${trBanner(v)}${visGoalCard(v)}${visProgCard(v)}
+      <div class="vishd"><h2>Flux</h2><button type="button" class="vislink" data-addf>${VI.plus}Ajouter un flux</button></div>
+      <nav class="vislist" aria-label="Flux de la visite">${visFlowRows(v,null)}</nav></main>${visQuickBar()}`;
+    o.querySelector("[data-back]").onclick=visClose;
+    visBindCommon(o,v);
   }
   function visPickFlow(title,except){
     return new Promise(res=>{
@@ -3990,55 +4091,47 @@
       if(d.showModal)d.showModal();else d.setAttribute("open","");
     });
   }
-  function visNoteHtml(n){
+  function visNoteHtml(n,withFlow){
     let [l,c]=NTYPE[n.type]||NTYPE.note;if(n.audio&&n.type==="note"){l="Enregistrement";c="nt-au"}
-    return `<article class="visnote" data-n="${esc(n.id)}"><div class="visnh"><span class="nt ${c}">${l}</span><span>${hm(n.at)}</span>${n.conv?`<span class="visconv">${n.conv.kind==="point"?"Point ouvert créé":"Tâche créée"}</span>`:""}<span class="sp"></span><button type="button" class="vismore" data-more aria-label="Actions sur la note">⋯</button></div>
+    const fl=withFlow&&visCur?(visCur.flows.find(f=>f.id===n.flow)||{}).name:"";
+    return `<article class="visnote" data-n="${esc(n.id)}"><div class="visnh"><span class="nt ${c}">${l}</span><span>${hm(n.at)}${fl?` · ${esc(fl)}`:""}</span>${n.conv?`<span class="visconv">${n.conv.kind==="point"?"Point ouvert créé":"Tâche créée"}</span>`:""}<span class="sp"></span><button type="button" class="vismore" data-more aria-label="Actions sur la note">${VI.more}</button></div>
       ${n.item&&visCur&&(visCur.items||[]).find(i=>i.id===n.item)?`<div class="visre">Réponse à : ${esc(visCur.items.find(i=>i.id===n.item).text)}</div>`:""}
       ${n.text?`<p>${esc(n.text).replace(/\n/g,"<br>")}</p>`:""}
       ${n.audio?visAudioHtml(n):""}
-      ${(n.photos||[]).length?`<div class="visphs">${n.photos.map(ph=>`<button type="button" class="vph" data-view="${esc(ph.id)}" aria-label="Voir la photo${ph.caption?" : "+esc(ph.caption):""}"><img data-ph="${esc(ph.id)}" alt="">${ph.caption?`<span>${esc(ph.caption)}</span>`:""}</button>`).join("")}</div>`:""}</article>`;
+      ${(n.photos||[]).length?`<div class="visphs">${n.photos.map(ph=>`<button type="button" class="vph" data-view="${esc(ph.id)}" aria-label="Voir la photo${ph.caption?" : "+esc(ph.caption):""}"><img data-ph="${esc(ph.id)}" alt="">${ph.caption?`<span>${esc(ph.caption)}</span>`:""}</button>`).join("")}</div>`:""}
+      ${!n.conv&&(n.type==="question"||n.type==="action")?`<span class="visfut">${n.type==="question"?"Deviendra un point ouvert pour le client":"Deviendra une tâche à votre nom"}</span>`:""}</article>`;
   }
+  const visCountTxt=ns=>{const c=visCounts(ns);return `${plural(c.n,"note")} · ${plural(c.ph,"photo")}${c.q?` · ${plural(c.q,"question client","questions client")}`:""}${c.a?` · ${plural(c.a,"action")}`:""}`};
   function visFlowScreen(o,v,p){
-    const f=v.flows.find(x=>x.id===visFlowId), ns=visNotes(v,f.id), ph=ns.reduce((k,x)=>k+(x.photos||[]).length,0), q=ns.filter(x=>x.type==="question").length;
-    const its=visItems(v,f.id), nSeen=its.filter(i=>i.seen).length, rep=visReply&&its.find(i=>i.id===visReply);
+    if(visWide())return visDesk(o,v,p,visFlowId);
+    const f=v.flows.find(x=>x.id===visFlowId), ns=visNotes(v,f.id), its=visItems(v,f.id), rep=visReply&&its.find(i=>i.id===visReply);
     if(visReply&&!rep)visReply=null;
-    o.innerHTML=`<header class="vish"><div class="visrow">${visBack("Retour aux flux")}<div class="vist"><b>${esc(f.name)}</b><span>${plural(ns.length,"note")} · ${plural(ph,"photo")}${q?` · ${plural(q,"question")}`:""}</span></div><button type="button" class="visback" data-fm aria-label="Actions sur le flux">⋯</button></div>
-      <div class="vischips" role="tablist" aria-label="Changer de flux">${visFlows(v).map(x=>`<button type="button" role="tab" aria-selected="${x.id===f.id}" data-f="${esc(x.id)}">${esc(x.name)}</button>`).join("")}</div><div class="visst"></div></header>
-      <main class="vism notes">${trBanner(v)}${its.length?`<details class="visitems"${ui.visItemsClosed?"":" open"}><summary>À voir <b>${nSeen}/${its.length}</b></summary>${its.map(i=>`<div class="visit${i.seen?" seen":""}" data-i="${esc(i.id)}"><button type="button" class="visseen" data-seen aria-pressed="${!!i.seen}" aria-label="${i.seen?"Marquer comme non vu":"Marquer comme vu"}"></button><span class="vitx">${i.kind==="point"?`<small>${esc(i.label||"Point ouvert")}</small>`:""}${esc(i.text)}${(v.notes||[]).some(n=>n.item===i.id)?`<em>${plural((v.notes||[]).filter(n=>n.item===i.id).length,"réponse")}</em>`:""}</span><button type="button" class="btn visrep" data-rep>Répondre</button></div>`).join("")}</details>`:""}
-        ${ns.length?ns.map(visNoteHtml).join(""):`<p class="visempty">Aucune note pour ce flux. Écrivez ou prenez une photo ci-dessous.</p>`}</main>
-      <footer class="viscap">
-        <div class="vistop"><div class="visseg" role="radiogroup" aria-label="Type de note">${Object.entries(NTYPE).map(([k,[l]])=>`<button type="button" role="radio" aria-checked="${visType===k}" data-t="${k}" aria-label="${l}">${k==="question"?"Question":l}</button>`).join("")}</div><button type="button" class="vistool" data-gal aria-label="Ajouter des photos de la galerie">${GAL_SVG}</button>${recOk()?`<button type="button" class="vistool rec" data-rec aria-label="Enregistrer la conversation">${MIC_SVG}</button>`:""}${bcOk()?`<button type="button" class="vistool" data-scan aria-label="Scanner un code-barres">${BC_SVG}</button>`:""}</div>
-        ${rep?`<div class="visreply"><span>Réponse à : <b>${esc(rep.text)}</b></span><button type="button" data-unrep aria-label="Ne plus répondre à cet élément">✕</button></div>`:""}
-        ${visStage.length?`<div class="visstage">${visStage.map(s=>`<span class="vph sm"><img data-ph="${esc(s.id)}" alt="Photo jointe"><button type="button" data-unstage="${esc(s.id)}" aria-label="Retirer la photo">✕</button></span>`).join("")}</div>`:""}
-        <div class="visin"><button type="button" class="viscam" data-cam aria-label="Prendre une photo">${CAM_SVG}</button><textarea rows="2" aria-label="Texte de la note" placeholder="Écrire ou dicter (micro du clavier)…">${esc(visText)}</textarea><button type="button" class="visok" data-add aria-label="Ajouter la note"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></button></div>
-      </footer>`;
+    o.innerHTML=visHead("Retour aux flux","Visite",f.name,esc(visCountTxt(ns)),visMoreBtn("data-fm","Actions sur le flux"),
+        `<div class="vischips" role="tablist" aria-label="Changer de flux">${visFlows(v).map(x=>`<button type="button" role="tab" aria-selected="${x.id===f.id}" data-f="${esc(x.id)}">${esc(x.name)}</button>`).join("")}</div>`)+
+      `<main class="vism notes">${trBanner(v)}${visSeeBox(v,f)}
+        ${ns.length?ns.map(n=>visNoteHtml(n)).join(""):`<p class="visempty">Aucune note pour ce flux. Écrivez ou prenez une photo ci-dessous.</p>`}</main>${visComposer(rep)}`;
     o.querySelector("[data-back]").onclick=()=>{visScreen="home";renderVisit()};
-    o.querySelectorAll(".vischips [data-f]").forEach(b=>b.onclick=()=>{visFlowId=b.dataset.f;renderVisit()});
     const chip=o.querySelector('.vischips [aria-selected="true"]');if(chip)chip.scrollIntoView({block:"nearest",inline:"center"});
-    o.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{visType=b.dataset.t;o.querySelectorAll("[data-t]").forEach(x=>x.setAttribute("aria-checked",x===b))});
-    const ta=o.querySelector(".visin textarea");ta.oninput=()=>{visText=ta.value};
-    o.querySelectorAll("[data-unstage]").forEach(b=>b.onclick=()=>{const id=b.dataset.unstage;visDropPhotos(visCur,[id]);visStage=visStage.filter(s=>s.id!==id);renderVisit()});
-    o.querySelector("[data-cam]").onclick=()=>visCapture(photos=>{visStage=visStage.concat(photos);renderVisit()});
-    o.querySelector("[data-gal]").onclick=()=>visCapture(photos=>{visStage=visStage.concat(photos);renderVisit()},"gallery");
-    const rb=o.querySelector("[data-rec]");if(rb)rb.onclick=()=>recStart(f.id);
-    recFillPlayers(o,v);trBind(o,v);
-    const sc=o.querySelector("[data-scan]");if(sc)sc.onclick=()=>visScan(r=>{if(!r)return;visText=(ta.value.trim()?ta.value.trim()+"\n":"")+r.text;if(r.photo)visStage=visStage.concat([r.photo]);renderVisit();const t=$("#visview .visin textarea");if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length)}});
-    o.querySelector("[data-add]").onclick=()=>{
-      const t=ta.value.trim();if(!t&&!visStage.length){ta.focus();return}
-      const photos=visStage;visStage=[];visText="";
-      const item=visReply;visReply=null;
-      visSet(x=>{x.notes.push({id:uid(),flow:f.id,type:visType,text:t.slice(0,4000),photos,at:Date.now(),conv:null,...(item?{item}:{})});if(item){const i=x.items.find(y=>y.id===item);if(i)i.seen=true}});
-      const m=$("#visview .vism");if(m)m.scrollTop=m.scrollHeight;
-    };
-    o.querySelector("[data-fm]").onclick=()=>visFlowMenu(f);
-    const det=o.querySelector(".visitems");if(det)det.ontoggle=()=>{ui.visItemsClosed=!det.open;saveUi()};
-    o.querySelectorAll("[data-seen]").forEach(b=>b.onclick=()=>{const id=b.closest("[data-i]").dataset.i;visSet(x=>{const i=x.items.find(y=>y.id===id);if(i)i.seen=!i.seen})});
-    o.querySelectorAll("[data-rep]").forEach(b=>b.onclick=()=>{visReply=b.closest("[data-i]").dataset.i;renderVisit();const t=$("#visview .visin textarea");if(t)t.focus()});
-    const ur=o.querySelector("[data-unrep]");if(ur)ur.onclick=()=>{visReply=null;renderVisit()};
-    o.querySelectorAll("[data-more]").forEach(b=>b.onclick=()=>visNoteMenu(b.closest("[data-n]").dataset.n));
-    o.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>visViewPhoto(b.dataset.view));
-    visFillPhotos(o,v);
-    const m=o.querySelector(".vism");if(!visReply)m.scrollTop=m.scrollHeight;
+    visBindCommon(o,v);visBindFlow(o,v,f);
+  }
+  // Ordinateur : flux à gauche, notes et saisie au centre, « À voir » et infos à droite
+  function visDesk(o,v,p,fid){
+    const f=fid?v.flows.find(x=>x.id===fid):null;
+    let center;
+    if(f){
+      const ns=visNotes(v,f.id), rep=visReply&&visItems(v,f.id).find(i=>i.id===visReply);if(visReply&&!rep)visReply=null;
+      center=`<div class="visdch"><div><h2>${esc(f.name)}</h2><span>${esc(visCountTxt(ns))}</span></div>${visMoreBtn("data-fm","Actions sur le flux")}</div>
+        <main class="vism notes">${ns.length?ns.map(n=>visNoteHtml(n)).join(""):`<p class="visempty">Aucune note pour ce flux. Écrivez ou prenez une photo ci-dessous.</p>`}</main>${visComposer(rep)}`;
+    }else{
+      const recent=(v.notes||[]).filter(n=>visFlows(v).some(x=>x.id===n.flow)).slice().sort((a,b)=>b.at-a.at).slice(0,6);
+      center=`<main class="vism vhome">${visGoalCard(v)}<div class="vishd"><h2>Dernières notes</h2></div>${recent.length?recent.map(n=>visNoteHtml(n,true)).join(""):`<p class="visempty">Choisissez un flux à gauche pour prendre des notes et des photos.</p>`}</main>${visQuickBar()}`;
+    }
+    o.innerHTML=visHead(f?"Retour à l'accueil de la visite":"Quitter la visite",f?"Accueil":p.name,v.title,visSub(v,p),visHomeActs(v))+
+      `<div class="visdesk"><aside class="visdl">${visProgCard(v)}<div class="vishd"><h2>Flux</h2><button type="button" class="vislink" data-addf aria-label="Ajouter un flux">${VI.plus}<span>Ajouter</span></button></div><nav class="vislist" aria-label="Flux de la visite">${visFlowRows(v,fid)}</nav></aside>
+      <section class="visdc">${center}</section>
+      <aside class="visdr">${f?visSeeBox(v,f):""}${visInfoBox(v)}${trBanner(v)}</aside></div>`;
+    o.querySelector("[data-back]").onclick=f?()=>{visScreen="home";renderVisit()}:visClose;
+    visBindCommon(o,v);if(f)visBindFlow(o,v,f);
   }
   async function visSheet(title,items){
     if(typeof window.__testDialog==="function"){const r=await window.__testDialog({type:"sheet",message:title,options:items.map(i=>i.l)});const i=items.find(x=>x.l===(r&&r.v));return i?i.k:null}
@@ -4238,45 +4331,55 @@
   }
   // ---------- Préparation de la visite (au bureau, sur ordinateur ou téléphone) ----------
   const dtLocal=ms=>{if(!ms)return "";const d=new Date(ms);const z=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`};
+  const visPrepOpen={}; // flux dépliés dans la préparation (par défaut : ceux qui ont des éléments)
+  function visStartNow(){visSet(y=>{y.status="open";y.startedAt=Date.now()});visScreen="home";renderVisit();render();toast("Visite démarrée : bonne visite !")}
   function visPrepScreen(o,v,p){
-    const pr=v.prep||(v.prep={}), live=v.status!=="prep";
+    const pr=v.prep||(v.prep={}), live=v.status!=="prep", wide=visWide();
     const parts=pr.participants||[], cand=[], seen=new Set();
     const addC=(name,side,extra)=>{const k=norm(name);if(!name||seen.has(k))return;seen.add(k);cand.push({name,side,...extra})};
     parts.forEach(x=>addC(x.name,x.side));ctList(v.projectId).forEach(c=>addC(c.name,c.side,{role:c.role}));memberEmails(v.projectId).forEach(e=>addC(nameOf(e),"mecalux",{email:e}));
     const on=new Set(parts.map(x=>norm(x.name)));
     const usedPts=new Set((v.items||[]).filter(i=>i.ref).map(i=>i.ref));
     const freePts=livePts().filter(x=>x.projectId===v.projectId&&x.status!=="closed"&&!usedPts.has(x.id));
-    const fl=v.flows||[];
-    o.innerHTML=`<header class="vish"><div class="visrow">${visBack(live?"Retour à la visite":"Fermer la préparation")}<div class="vist"><b>${esc(v.title)}</b><span>${esc(p.name)} · ${live?"préparation (visite en cours)":"visite préparée"}</span></div><button type="button" class="visback" data-pm aria-label="Actions sur la visite">⋯</button></div></header>
-      <main class="vism prep">
+    const fl=v.flows||[], nOn=fl.filter(f=>!f.off).length, nIt=visItemsOn(v).length;
+    const isOpen=f=>!f.off&&(f.id in visPrepOpen?visPrepOpen[f.id]:visItems(v,f.id).length>0);
+    const acts=wide?(live?`<button type="button" class="btn primary" data-go>Revenir à la visite</button>`:`<button type="button" class="btn" data-x>Fermer</button><button type="button" class="btn primary" data-start>${CAM_SVG}Démarrer la visite</button>`):"";
+    o.innerHTML=visHead(live?"Retour à la visite":"Fermer la préparation",live?"Visite":"Projet",live?"Préparation":"Préparer la visite",`${esc(v.title)} · ${esc(p.name)}`,acts+visMoreBtn("data-pm","Actions sur la visite"))+`
+      <main class="vism prep"><div class="visprepg">
+        <div class="vpc1">
         <section class="viscard"><h3>Informations</h3>
           <div class="visgrid"><label class="uifld"><span>Date et heure</span><input type="datetime-local" data-k="plannedAt" value="${dtLocal(pr.plannedAt)}"></label>
           <label class="uifld"><span>Lieu</span><input type="text" data-k="location" maxlength="300" placeholder="Site, adresse" value="${esc(pr.location||"")}"></label></div>
           <label class="uifld"><span>Objectif de la visite</span><textarea rows="2" data-k="goal" maxlength="2000" placeholder="Ex. : analyser les flux de réception et d'expédition">${esc(pr.goal||"")}</textarea></label>
           <label class="uifld"><span>Infos utiles</span><textarea rows="2" data-k="info" maxlength="2000" placeholder="Contact sur place, horaires, équipements de sécurité…">${esc(pr.info||"")}</textarea></label>
         </section>
-        <section class="viscard"><h3>Participants</h3>
-          ${cand.length?`<div class="mtgppl">${cand.map((x,i)=>`<label><input type="checkbox" data-pp="${i}" ${on.has(norm(x.name))?"checked":""}><span>${esc(x.name)}${x.role?` <small>${esc(x.role)}</small>`:""}</span><em>${esc(SIDE[x.side]||"")}</em></label>`).join("")}</div>`:`<p class="muted">Aucun contact pour ce projet.</p>`}
+        <section class="viscard"><div class="vissh"><h3>Participants</h3>${parts.length?`<span class="muted">${plural(parts.length,"coché","cochés")}</span>`:""}</div>
+          ${cand.length?`<div class="mtgppl visppl">${cand.map((x,i)=>`<label><input type="checkbox" data-pp="${i}" ${on.has(norm(x.name))?"checked":""}><span>${esc(x.name)}${x.role?` <small>${esc(x.role)}</small>`:""}</span><em>${esc(SIDE[x.side]||"")}</em></label>`).join("")}</div>`:`<p class="muted">Aucun contact pour ce projet.</p>`}
           <form class="mtgadd" data-padd autocomplete="off"><input type="text" placeholder="Nom ou fonction" aria-label="Nom ou fonction" maxlength="120"><select aria-label="Côté">${Object.entries(SIDE).map(([k,l])=>`<option value="${k}">${l}</option>`).join("")}</select><button class="btn" type="submit">Ajouter</button></form>
         </section>
-        <section class="viscard visflowsec"><div class="vishrow"><h3>Flux et éléments à voir</h3><button type="button" class="btn ghost" data-seed title="Ajoute les points ouverts attendant le client dont le thème correspond à un flux">Reprendre les points ouverts</button></div>
-          <p class="muted">Les points ouverts attendant une réponse du client sont repris automatiquement dans le flux de même thème. Ajoutez ce que vous voulez voir, photographier ou demander sur place.</p>
-          <div class="visflows">${fl.map((f,k)=>{const it=visItems(v,f.id);return `<div class="visfl${f.off?" off":""}" data-f="${esc(f.id)}">
-            <div class="visflh"><label><input type="checkbox" data-on ${f.off?"":"checked"} aria-label="Flux ${esc(f.name)} couvert pendant la visite"><b>${esc(f.name)}</b></label><span class="muted">${f.off?"non couvert":plural(it.length,"élément")}</span><span class="sp"></span>
+        </div>
+        <div class="vpc2">
+          <div class="vishd"><h2>À voir pendant la visite</h2><span>${plural(nIt,"élément")} · ${plural(nOn,"flux","flux")}</span></div>
+          <div class="visflows">${fl.map((f,k)=>{const it=visItems(v,f.id), op=isOpen(f);return `<div class="visfl${f.off?" off":""}${op?" open":""}" data-f="${esc(f.id)}">
+            <div class="visflh"><input type="checkbox" data-on ${f.off?"":"checked"} aria-label="Flux ${esc(f.name)} couvert pendant la visite"><button type="button" class="visflt" data-tog aria-expanded="${op}"${f.off?" disabled":""}><b>${esc(f.name)}</b><span class="muted">${f.off?"non couvert":it.length?plural(it.length,"élément"):"aucun élément"}</span>${f.off?"":VI.chev}</button>
               <button type="button" class="visround sm" data-up ${k?"":"disabled"} aria-label="Monter ${esc(f.name)}">↑</button><button type="button" class="visround sm" data-down ${k<fl.length-1?"":"disabled"} aria-label="Descendre ${esc(f.name)}">↓</button></div>
-            ${f.off?"":`${it.map(i=>`<div class="visprepi" data-i="${esc(i.id)}"><span>${i.kind==="point"?`<small>${esc(i.label||"Point ouvert")}</small>`:""}${esc(i.text)}</span><button type="button" class="vismore" data-del aria-label="Retirer « ${esc(i.text)} »">✕</button></div>`).join("")}
-              <form class="visprepadd" autocomplete="off"><input type="text" maxlength="300" placeholder="Ajouter un élément à voir…" aria-label="Élément à voir pour ${esc(f.name)}"><button class="btn" type="submit">Ajouter</button></form>
-              ${freePts.length?`<select data-addpt aria-label="Ajouter un point ouvert à ${esc(f.name)}"><option value="">Ajouter un point ouvert…</option>${freePts.map(x=>`<option value="${esc(x.id)}">${esc((ptNumOf(x)?ptNumOf(x)+" – ":"")+short(x.text))}</option>`).join("")}</select>`:""}`}
+            ${op?`${it.map(i=>`<div class="visprepi" data-i="${esc(i.id)}"><span>${i.kind==="point"?`<small>${esc(i.label||"Point ouvert")}</small>`:""}${esc(i.text)}</span><button type="button" class="vismore" data-del aria-label="Retirer « ${esc(i.text)} »">✕</button></div>`).join("")}
+              <form class="visprepadd" autocomplete="off"><input type="text" maxlength="300" placeholder="Ajouter un élément à voir…" aria-label="Élément à voir pour ${esc(f.name)}"><button class="btn" type="submit">Ajouter</button></form>`:""}
           </div>`}).join("")}</div>
-          <button type="button" class="btn ghost" data-addf>+ Ajouter un flux</button>
-        </section>
-      </main>
-      <footer class="visf">${live?`<button type="button" class="btn primary visend" data-go>Revenir à la visite</button>`:`<button type="button" class="btn visend" data-x>Fermer</button><button type="button" class="btn primary visend" data-start>Démarrer la visite</button>`}</footer>`;
+          <button type="button" class="vislink" data-addf>${VI.plus}Ajouter un flux</button>
+        </div>
+        <aside class="vpc3"><section class="viscard"><div class="vissh"><h3>Points ouverts</h3><span class="muted">${freePts.length?`${freePts.length} non repris`:"tous repris"}</span></div>
+          <p class="muted">Les points en attente de réponse du client se reprennent dans le flux du même thème.</p>
+          <button type="button" class="btn" data-seed>Reprendre les points ouverts</button>
+          ${freePts.map(x=>`<div class="vispt"><span><small>${esc([ptNumOf(x),x.theme,x.owner==="client"?"client":x.owner==="mecalux"?"Mecalux":""].filter(Boolean).join(" · "))}</small>${esc(short(x.text))}</span><button type="button" class="btn" data-addpt="${esc(x.id)}">Ajouter</button></div>`).join("")}
+        </section></aside>
+      </div></main>
+      ${wide?"":`<footer class="visf">${live?`<button type="button" class="btn primary visend" data-go>Revenir à la visite</button>`:`<button type="button" class="btn visend" data-x>Fermer</button><button type="button" class="btn primary visend" data-start>Démarrer la visite</button>`}</footer>`}`;
     const back=()=>{if(live){visScreen="home";renderVisit()}else visClose()};
     o.querySelector("[data-back]").onclick=back;
     const x=o.querySelector("[data-x]");if(x)x.onclick=back;
     const g=o.querySelector("[data-go]");if(g)g.onclick=back;
-    const st=o.querySelector("[data-start]");if(st)st.onclick=()=>{visSet(y=>{y.status="open";y.startedAt=Date.now()});visScreen="home";renderVisit();render();toast("Visite démarrée : bonne visite !")};
+    const st=o.querySelector("[data-start]");if(st)st.onclick=visStartNow;
     o.querySelector("[data-pm]").onclick=async()=>{const ch=await visSheet(v.title,[{k:"ren",l:"Renommer la visite"},{k:"del",l:"Supprimer la visite",danger:true}]);
       if(ch==="ren"){const t=await uiPrompt("Intitulé de la visite",v.title,{ok:"Renommer"});if(t&&t.trim())visSet(y=>{y.title=t.trim().slice(0,300)})}else if(ch==="del")visDelete(visCur)};
     o.querySelectorAll("[data-k]").forEach(el=>el.onchange=()=>visQuiet(y=>{const k=el.dataset.k;y.prep=y.prep||{};y.prep[k]=k==="plannedAt"?(el.value?new Date(el.value).getTime():null):el.value.trim()}));
@@ -4286,14 +4389,21 @@
       visSet(y=>{y.prep.participants=(y.prep.participants||[]).filter(z=>norm(z.name)!==norm(name));y.prep.participants.push({name,side})})};
     o.querySelector("[data-seed]").onclick=()=>{let n=0;visSet(y=>{n=visSeed(y)});toast(n?`${plural(n,"point ouvert ajouté","points ouverts ajoutés")} à « À voir ».`:"Aucun nouveau point ouvert à reprendre.")};
     o.querySelector("[data-addf]").onclick=async()=>{const n=await uiPrompt("Nom du nouveau flux","",{ok:"Ajouter"});if(n&&n.trim())visSet(y=>y.flows.push({id:uid(),name:n.trim().slice(0,60)}))};
+    o.querySelectorAll("[data-addpt]").forEach(b=>b.onclick=async()=>{
+      const x=livePts().find(z=>z.id===b.dataset.addpt);if(!x)return;
+      const tk=themeKey(x.theme);let fid=tk&&(visFlows(visCur).find(f=>themeKey(f.name)===tk)||{}).id;
+      if(!fid)fid=await visPickFlow("Dans quel flux voir ce point ?");if(!fid)return;
+      visPrepOpen[fid]=true;
+      visSet(y=>{y.items=y.items||[];y.items.push({id:uid(),flow:fid,kind:"point",ref:x.id,text:x.text.split("\n")[0].slice(0,300),label:ptNumOf(x)||"Point ouvert",seen:false})});
+    });
     o.querySelectorAll(".visfl").forEach(box=>{
       const fid=box.dataset.f, idx=()=>visCur.flows.findIndex(z=>z.id===fid);
       box.querySelector("[data-on]").onchange=e=>visSet(y=>{y.flows.find(z=>z.id===fid).off=!e.target.checked});
+      box.querySelector("[data-tog]").onclick=()=>{visPrepOpen[fid]=!box.classList.contains("open");renderVisit()};
       box.querySelector("[data-up]").onclick=()=>visSet(y=>{const i=idx();if(i>0)[y.flows[i-1],y.flows[i]]=[y.flows[i],y.flows[i-1]]});
       box.querySelector("[data-down]").onclick=()=>visSet(y=>{const i=idx();if(i<y.flows.length-1)[y.flows[i+1],y.flows[i]]=[y.flows[i],y.flows[i+1]]});
       box.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{const id=b.closest("[data-i]").dataset.i;visSet(y=>{y.items=y.items.filter(z=>z.id!==id);y.notes.forEach(n=>{if(n.item===id)delete n.item})})});
-      const fa=box.querySelector(".visprepadd");if(fa)fa.onsubmit=e=>{e.preventDefault();const t=fa.querySelector("input").value.trim();if(t){visSet(y=>{y.items=y.items||[];y.items.push({id:uid(),flow:fid,kind:"free",text:t.slice(0,300),seen:false})});const n=$(`#visview .visfl[data-f="${fid}"] .visprepadd input`);if(n)n.focus()}};
-      const sp=box.querySelector("[data-addpt]");if(sp)sp.onchange=()=>{const x=livePts().find(z=>z.id===sp.value);if(x)visSet(y=>{y.items=y.items||[];y.items.push({id:uid(),flow:fid,kind:"point",ref:x.id,text:x.text.split("\n")[0].slice(0,300),label:ptNumOf(x)||"Point ouvert",seen:false})})};
+      const fa=box.querySelector(".visprepadd");if(fa)fa.onsubmit=e=>{e.preventDefault();const t=fa.querySelector("input").value.trim();if(t){visPrepOpen[fid]=true;visSet(y=>{y.items=y.items||[];y.items.push({id:uid(),flow:fid,kind:"free",text:t.slice(0,300),seen:false})});const n=$(`#visview .visfl[data-f="${fid}"] .visprepadd input`);if(n)n.focus()}};
     });
   }
   // ---------- Scan de codes-barres (API BarcodeDetector : Chrome sur Android ; absente sur iPhone) ----------
@@ -4392,28 +4502,39 @@
     const answered=its.filter(i=>i.kind==="point"&&!i.applied&&ns.some(n=>n.item===i.id));
     const left=its.filter(i=>!i.seen&&!i.applied&&!ns.some(n=>n.item===i.id)), leftFree=left.filter(i=>i.kind!=="point"), leftPts=left.filter(i=>i.kind==="point");
     const ansTxt=i=>ns.filter(n=>n.item===i.id).map(n=>n.text||"(photos)").join(" / ");
-    const seenN=its.filter(i=>i.seen).length;
-    const dstr=new Date(visDate(v)).toLocaleDateString("fr-FR");
+    const seenN=its.filter(i=>i.seen).length, c=visCounts(ns);
     const anything=todo.length||answered.length||leftFree.length;
-    o.innerHTML=`<header class="vish"><div class="visrow">${visBack("Retour à la visite")}<div class="vist"><b>${v.status==="done"?"Bilan de la visite":"Fin de visite"}</b><span>${esc(p.name)} · ${hm(visDate(v))}${v.endedAt?" – "+hm(v.endedAt):""}</span></div></div><div class="visst"></div></header>
-      <main class="vism end">
-        <section class="viscard">${its.length?`<p class="viscov"><b>${seenN}/${its.length}</b> éléments prévus vus</p>`:""}<table class="vistab"><thead><tr><th>Flux</th><th>Notes</th><th>Quest.</th><th>Act.</th><th>Photos</th></tr></thead><tbody>${v.flows.map(f=>{const n=visNotes(v,f.id);if(!n.length)return "";return `<tr><td>${esc(f.name)}</td><td>${n.length}</td><td>${n.filter(x=>x.type==="question").length}</td><td>${n.filter(x=>x.type==="action").length}</td><td>${n.reduce((k,x)=>k+(x.photos||[]).length,0)}</td></tr>`}).join("")||`<tr><td colspan="5">Aucune note.</td></tr>`}</tbody></table></section>
-        ${answered.length?`<section class="viscard"><h3>Points ouverts répondus sur site</h3><p class="muted">La réponse est ajoutée au point. Cochez ceux qui peuvent être levés.</p>${answered.map(i=>`<label class="vischk sm"><input type="checkbox" data-close="${esc(i.id)}"><span><em>Lever le point ${esc(i.label||"")} (${esc(fname(i.flow))})</em>${esc(i.text)}<small class="visans">Réponse : ${esc(ansTxt(i))}</small></span></label>`).join("")}</section>`:""}
-        <section class="viscard"><h3>À créer dans le projet</h3>
-          ${nq.length||na.length?`${nq.length?`<label class="vischk"><input type="checkbox" data-all="question" checked><span><b>${plural(nq.length,"question")}</b> ${nq.length>1?"deviennent":"devient"} des points ouverts, à répondre par le client, rangés par flux (thème)</span></label>`:""}
-          ${na.length?`<label class="vischk"><input type="checkbox" data-all="action" checked><span><b>${plural(na.length,"action")}</b> ${na.length>1?"deviennent":"devient"} des tâches à votre nom, avec la mention « Issu de la visite du ${dstr} »</span></label>`:""}
-          <details class="visrev"><summary>Revoir la liste avant de créer</summary>${todo.map(n=>`<label class="vischk sm"><input type="checkbox" data-one="${esc(n.id)}" data-kind="${n.type}" checked><span><em>${n.type==="question"?"Point":"Tâche"} · ${esc(fname(n.flow))}</em>${esc(n.text||"(photo sans texte)")}</span></label>`).join("")}</details>`
+    const dur=v.startedAt&&v.endedAt&&v.endedAt>v.startedAt?(m=>` (${m>=60?Math.floor(m/60)+" h "+String(m%60).padStart(2,"0"):m+" min"})`)(Math.round((v.endedAt-v.startedAt)/60000)):"";
+    const kpi=(n,s,pl,k)=>`<div class="viskpi vt-${k}"><b>${n}</b><span>${n>1?pl:s}</span></div>`;
+    const what=[nq.length?`${plural(nq.length,"question")} ${nq.length>1?"deviennent des points ouverts":"devient un point ouvert"} pour le client, rangé${nq.length>1?"s":""} par flux`:"",na.length?`${plural(na.length,"action")} ${na.length>1?"deviennent des tâches":"devient une tâche"} à votre nom`:""].filter(Boolean).join(" · ");
+    o.innerHTML=visHead("Retour à la visite","Visite",v.status==="done"?"Bilan de la visite":"Fin de visite",`${esc(p.name)} · ${hm(visDate(v))}${v.endedAt?" – "+hm(v.endedAt):""}${dur}`,"")+
+      `<main class="vism end">
+        <section class="viscard">
+          <div class="viskpis">${kpi(c.n,"note","notes","n")}${kpi(c.ph,"photo","photos","n")}${kpi(c.q,"question","questions","cli")}${kpi(c.a,"action","actions","act")}</div>
+          ${its.length?`<div class="viscov"><span class="vbar${seenN===its.length?" ok":""}"><i style="width:${Math.round(100*seenN/its.length)}%"></i></span><b>${seenN} / ${its.length} éléments prévus vus</b></div>`:""}
+          ${v.flows.some(f=>visNotes(v,f.id).length)?`<div class="visflsum">${v.flows.map(f=>{const x=visCounts(visNotes(v,f.id));if(!x.n)return "";return `<span><b>${esc(f.name)}</b> ${[plural(x.n,"note"),x.ph?plural(x.ph,"photo"):"",x.q?plural(x.q,"question"):"",x.a?plural(x.a,"action"):""].filter(Boolean).join(" · ")}</span>`}).join("")}</div>`:`<p class="muted">Aucune note.</p>`}
+        </section>
+        <section class="viscard"><div class="vissh"><h3>À créer dans le projet</h3>${todo.length?`<b data-cnt>${plural(todo.length,"élément coché","éléments cochés")}</b>`:""}</div>
+          ${todo.length?`<p class="muted">${what}.</p>${todo.map(n=>`<label class="vischk sm"><input type="checkbox" data-one="${esc(n.id)}" data-kind="${n.type}" checked><span><span class="vckh"><span class="tag vt-${n.type==="question"?"cli":"act"}">${n.type==="question"?"Point ouvert":"Tâche"}</span><em>${esc(fname(n.flow))}</em></span>${esc(n.text||"(photo sans texte)")}</span></label>`).join("")}`
           :`<p class="muted">${ns.some(n=>n.conv)?"Tous les points et tâches de cette visite ont déjà été créés.":"Aucune note de type « Question client » ou « Action »."}</p>`}
         </section>
-        ${left.length?`<section class="viscard"><h3>Restant à voir</h3>${leftFree.map(i=>`<div class="visleft"><span><em>${esc(fname(i.flow))}</em>${esc(i.text)}</span><select data-left="${esc(i.id)}" aria-label="Que faire de « ${esc(i.text)} » ?"><option value="">Ignorer</option><option value="point">Point ouvert</option><option value="task">Tâche</option></select></div>`).join("")}${leftPts.map(i=>`<div class="visleft"><span><em>${esc(i.label||"Point ouvert")} · ${esc(fname(i.flow))}</em>${esc(i.text)}</span><span class="muted">reste ouvert</span></div>`).join("")}</section>`:""}
+        ${answered.length?`<section class="viscard"><h3>Points ouverts répondus sur site</h3><p class="muted">La réponse est ajoutée au point. Cochez ceux qui peuvent être levés.</p>${answered.map(i=>`<label class="vischk sm"><input type="checkbox" data-close="${esc(i.id)}"><span><em>Lever le point ${esc(i.label||"")} (${esc(fname(i.flow))})</em>${esc(i.text)}<small class="visans">Réponse : ${esc(ansTxt(i))}</small></span></label>`).join("")}</section>`:""}
+        ${left.length?`<section class="viscard"><h3>Restant à voir</h3>${leftFree.map(i=>`<div class="visleft"><span><em>${esc(fname(i.flow))}</em>${esc(i.text)}</span><div class="visseg3" role="radiogroup" aria-label="Que faire de « ${esc(i.text)} » ?">${[["","Ignorer"],["point","Point ouvert"],["task","Tâche"]].map(([val,l],k)=>`<label><input type="radio" name="vl-${esc(i.id)}" value="${val}" data-left="${esc(i.id)}"${k?"":" checked"}><span>${l}</span></label>`).join("")}</div></div>`).join("")}${leftPts.map(i=>`<div class="visleft"><span><em>${esc(i.label||"Point ouvert")} · ${esc(fname(i.flow))}</em>${esc(i.text)}</span><span class="muted">reste ouvert</span></div>`).join("")}</section>`:""}
       </main>
-      <footer class="visf col">${anything?`<button type="button" class="btn primary" data-apply>Appliquer au projet</button>`:""}<button type="button" class="btn" data-pdf>Exporter le compte rendu de visite (PDF)</button>${v.status==="done"?`<button type="button" class="btn ghost" data-reopen>Reprendre la visite</button>`:`<button type="button" class="btn ${anything?"":"primary "}visdone" data-done>Clôturer la visite</button>`}</footer>`;
+      <footer class="visf col vendf">${anything?`<button type="button" class="btn primary" data-apply>Appliquer au projet</button>`:""}<div class="visf2"><button type="button" class="btn" data-pdf>${VI.doc}Compte rendu PDF</button>${v.status==="done"?`<button type="button" class="btn" data-reopen>Reprendre la visite</button>`:`<button type="button" class="btn ${anything?"":"primary "}visdone" data-done>Clôturer la visite</button>`}</div></footer>`;
     o.querySelector("[data-back]").onclick=()=>{visScreen="home";renderVisit()};
-    o.querySelectorAll("[data-all]").forEach(cb=>cb.onchange=()=>o.querySelectorAll(`[data-kind="${cb.dataset.all}"]`).forEach(x=>x.checked=cb.checked));
-    const ap=o.querySelector("[data-apply]");if(ap)ap.onclick=()=>visApply(
+    const ap=o.querySelector("[data-apply]");
+    const label=()=>{if(!ap)return;
+      const one=[...o.querySelectorAll("[data-one]:checked")], lc=[...o.querySelectorAll("[data-left]:checked")];
+      const np=one.filter(x=>x.dataset.kind==="question").length+lc.filter(x=>x.value==="point").length, nt=one.filter(x=>x.dataset.kind==="action").length+lc.filter(x=>x.value==="task").length;
+      const parts=[np?plural(np,"point ouvert","points ouverts"):"",nt?plural(nt,"tâche"):""].filter(Boolean);
+      ap.textContent=parts.length&&!answered.length?"Créer "+parts.join(" et "):"Appliquer au projet";
+      const cn=o.querySelector("[data-cnt]");if(cn)cn.textContent=plural(one.length,"élément coché","éléments cochés")};
+    o.querySelectorAll("[data-one],[data-left]").forEach(x=>x.addEventListener("change",label));label();
+    if(ap)ap.onclick=()=>visApply(
       new Set([...o.querySelectorAll("[data-one]")].filter(x=>x.checked).map(x=>x.dataset.one)),
       new Set([...o.querySelectorAll("[data-close]")].filter(x=>x.checked).map(x=>x.dataset.close)),
-      Object.fromEntries([...o.querySelectorAll("[data-left]")].map(x=>[x.dataset.left,x.value])));
+      Object.fromEntries([...o.querySelectorAll("[data-left]:checked")].filter(x=>x.value).map(x=>[x.dataset.left,x.value])));
     o.querySelector("[data-pdf]").onclick=()=>visPdf(visCur);
     const dn=o.querySelector("[data-done]");if(dn)dn.onclick=()=>visFinish(visCur);
     const ro=o.querySelector("[data-reopen]");if(ro)ro.onclick=()=>{visSet(x=>{x.status="open";x.endedAt=null});visScreen="home";renderVisit()};
@@ -4558,7 +4679,7 @@
     el.innerHTML=`<div class="rectop"><div class="recclk"><span class="reclbl">${r.paused?"En pause":"Enregistrement"} · ${esc(fl)}</span><b data-rectime>${mmss(recElapsed(r))}</b></div><div class="recbars" aria-hidden="true"></div></div>
       <p class="recinfo">${r.photos.length?`${plural(r.photos.length,"photo")} prise${r.photos.length>1?"s":""} pendant l'enregistrement · `:""}Écran maintenu allumé · enregistré sur l'appareil</p>
       <div class="recbtns"><button type="button" class="viscam" data-recph aria-label="Prendre une photo pendant l'enregistrement">${CAM_SVG}</button><button type="button" class="btn" data-recpause>${r.paused?"Reprendre":"Pause"}</button><button type="button" class="btn recstop" data-recstop><span class="recsq" aria-hidden="true"></span>Arrêter</button></div>`;
-    o.appendChild(el);
+    (o.querySelector(".visdc")||o).appendChild(el);
     el.querySelector("[data-recstop]").onclick=recStop;
     el.querySelector("[data-recpause]").onclick=recPause;
     el.querySelector("[data-recph]").onclick=()=>visCapture(ph=>{if(ph.length&&visRec===r){r.photos=r.photos.concat(ph);renderVisit()}});
@@ -4745,27 +4866,44 @@
   }
   function renderVisits(L,p){
     visEnsure();if(vis.loaded)visLoad();
-    const top=document.createElement("div");top.className="mtgtop";
-    top.innerHTML=`<button type="button" class="btn primary" data-prep>Préparer une visite</button><button type="button" class="btn" data-new>Démarrer une visite maintenant</button><span class="muted">Préparez au bureau, puis « Démarrer la visite » sur site. Fonctionne sans réseau : l'envoi se fait au retour de la connexion.</span>`;
+    const top=document.createElement("div");top.className="vistopbar";
+    top.innerHTML=`<button type="button" class="btn primary" data-new>${CAM_SVG}Démarrer une visite</button><button type="button" class="btn" data-prep>Préparer une visite</button><span class="muted">Préparez au bureau, puis démarrez sur site. Fonctionne sans réseau : l'envoi se fait au retour de la connexion.</span>`;
     top.querySelector("[data-prep]").onclick=()=>visNew(p,true);
     top.querySelector("[data-new]").onclick=()=>visNew(p);
     L.appendChild(top);
     const vs=visList(p.id);
-    const g=document.createElement("section");g.className="group";
-    g.innerHTML=`<h2>Visites <span>${vs.length}</span></h2>`;
-    if(!vs.length)g.insertAdjacentHTML("beforeend",`<div class="empty">${vis.loaded?"Aucune visite pour ce projet.":"Chargement…"}</div>`);
-    else{
-      const ul=document.createElement("ul");ul.className="tasks";
-      vs.forEach(v=>{const li=document.createElement("li");li.className="task mtgrow";
-        const ns=v.notes||[], ph=ns.reduce((k,x)=>k+(x.photos||[]).length,0), q=ns.filter(x=>x.type==="question").length;
-        const its=v.items||[], pl=v.prep&&v.prep.plannedAt;
-        li.innerHTML=`<span class="mtgdate">${v.status==="prep"&&!pl?"À dater":esc(new Date(visDate(v)).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"}))}</span><div><div class="ttl">${esc(v.title)}</div><div class="meta">${v.status==="prep"?`<span class="tag">${plural(its.length,"élément")} à voir</span>${pl?`<span class="tag">${hm(pl)}</span>`:""}${v.prep.location?`<span class="tag">${esc(v.prep.location)}</span>`:""}`:`<span class="tag">${plural(ns.length,"note")}</span><span class="tag">${plural(ph,"photo")}</span>${q?`<span class="tag">${plural(q,"question")}</span>`:""}`}<span class="tag ${v.status==="done"?"done-t":"wait"}">${v.status==="done"?"Terminée":v.status==="prep"?"Préparée":"En cours"}</span>${vis.map[v.id]&&vis.map[v.id].dirty?`<span class="tag">En attente d'envoi</span>`:""}</div></div><div class="acts">${v.status==="open"?`<button type="button" class="sbtn" data-fin>Clôturer</button>`:""}<button type="button" class="sbtn">Ouvrir</button><button type="button" class="sbtn" data-del aria-label="Supprimer la visite ${esc(v.title)}" title="Supprimer">✕</button></div>`;
-        li.querySelector("[data-del]").onclick=e=>{e.stopPropagation();visDelete(v)};
-        const fin=li.querySelector("[data-fin]");if(fin)fin.onclick=e=>{e.stopPropagation();visFinish(v)};
+    if(!vs.length){const g=document.createElement("section");g.className="group";g.innerHTML=`<h2>Visites <span>0</span></h2><div class="empty">${vis.loaded?"Aucune visite pour ce projet.":"Chargement…"}</div>`;L.appendChild(g);return}
+    const dl=t=>new Date(t).toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"});
+    const menu=async v=>{
+      const ch=await visSheet(v.title,[{k:"open",l:"Ouvrir la visite"},...(v.status==="open"?[{k:"fin",l:"Clôturer la visite"}]:[]),...(v.status!=="prep"?[{k:"pdf",l:"Exporter le compte rendu (PDF)"}]:[]),{k:"del",l:"Supprimer la visite",danger:true}]);
+      if(ch==="open")visOpen(v);else if(ch==="fin")visFinish(v);else if(ch==="pdf")visPdf(v);else if(ch==="del")visDelete(v);
+    };
+    [["open","En cours"],["prep","Préparées"],["done","Terminées"]].forEach(([st,lab])=>{
+      const list=vs.filter(v=>(v.status||"open")===st);if(!list.length)return;
+      const g=document.createElement("section");g.className="group visgrp";
+      g.innerHTML=`<h2>${lab} <span>${list.length}</span></h2>`;
+      const ul=document.createElement("ul");ul.className="tasks vislst";
+      list.forEach(v=>{
+        const li=document.createElement("li");li.className="task mtgrow vrow vr-"+st;
+        const ns=v.notes||[], c=visCounts(ns), its=visItemsOn(v), seen=its.filter(i=>i.seen).length, pr=v.prep||{}, pl=pr.plannedAt, nPart=(pr.participants||[]).length;
+        const d=st==="prep"?pl:visDate(v);
+        const stats=[plural(c.n,"note"),plural(c.ph,"photo"),c.q?plural(c.q,"question"):"",c.au?plural(c.au,"enregistrement"):""].filter(Boolean).join(" · ");
+        const meta=st==="prep"?[pl?`${dl(pl)} · ${hm(pl)}`:"Pas encore datée",pr.location||"",plural(its.length,"élément")+" à voir",nPart?plural(nPart,"participant"):""].filter(Boolean)
+          :st==="open"?[`Démarrée ${dl(visDate(v))} à ${hm(visDate(v))}`,pr.location||"",stats]:[dl(visDate(v)),stats];
+        const trn=ns.filter(n=>n.audio&&!n.tr).length, pend=visPendingN(v);
+        const tags=`<span class="tag ${st==="done"?"done-t":st==="prep"?"wait":"vt-act"}">${st==="done"?"Terminée":st==="prep"?"Préparée":"En cours"}</span>${vis.map[v.id]&&vis.map[v.id].dirty?`<span class="tag vt-act">En attente d'envoi</span>`:""}${st!=="prep"&&trn?`<span class="tag vt-au">${plural(trn,"enregistrement")} à transcrire</span>`:""}${st==="done"&&pend?`<span class="tag vt-cli">${plural(pend,"élément")} à créer dans le projet</span>`:""}${st==="done"&&!pend&&ns.some(n=>n.conv)?`<span class="tag done-t">Points et tâches créés</span>`:""}`;
+        li.innerHTML=`<span class="mtgdate vdd">${d?`<b>${new Date(d).getDate()}</b><small>${esc(new Date(d).toLocaleDateString("fr-FR",{month:"short"}))}</small>`:`<small>À dater</small>`}</span>
+          <div class="vbody"><div class="ttl">${esc(v.title)}</div><div class="meta"><span class="vmeta">${meta.map(esc).join(" · ")}</span>${tags}</div>${st==="open"&&its.length?`<div class="vprog"><span class="vbar sm"><i style="width:${Math.round(100*seen/its.length)}%"></i></span><span>${seen} / ${its.length} vus</span></div>`:""}</div>
+          <div class="vacts">${st==="open"?`<button type="button" class="btn sm" data-fin>Clôturer</button><button type="button" class="btn primary sm" data-open>Reprendre</button>`:st==="prep"?`<button type="button" class="btn sm" data-open>Modifier</button><button type="button" class="btn primary sm" data-startl>Démarrer</button>`:`<button type="button" class="btn sm" data-open>Bilan</button><button type="button" class="btn sm" data-pdfl>${VI.doc}<span>Compte rendu PDF</span></button>`}<button type="button" class="btn sm vmore" data-vmore aria-label="Plus d'actions sur la visite ${esc(v.title)}">${VI.more}</button></div>`;
+        const stop=fn=>e=>{e.stopPropagation();fn()};
+        li.querySelector("[data-vmore]").onclick=stop(()=>menu(v));
+        const fin=li.querySelector("[data-fin]");if(fin)fin.onclick=stop(()=>visFinish(v));
+        const op=li.querySelector("[data-open]");if(op)op.onclick=stop(()=>{visOpen(v);if(st==="done"){visScreen="end";renderVisit()}});
+        const sl=li.querySelector("[data-startl]");if(sl)sl.onclick=stop(()=>{visOpen(v);visStartNow()});
+        const pd=li.querySelector("[data-pdfl]");if(pd)pd.onclick=stop(()=>visPdf(v));
         li.onclick=()=>visOpen(v);ul.appendChild(li)});
-      g.appendChild(ul);
-    }
-    L.appendChild(g);
+      g.appendChild(ul);L.appendChild(g);
+    });
   }
   window.__visState=()=>({map:vis.map,pending:vis.pending}); // utilisé par les tests
   window.__auState=()=>Object.fromEntries(Object.entries(visPlayers).map(([k,p])=>[k,{playing:!!(p.a&&!p.a.paused),t:p.a?p.a.currentTime:0}]));

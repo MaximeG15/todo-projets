@@ -32,7 +32,7 @@ with sync_playwright() as pw:
     back();ok(v.is_visible() and v.locator(".vistile").count()>0,"retour : accueil de la visite")
     back();ok(pg.locator("#visview").count()==0 and mode()=="visits","retour : visite fermée, liste des visites")
     # fenêtre ouverte : fermée par le retour
-    pg.locator("#lists .mtgrow").first.click();pg.wait_for_timeout(300)
+    pg.locator("#lists .mtgrow .ttl").first.click();pg.wait_for_timeout(300)
     pg.locator("#visview [data-vm]").click();pg.wait_for_timeout(200)
     ok(pg.locator("dialog.vissheet").count()==1,"menu de la visite ouvert")
     back();ok(pg.locator("dialog[open]").count()==0 and pg.locator("#visview").is_visible(),"retour : menu fermé, on reste dans la visite")
