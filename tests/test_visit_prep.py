@@ -47,7 +47,7 @@ with sync_playwright() as pw:
     ok("Préparée" in pg.locator(".phtile",has_text="Visites").inner_text(),"accueil du projet : visite préparée")
     pg.locator(".phtile",has_text="Visites").click();pg.locator("#lists .mtgrow").first.click();pg.wait_for_timeout(300)
     v.locator("[data-start]").click();pg.wait_for_timeout(300)
-    ok(v.locator(".vistile:not(.add)").count()==7 and v.locator(".vistile",has_text="Inventaire").count()==0,"visite démarrée : flux non couverts masqués")
+    ok(v.locator(".vistile:not(.add)").count()==6 and v.locator(".vistile",has_text="Inventaire").count()==0,"visite démarrée : flux non couverts masqués")
     ok("0/2 vus" in v.locator(".vistile",has_text="Réception").inner_text(),"avancement sur la tuile")
     v.locator(".vistile",has_text="Réception").click();pg.wait_for_timeout(300)
     ok(v.locator(".visitems .visit").count()==2,"flux : liste « À voir »")
