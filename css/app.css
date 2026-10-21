@@ -1150,3 +1150,37 @@ body.visopen{overflow:hidden}
 .visnav.prev{left:max(10px,env(safe-area-inset-left,0px))}.visnav.next{right:max(10px,env(safe-area-inset-right,0px))}
 .visnav:disabled{opacity:.25;cursor:default}
 .visphn{position:absolute;top:max(12px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);padding:4px 12px;border-radius:14px;background:rgba(14,26,34,.72);color:#fff;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+/* Visites sur ordinateur : la vue occupe la largeur disponible (jusqu'à 1200 px) */
+@media (min-width:900px){
+  .visv > *{max-width:1200px}
+  .vish > *{max-width:1152px}
+  .visv > .visf,.visv > .viscap{max-width:none;padding-left:max(24px,calc((100% - 1152px) / 2));padding-right:max(24px,calc((100% - 1152px) / 2))}
+  .visf:not(.col){justify-content:flex-end}
+  .visf .visend{flex:0 1 320px}
+  .visf.col{flex-direction:row;flex-wrap:wrap;justify-content:flex-end;align-items:center}
+  .visf.col .btn{flex:0 1 auto;padding-left:22px;padding-right:22px}
+  .vistiles{grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+  .vistile{min-height:104px;padding:14px 16px}
+  .vistile b{font-size:17px}
+  .vph{width:132px;height:132px}
+  .visstage .vph.sm{width:72px;height:72px}
+  .visnote p{font-size:16px}
+  .viscap .vistop,.viscap .visin,.viscap .visreply,.viscap .visstage{width:100%}
+  .vism.end{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(460px,100%),1fr));align-items:start;align-content:start}
+  .vism.prep{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);align-items:start;align-content:start}
+  .vism.prep > *{grid-column:1}
+  .vism.prep > .visflowsec{grid-column:2;grid-row:1 / span 6}
+  .visedit > *{width:100%;max-width:1200px;margin-left:auto;margin-right:auto;box-sizing:border-box}
+  .visedit > .visstagecv{max-width:none}
+}
+/* Visionneuse : zoom */
+.visphv{touch-action:none;overflow:hidden;cursor:zoom-in}
+.visphv.zoomed{cursor:grab}
+.visphv.zoomed:active{cursor:grabbing}
+.visphv img{transform-origin:50% 50%;will-change:transform}
+.viszoom{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);height:34px;padding:0 14px;border:0;border-radius:17px;background:rgba(14,26,34,.78);color:#fff;font:inherit;font-size:14px;font-weight:600;cursor:pointer;font-variant-numeric:tabular-nums}
+.viszoom::after{content:" · taille normale";font-weight:400;opacity:.8}
+@media (min-width:900px){
+  .viscap .vistop .visseg{flex:0 1 440px}
+  .visedit footer .btn.primary{flex:0 1 340px;margin-left:auto}
+}

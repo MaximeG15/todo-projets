@@ -76,6 +76,25 @@ with sync_playwright() as pw:
     ok(vw.locator(".visphn").inner_text()=="1 / 2" and vw.locator("input").input_value()=="Quai 3","retour à la photo 1")
     pg.keyboard.press("ArrowRight");pg.wait_for_timeout(300)
     ok(vw.locator("input").input_value()=="Quai 4","flèche du clavier, légende de la photo 2 conservée")
+    # zoom : double-clic, déplacement, molette, retour à la taille normale
+    bb=vw.locator(".visphv").bounding_box();cx,cy=bb["x"]+bb["width"]/2,bb["y"]+bb["height"]/2
+    pg.mouse.dblclick(cx+40,cy+20);pg.wait_for_timeout(200)
+    tr=vw.locator(".visphv img").evaluate("e=>e.style.transform")
+    ok("scale(2.5)" in tr and vw.locator("[data-zr]").inner_text().startswith("250"),"double-clic : zoom ×2,5 sur le point visé")
+    pg.mouse.move(cx,cy);pg.mouse.down();pg.mouse.move(cx-60,cy-30,steps=4);pg.mouse.up();pg.wait_for_timeout(100)
+    ok(vw.locator(".visphv img").evaluate("e=>e.style.transform")!=tr and vw.locator(".visphn").inner_text()=="2 / 2","photo zoomée déplacée à la souris, sans changer de photo")
+    pg.mouse.wheel(0,-400);pg.wait_for_timeout(200)
+    ok(int(vw.locator("[data-zr]").inner_text().split()[0])>250,"molette : zoom plus fort")
+    pg.screenshot(path=OUT+"visit_zoom.png")
+    vw.locator("[data-zr]").click();pg.wait_for_timeout(100)
+    ok(vw.locator(".visphv img").evaluate("e=>e.style.transform")=="" and vw.locator("[data-zr]").is_hidden(),"retour à la taille normale")
+    z=vw.locator(".visphv").evaluate("""v=>{const r=v.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+      const ev=(t,id,x,y)=>v.dispatchEvent(new PointerEvent(t,{pointerId:id,clientX:x,clientY:y,pointerType:'touch',bubbles:true,isPrimary:id===1}));
+      ev('pointerdown',1,cx-40,cy);ev('pointerdown',2,cx+40,cy);
+      for(let i=1;i<=5;i++){ev('pointermove',1,cx-40-i*16,cy);ev('pointermove',2,cx+40+i*16,cy)}
+      ev('pointerup',1,cx-120,cy);ev('pointerup',2,cx+120,cy);return document.querySelector('.visphoto [data-zr]').textContent}""")
+    ok(z.startswith("300"),"pincement à deux doigts : zoom ×3 (%s)"%z)
+    vw.locator("[data-zr]").click()
     vw.locator("[data-x]").click();pg.wait_for_timeout(300)
     info=pg.evaluate("""async()=>{const d=await new Promise(r=>{const q=indexedDB.open('todo-projets-visites');q.onsuccess=()=>r(q.result)});
       const all=await new Promise(r=>{const q=d.transaction('photos').objectStore('photos').getAll();q.onsuccess=()=>r(q.result)});

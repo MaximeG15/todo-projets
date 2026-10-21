@@ -3954,7 +3954,7 @@
     let idx=list().findIndex(p=>p.id===phid), changed=false;
     const ARR=dir=>`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${dir<0?"M15 5l-7 7 7 7":"M9 5l7 7-7 7"}"></path></svg>`;
     const d=document.createElement("dialog");d.className="visphoto";d.setAttribute("aria-label","Photo");
-    d.innerHTML=`<div class="visphv"><img alt=""><button type="button" class="visnav prev" data-nav="-1" aria-label="Photo précédente">${ARR(-1)}</button><button type="button" class="visnav next" data-nav="1" aria-label="Photo suivante">${ARR(1)}</button><span class="visphn" aria-live="polite"></span></div>
+    d.innerHTML=`<div class="visphv"><img alt=""><button type="button" class="visnav prev" data-nav="-1" aria-label="Photo précédente">${ARR(-1)}</button><button type="button" class="visnav next" data-nav="1" aria-label="Photo suivante">${ARR(1)}</button><span class="visphn" aria-live="polite"></span><button type="button" class="viszoom" data-zr hidden aria-label="Revenir à la taille normale"></button></div>
       <div class="visphb"><input type="text" maxlength="200" placeholder="Légende" aria-label="Légende"><button type="button" class="btn danger-t" data-del>Supprimer</button><button type="button" class="btn primary" data-x>Fermer</button></div>`;
     document.body.appendChild(d);
     const img=d.querySelector("img"), inp=d.querySelector("input"), cnt=d.querySelector(".visphn");
@@ -3962,7 +3962,7 @@
     const keep=()=>{const ph=list()[idx];if(!ph)return;const c=inp.value.trim().slice(0,200);if(c!==(ph.caption||"")){visQuiet(x=>{x.notes.find(y=>y.id===n.id).photos.find(p=>p.id===ph.id).caption=c});changed=true}};
     const show=async()=>{
       const ps=list(), ph=ps[idx];if(!ph)return;
-      inp.value=ph.caption||"";img.alt=ph.caption||"Photo";img.removeAttribute("src");
+      inp.value=ph.caption||"";img.alt=ph.caption||"Photo";img.removeAttribute("src");zReset();
       cnt.textContent=ps.length>1?`${idx+1} / ${ps.length}`:"";cnt.hidden=ps.length<2;
       d.querySelectorAll("[data-nav]").forEach(b=>{b.hidden=ps.length<2;b.disabled=+b.dataset.nav<0?idx===0:idx===ps.length-1});
       const id=ph.id, u=await visPhotoUrl(visCur,id);if(u&&list()[idx]&&list()[idx].id===id)img.src=u;
@@ -3971,10 +3971,42 @@
     d.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>go(+b.dataset.nav));
     const onKey=e=>{if(e.target===inp||!d.isConnected)return;if(e.key==="ArrowLeft"){e.preventDefault();go(-1)}else if(e.key==="ArrowRight"){e.preventDefault();go(1)}};
     document.addEventListener("keydown",onKey);
-    // balayage au doigt
-    let sx=null,sy=0;const v=d.querySelector(".visphv");
-    v.addEventListener("pointerdown",e=>{if(e.target.closest("button"))return;sx=e.clientX;sy=e.clientY});
-    v.addEventListener("pointerup",e=>{if(sx==null)return;const dx=e.clientX-sx, dy=e.clientY-sy;sx=null;if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5)go(dx<0?1:-1)});
+    // zoom : pincement à deux doigts, molette, double-clic ou double tape ; déplacement de la photo zoomée au doigt ou à la souris
+    // balayage horizontal (photo non zoomée) : photo précédente ou suivante
+    const v=d.querySelector(".visphv"), zb=d.querySelector("[data-zr]");
+    let z=1,tx=0,ty=0,pinch=null,drag=null,lastTap=0;const pts=new Map();
+    const ctr=e=>{const r=v.getBoundingClientRect();return [e.clientX-r.left-r.width/2,e.clientY-r.top-r.height/2]};
+    const apply=()=>{img.style.transform=z>1?`translate(${tx}px,${ty}px) scale(${z})`:"";v.classList.toggle("zoomed",z>1);zb.hidden=z<=1;zb.textContent=Math.round(z*100)+" %"};
+    const clamp=()=>{if(z<=1.01){z=1;tx=0;ty=0;return}const r=v.getBoundingClientRect(), mx=r.width*(z-1)/2, my=r.height*(z-1)/2;tx=Math.max(-mx,Math.min(mx,tx));ty=Math.max(-my,Math.min(my,ty))};
+    const zoomAt=(nz,cx,cy)=>{nz=Math.max(1,Math.min(6,nz));const k=nz/z;tx=cx-(cx-tx)*k;ty=cy-(cy-ty)*k;z=nz;clamp();apply()};
+    function zReset(){z=1;tx=0;ty=0;pinch=null;drag=null;pts.clear();apply()}
+    const toggle=e=>{if(z>1)zReset();else{const [cx,cy]=ctr(e);zoomAt(2.5,cx,cy)}};
+    zb.onclick=zReset;
+    v.addEventListener("wheel",e=>{e.preventDefault();const [cx,cy]=ctr(e);zoomAt(z*Math.exp(-e.deltaY*0.0015),cx,cy)},{passive:false});
+    v.addEventListener("dblclick",e=>{if(e.target.closest("button"))return;e.preventDefault();toggle(e)});
+    v.addEventListener("pointerdown",e=>{
+      if(e.target.closest("button"))return;
+      pts.set(e.pointerId,[e.clientX,e.clientY]);try{v.setPointerCapture(e.pointerId)}catch(x){}
+      if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a[0]-b[0],a[1]-b[1])||1,z,m:[(a[0]+b[0])/2,(a[1]+b[1])/2]};drag=null}
+      else if(pts.size===1)drag={x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,t:Date.now(),moved:false};
+    });
+    v.addEventListener("pointermove",e=>{
+      if(!pts.has(e.pointerId))return;pts.set(e.pointerId,[e.clientX,e.clientY]);
+      if(pinch&&pts.size===2){const [a,b]=[...pts.values()], m=[(a[0]+b[0])/2,(a[1]+b[1])/2], r=v.getBoundingClientRect();
+        tx+=m[0]-pinch.m[0];ty+=m[1]-pinch.m[1];pinch.m=m;
+        zoomAt(pinch.z*Math.hypot(a[0]-b[0],a[1]-b[1])/pinch.d,m[0]-r.left-r.width/2,m[1]-r.top-r.height/2);return}
+      if(drag){if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>8)drag.moved=true;
+        if(z>1){tx+=e.clientX-drag.x;ty+=e.clientY-drag.y;clamp();apply()}drag.x=e.clientX;drag.y=e.clientY}
+    });
+    const up=e=>{
+      if(!pts.has(e.pointerId))return;pts.delete(e.pointerId);
+      if(pinch){if(pts.size<2)pinch=null;if(pts.size===1){const [p]=[...pts.values()];drag={x:p[0],y:p[1],sx:p[0],sy:p[1],t:0,moved:true}}return}
+      const g=drag;drag=null;if(!g||e.type==="pointercancel")return;
+      const dx=e.clientX-g.sx, dy=e.clientY-g.sy;
+      if(z<=1&&Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5){go(dx<0?1:-1);return}
+      if(e.pointerType==="touch"&&!g.moved&&Date.now()-g.t<300){if(Date.now()-lastTap<320){lastTap=0;toggle(e)}else lastTap=Date.now()}
+    };
+    v.addEventListener("pointerup",up);v.addEventListener("pointercancel",up);
     const close=()=>{keep();document.removeEventListener("keydown",onKey);try{d.close()}catch(e){}d.remove();if(changed)renderVisit()};
     d.addEventListener("cancel",e=>{e.preventDefault();close()});
     d.querySelector("[data-x]").onclick=close;
@@ -4106,7 +4138,7 @@
           ${cand.length?`<div class="mtgppl">${cand.map((x,i)=>`<label><input type="checkbox" data-pp="${i}" ${on.has(norm(x.name))?"checked":""}><span>${esc(x.name)}${x.role?` <small>${esc(x.role)}</small>`:""}</span><em>${esc(SIDE[x.side]||"")}</em></label>`).join("")}</div>`:`<p class="muted">Aucun contact pour ce projet.</p>`}
           <form class="mtgadd" data-padd autocomplete="off"><input type="text" placeholder="Nom ou fonction" aria-label="Nom ou fonction" maxlength="120"><select aria-label="Côté">${Object.entries(SIDE).map(([k,l])=>`<option value="${k}">${l}</option>`).join("")}</select><button class="btn" type="submit">Ajouter</button></form>
         </section>
-        <section class="viscard"><div class="vishrow"><h3>Flux et éléments à voir</h3><button type="button" class="btn ghost" data-seed title="Ajoute les points ouverts attendant le client dont le thème correspond à un flux">Reprendre les points ouverts</button></div>
+        <section class="viscard visflowsec"><div class="vishrow"><h3>Flux et éléments à voir</h3><button type="button" class="btn ghost" data-seed title="Ajoute les points ouverts attendant le client dont le thème correspond à un flux">Reprendre les points ouverts</button></div>
           <p class="muted">Les points ouverts attendant une réponse du client sont repris automatiquement dans le flux de même thème. Ajoutez ce que vous voulez voir, photographier ou demander sur place.</p>
           <div class="visflows">${fl.map((f,k)=>{const it=visItems(v,f.id);return `<div class="visfl${f.off?" off":""}" data-f="${esc(f.id)}">
             <div class="visflh"><label><input type="checkbox" data-on ${f.off?"":"checked"} aria-label="Flux ${esc(f.name)} couvert pendant la visite"><b>${esc(f.name)}</b></label><span class="muted">${f.off?"non couvert":plural(it.length,"élément")}</span><span class="sp"></span>
