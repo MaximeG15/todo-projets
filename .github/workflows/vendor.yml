@@ -1,0 +1,44 @@
+name: vendor
+on:
+  push:
+    branches: [vendor-files]
+permissions:
+  contents: write
+jobs:
+  fetch:
+    if: "!contains(github.event.head_commit.message, '[vendored]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Fetch transformers.js and onnxruntime-web
+        run: |
+          set -e
+          V=$(npm view @huggingface/transformers@3 version | tail -1 | awk '{print $NF}' | tr -d "'")
+          echo "transformers $V" > log.txt
+          npm view @huggingface/transformers@3 version >> log.txt
+          mkdir -p t && cd t && npm pack @huggingface/transformers@$V >/dev/null && tar xzf *.tgz && cd ..
+          OV=$(node -e "const p=require('./t/package/package.json');console.log((p.dependencies||{})['onnxruntime-web'])")
+          echo "onnxruntime-web dep $OV" >> log.txt
+          mkdir -p o && cd o && npm pack onnxruntime-web@$OV >/dev/null && tar xzf *.tgz && cd ..
+          echo "ort version $(node -e "console.log(require('./o/package/package.json').version)")" >> log.txt
+          echo "--- transformers dist" >> log.txt; ls -la t/package/dist >> log.txt
+          echo "--- ort dist" >> log.txt; ls -la o/package/dist >> log.txt
+          rm -rf transformers && mkdir transformers
+          cp t/package/dist/transformers.min.js transformers/ 2>/dev/null || true
+          cp t/package/dist/transformers.web.min.js transformers/ 2>/dev/null || true
+          cp t/package/LICENSE transformers/LICENSE-transformers 2>/dev/null || true
+          cp o/package/dist/ort-wasm-simd-threaded.jsep.mjs o/package/dist/ort-wasm-simd-threaded.jsep.wasm transformers/ 2>/dev/null || true
+          cp o/package/dist/ort-wasm-simd-threaded.mjs o/package/dist/ort-wasm-simd-threaded.wasm transformers/ 2>/dev/null || true
+          cp o/package/LICENSE transformers/LICENSE-onnxruntime 2>/dev/null || true
+          echo "--- vendored" >> log.txt; ls -la transformers >> log.txt
+          head -c 600 transformers/transformers.min.js >> log.txt || true
+          rm -rf t o
+      - name: Commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Bibliothèque de transcription [vendored]" || echo "rien"
+          git push
