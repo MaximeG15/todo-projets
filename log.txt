@@ -1,6 +1,121 @@
-ok code128
-ok gs1-128
-ok ean13
-ok datamatrix
-ok gs1datamatrix
-ok qrcode
+transformers 3.8.1
+@huggingface/transformers@3.0.0 '3.0.0'
+@huggingface/transformers@3.0.1 '3.0.1'
+@huggingface/transformers@3.0.2 '3.0.2'
+@huggingface/transformers@3.1.0 '3.1.0'
+@huggingface/transformers@3.1.1 '3.1.1'
+@huggingface/transformers@3.1.2 '3.1.2'
+@huggingface/transformers@3.2.0 '3.2.0'
+@huggingface/transformers@3.2.1 '3.2.1'
+@huggingface/transformers@3.2.2 '3.2.2'
+@huggingface/transformers@3.2.3 '3.2.3'
+@huggingface/transformers@3.2.4 '3.2.4'
+@huggingface/transformers@3.3.0 '3.3.0'
+@huggingface/transformers@3.3.1 '3.3.1'
+@huggingface/transformers@3.3.2 '3.3.2'
+@huggingface/transformers@3.3.3 '3.3.3'
+@huggingface/transformers@3.4.0 '3.4.0'
+@huggingface/transformers@3.4.1 '3.4.1'
+@huggingface/transformers@3.4.2 '3.4.2'
+@huggingface/transformers@3.5.0 '3.5.0'
+@huggingface/transformers@3.5.1 '3.5.1'
+@huggingface/transformers@3.5.2 '3.5.2'
+@huggingface/transformers@3.6.0 '3.6.0'
+@huggingface/transformers@3.6.1 '3.6.1'
+@huggingface/transformers@3.6.2 '3.6.2'
+@huggingface/transformers@3.6.3 '3.6.3'
+@huggingface/transformers@3.7.0 '3.7.0'
+@huggingface/transformers@3.7.1 '3.7.1'
+@huggingface/transformers@3.7.2 '3.7.2'
+@huggingface/transformers@3.7.3 '3.7.3'
+@huggingface/transformers@3.7.4 '3.7.4'
+@huggingface/transformers@3.7.5 '3.7.5'
+@huggingface/transformers@3.7.6 '3.7.6'
+@huggingface/transformers@3.8.0 '3.8.0'
+@huggingface/transformers@3.8.1 '3.8.1'
+onnxruntime-web dep 1.22.0-dev.20250409-89f8206ba4
+ort version 1.22.0-dev.20250409-89f8206ba4
+--- transformers dist
+total 45272
+drwxr-xr-x 2 runner runner     4096 Oct 21 14:49 .
+drwxr-xr-x 5 runner runner     4096 Oct 21 14:49 ..
+-rw-r--r-- 1 runner runner    44484 Oct 26  1985 ort-wasm-simd-threaded.jsep.mjs
+-rw-r--r-- 1 runner runner 21596019 Oct 26  1985 ort-wasm-simd-threaded.jsep.wasm
+-rw-r--r-- 1 runner runner  2253735 Oct 26  1985 transformers.js
+-rw-r--r-- 1 runner runner  2146226 Oct 26  1985 transformers.js.map
+-rw-r--r-- 1 runner runner   888173 Oct 26  1985 transformers.min.js
+-rw-r--r-- 1 runner runner  2692154 Oct 26  1985 transformers.min.js.map
+-rw-r--r-- 1 runner runner  1647845 Oct 26  1985 transformers.node.cjs
+-rw-r--r-- 1 runner runner  1575731 Oct 26  1985 transformers.node.cjs.map
+-rw-r--r-- 1 runner runner   426274 Oct 26  1985 transformers.node.min.cjs
+-rw-r--r-- 1 runner runner  1799021 Oct 26  1985 transformers.node.min.cjs.map
+-rw-r--r-- 1 runner runner   470288 Oct 26  1985 transformers.node.min.mjs
+-rw-r--r-- 1 runner runner  1799404 Oct 26  1985 transformers.node.min.mjs.map
+-rw-r--r-- 1 runner runner  1777746 Oct 26  1985 transformers.node.mjs
+-rw-r--r-- 1 runner runner  1575721 Oct 26  1985 transformers.node.mjs.map
+-rw-r--r-- 1 runner runner  1777240 Oct 26  1985 transformers.web.js
+-rw-r--r-- 1 runner runner  1576002 Oct 26  1985 transformers.web.js.map
+-rw-r--r-- 1 runner runner   469931 Oct 26  1985 transformers.web.min.js
+-rw-r--r-- 1 runner runner  1798603 Oct 26  1985 transformers.web.min.js.map
+--- ort dist
+total 88220
+drwxr-xr-x 2 runner runner     4096 Oct 21 14:49 .
+drwxr-xr-x 5 runner runner     4096 Oct 21 14:49 ..
+-rw-r--r-- 1 runner runner    44484 Oct 26  1985 ort-wasm-simd-threaded.jsep.mjs
+-rw-r--r-- 1 runner runner 21596019 Oct 26  1985 ort-wasm-simd-threaded.jsep.wasm
+-rw-r--r-- 1 runner runner    20856 Oct 26  1985 ort-wasm-simd-threaded.mjs
+-rw-r--r-- 1 runner runner 11133407 Oct 26  1985 ort-wasm-simd-threaded.wasm
+-rw-r--r-- 1 runner runner   832611 Oct 26  1985 ort.all.bundle.min.mjs
+-rw-r--r-- 1 runner runner  3114304 Oct 26  1985 ort.all.bundle.min.mjs.map
+-rw-r--r-- 1 runner runner  5733825 Oct 26  1985 ort.all.js
+-rw-r--r-- 1 runner runner   789395 Oct 26  1985 ort.all.min.js
+-rw-r--r-- 1 runner runner  2998822 Oct 26  1985 ort.all.min.js.map
+-rw-r--r-- 1 runner runner   789326 Oct 26  1985 ort.all.min.mjs
+-rw-r--r-- 1 runner runner  2998810 Oct 26  1985 ort.all.min.mjs.map
+-rw-r--r-- 1 runner runner  5655719 Oct 26  1985 ort.all.mjs
+-rw-r--r-- 1 runner runner   398170 Oct 26  1985 ort.bundle.min.mjs
+-rw-r--r-- 1 runner runner  1464642 Oct 26  1985 ort.bundle.min.mjs.map
+-rw-r--r-- 1 runner runner  2559644 Oct 26  1985 ort.js
+-rw-r--r-- 1 runner runner   355131 Oct 26  1985 ort.min.js
+-rw-r--r-- 1 runner runner  1350735 Oct 26  1985 ort.min.js.map
+-rw-r--r-- 1 runner runner   355057 Oct 26  1985 ort.min.mjs
+-rw-r--r-- 1 runner runner  1350733 Oct 26  1985 ort.min.mjs.map
+-rw-r--r-- 1 runner runner  2528294 Oct 26  1985 ort.mjs
+-rw-r--r-- 1 runner runner    25274 Oct 26  1985 ort.node.min.js
+-rw-r--r-- 1 runner runner   142189 Oct 26  1985 ort.node.min.js.map
+-rw-r--r-- 1 runner runner    25219 Oct 26  1985 ort.node.min.mjs
+-rw-r--r-- 1 runner runner   142345 Oct 26  1985 ort.node.min.mjs.map
+-rw-r--r-- 1 runner runner    48022 Oct 26  1985 ort.wasm.bundle.min.mjs
+-rw-r--r-- 1 runner runner   305752 Oct 26  1985 ort.wasm.bundle.min.mjs.map
+-rw-r--r-- 1 runner runner   553484 Oct 26  1985 ort.wasm.js
+-rw-r--r-- 1 runner runner    48076 Oct 26  1985 ort.wasm.min.js
+-rw-r--r-- 1 runner runner   305760 Oct 26  1985 ort.wasm.min.js.map
+-rw-r--r-- 1 runner runner    48008 Oct 26  1985 ort.wasm.min.mjs
+-rw-r--r-- 1 runner runner   305752 Oct 26  1985 ort.wasm.min.mjs.map
+-rw-r--r-- 1 runner runner   545806 Oct 26  1985 ort.wasm.mjs
+-rw-r--r-- 1 runner runner  3412544 Oct 26  1985 ort.webgl.js
+-rw-r--r-- 1 runner runner   454171 Oct 26  1985 ort.webgl.min.js
+-rw-r--r-- 1 runner runner  1814807 Oct 26  1985 ort.webgl.min.js.map
+-rw-r--r-- 1 runner runner   454034 Oct 26  1985 ort.webgl.min.mjs
+-rw-r--r-- 1 runner runner  1814538 Oct 26  1985 ort.webgl.min.mjs.map
+-rw-r--r-- 1 runner runner  3362598 Oct 26  1985 ort.webgl.mjs
+-rw-r--r-- 1 runner runner   398191 Oct 26  1985 ort.webgpu.bundle.min.mjs
+-rw-r--r-- 1 runner runner  1464642 Oct 26  1985 ort.webgpu.bundle.min.mjs.map
+-rw-r--r-- 1 runner runner  2559651 Oct 26  1985 ort.webgpu.js
+-rw-r--r-- 1 runner runner   355138 Oct 26  1985 ort.webgpu.min.js
+-rw-r--r-- 1 runner runner  1350735 Oct 26  1985 ort.webgpu.min.js.map
+-rw-r--r-- 1 runner runner   355071 Oct 26  1985 ort.webgpu.min.mjs
+-rw-r--r-- 1 runner runner  1350734 Oct 26  1985 ort.webgpu.min.mjs.map
+-rw-r--r-- 1 runner runner  2528301 Oct 26  1985 ort.webgpu.mjs
+--- vendored
+total 33384
+drwxr-xr-x 2 runner runner     4096 Oct 21 14:49 .
+drwxr-xr-x 7 runner runner     4096 Oct 21 14:49 ..
+-rw-r--r-- 1 runner runner    11358 Oct 21 14:49 LICENSE-transformers
+-rw-r--r-- 1 runner runner    44484 Oct 21 14:49 ort-wasm-simd-threaded.jsep.mjs
+-rw-r--r-- 1 runner runner 21596019 Oct 21 14:49 ort-wasm-simd-threaded.jsep.wasm
+-rw-r--r-- 1 runner runner    20856 Oct 21 14:49 ort-wasm-simd-threaded.mjs
+-rw-r--r-- 1 runner runner 11133407 Oct 21 14:49 ort-wasm-simd-threaded.wasm
+-rw-r--r-- 1 runner runner   888173 Oct 21 14:49 transformers.min.js
+-rw-r--r-- 1 runner runner   469931 Oct 21 14:49 transformers.web.min.js
+var e,t,n={"./node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm":(e,t,n)=>{e.exports=n.p+"ort-wasm-simd-threaded.jsep.wasm"},"./node_modules/onnxruntime-web/dist/ort.bundle.min.mjs?46eb":(e,t,n)=>{e.exports=n.p+"ort.bundle.min.mjs"},"?2ce3":()=>{},"?7992":()=>{},"?5af5":()=>{},"?2b25":()=>{},"?db59":()=>{},"?383f":()=>{},"?fa4b":()=>{},"./node_modules/@huggingface/jinja/dist/index.js":(e,t,n)=>{n.r(t),n.d(t,{Environment:()=>ie,Interpreter:()=>ue,Template:()=>we,parse:()=>V,tokenize:()=>u});var r=Object.freeze({Text:"Text",NumericLiteral:"NumericLiteral",StringLiteral:"StringLi
