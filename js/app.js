@@ -3578,7 +3578,7 @@
   // Une visite = un document (flux + notes). Tout est d'abord enregistré sur l'appareil (IndexedDB) : la visite
   // fonctionne sans réseau. En mode en ligne, les visites et les photos partent dès que la connexion le permet
   // (table « visits », stockage privé « visit-photos », chemin <projet>/<visite>/<photo>.jpg).
-  const VIS_FLOWS=["Généralités","Réception","Stockage","Réapprovisionnement","Préparation","Expédition","Gestion de stock","Inventaire"];
+  const VIS_FLOWS=["Réception","Stockage","Réapprovisionnement","Préparation","Expédition","Gestion de stock","Inventaire"];
   const NTYPE={note:["Note","nt-note"],question:["Question client","nt-q"],action:["Action","nt-act"]};
   const VIS_MAX=1600, VIS_Q=0.8;
   const vis={map:{},loaded:false,loading:null,pending:0,flushing:false,err:"",urls:{},t:null};
@@ -3784,7 +3784,10 @@
   }
   // ---------- Écran de visite ----------
   let visCur=null, visScreen="home", visFlowId=null, visType="note", visStage=[], visText="", visReply=null;
-  function visOpen(v,flowId){if(vis.loaded)setTimeout(()=>visLoad(true),0);visCur=JSON.parse(JSON.stringify(v));visCur.items=visCur.items||[];visCur.prep=visCur.prep||{};visScreen=v.status==="prep"?"prep":flowId?"flow":"home";visFlowId=flowId||null;visStage=[];visText="";visReply=null;renderVisit()}
+  function visOpen(v,flowId){if(vis.loaded)setTimeout(()=>visLoad(true),0);visCur=JSON.parse(JSON.stringify(v));visCur.items=visCur.items||[];visCur.prep=visCur.prep||{};
+    // flux « Généralités » retiré des flux par défaut : on l'enlève des visites en cours s'il est resté vide
+    if(visCur.status!=="done"){const g=(visCur.flows||[]).filter(f=>f.name==="Généralités"&&!visNotes(visCur,f.id).length&&!visCur.items.some(i=>i.flow===f.id)).map(f=>f.id);if(g.length&&visCur.flows.length>g.length)visQuiet(x=>{x.flows=x.flows.filter(f=>!g.includes(f.id))})}
+    visScreen=v.status==="prep"?"prep":flowId?"flow":"home";visFlowId=flowId||null;visStage=[];visText="";visReply=null;renderVisit()}
   function visClose(){if(visStage.length)visDropPhotos(visCur,visStage.map(s=>s.id));visCur=null;visStage=[];renderVisit();render()}
   function visSet(fn){fn(visCur);visPut(visCur);renderVisit()}
   function visQuiet(fn){fn(visCur);visPut(visCur)} // modification sans redessiner (saisie en cours)
@@ -3946,16 +3949,45 @@
     if(ch==="del")visSet(x=>{x.flows=x.flows.filter(y=>y.id!==f.id);x.items=(x.items||[]).filter(i=>i.flow!==f.id)});
   }
   async function visViewPhoto(phid){
-    const n=visCur.notes.find(x=>(x.photos||[]).some(p=>p.id===phid)), ph=n&&n.photos.find(p=>p.id===phid);if(!ph)return;
+    const n=visCur.notes.find(x=>(x.photos||[]).some(p=>p.id===phid));if(!n)return;
+    const list=()=>(visCur.notes.find(y=>y.id===n.id)||{photos:[]}).photos||[];
+    let idx=list().findIndex(p=>p.id===phid), changed=false;
+    const ARR=dir=>`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${dir<0?"M15 5l-7 7 7 7":"M9 5l7 7-7 7"}"></path></svg>`;
     const d=document.createElement("dialog");d.className="visphoto";d.setAttribute("aria-label","Photo");
-    d.innerHTML=`<img alt="${esc(ph.caption||"Photo")}"><div class="visphb"><input type="text" maxlength="200" placeholder="Légende" value="${esc(ph.caption||"")}" aria-label="Légende"><button type="button" class="btn danger-t" data-del>Supprimer</button><button type="button" class="btn primary" data-x>Fermer</button></div>`;
+    d.innerHTML=`<div class="visphv"><img alt=""><button type="button" class="visnav prev" data-nav="-1" aria-label="Photo précédente">${ARR(-1)}</button><button type="button" class="visnav next" data-nav="1" aria-label="Photo suivante">${ARR(1)}</button><span class="visphn" aria-live="polite"></span></div>
+      <div class="visphb"><input type="text" maxlength="200" placeholder="Légende" aria-label="Légende"><button type="button" class="btn danger-t" data-del>Supprimer</button><button type="button" class="btn primary" data-x>Fermer</button></div>`;
     document.body.appendChild(d);
-    const u=await visPhotoUrl(visCur,phid);if(u)d.querySelector("img").src=u;
-    const close=()=>{const c=d.querySelector("input").value.trim().slice(0,200);try{d.close()}catch(e){}d.remove();if(c!==(ph.caption||""))visSet(x=>{x.notes.find(y=>y.id===n.id).photos.find(p=>p.id===phid).caption=c})};
+    const img=d.querySelector("img"), inp=d.querySelector("input"), cnt=d.querySelector(".visphn");
+    // la légende saisie est gardée quand on change de photo
+    const keep=()=>{const ph=list()[idx];if(!ph)return;const c=inp.value.trim().slice(0,200);if(c!==(ph.caption||"")){visQuiet(x=>{x.notes.find(y=>y.id===n.id).photos.find(p=>p.id===ph.id).caption=c});changed=true}};
+    const show=async()=>{
+      const ps=list(), ph=ps[idx];if(!ph)return;
+      inp.value=ph.caption||"";img.alt=ph.caption||"Photo";img.removeAttribute("src");
+      cnt.textContent=ps.length>1?`${idx+1} / ${ps.length}`:"";cnt.hidden=ps.length<2;
+      d.querySelectorAll("[data-nav]").forEach(b=>{b.hidden=ps.length<2;b.disabled=+b.dataset.nav<0?idx===0:idx===ps.length-1});
+      const id=ph.id, u=await visPhotoUrl(visCur,id);if(u&&list()[idx]&&list()[idx].id===id)img.src=u;
+    };
+    const go=k=>{const ps=list(), j=idx+k;if(j<0||j>=ps.length)return;keep();idx=j;show()};
+    d.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>go(+b.dataset.nav));
+    const onKey=e=>{if(e.target===inp||!d.isConnected)return;if(e.key==="ArrowLeft"){e.preventDefault();go(-1)}else if(e.key==="ArrowRight"){e.preventDefault();go(1)}};
+    document.addEventListener("keydown",onKey);
+    // balayage au doigt
+    let sx=null,sy=0;const v=d.querySelector(".visphv");
+    v.addEventListener("pointerdown",e=>{if(e.target.closest("button"))return;sx=e.clientX;sy=e.clientY});
+    v.addEventListener("pointerup",e=>{if(sx==null)return;const dx=e.clientX-sx, dy=e.clientY-sy;sx=null;if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5)go(dx<0?1:-1)});
+    const close=()=>{keep();document.removeEventListener("keydown",onKey);try{d.close()}catch(e){}d.remove();if(changed)renderVisit()};
     d.addEventListener("cancel",e=>{e.preventDefault();close()});
     d.querySelector("[data-x]").onclick=close;
-    d.querySelector("[data-del]").onclick=async()=>{try{d.close()}catch(e){}d.remove();if(!await uiConfirm("Supprimer cette photo ?",{ok:"Supprimer",danger:true}))return;visDropPhotos(visCur,[phid]);visSet(x=>{const y=x.notes.find(z=>z.id===n.id);y.photos=y.photos.filter(p=>p.id!==phid);if(!y.photos.length&&!y.text)x.notes=x.notes.filter(z=>z.id!==y.id)})};
+    d.querySelector("[data-del]").onclick=async()=>{
+      keep();const ph=list()[idx];if(!ph)return;
+      if(!await uiConfirm("Supprimer cette photo ?",{ok:"Supprimer",danger:true}))return;
+      visDropPhotos(visCur,[ph.id]);
+      visQuiet(x=>{const y=x.notes.find(z=>z.id===n.id);y.photos=y.photos.filter(p=>p.id!==ph.id);if(!y.photos.length&&!y.text)x.notes=x.notes.filter(z=>z.id!==y.id)});changed=true;
+      const ps=list();if(!ps.length){document.removeEventListener("keydown",onKey);try{d.close()}catch(e){}d.remove();renderVisit();return}
+      idx=Math.min(idx,ps.length-1);show();
+    };
     if(d.showModal)d.showModal();else d.setAttribute("open","");
+    show();
   }
   // ---------- Photo : prise de vue, réduction, annotation, légende, série ----------
   // src « camera » : appareil photo direct ; « gallery » : galerie du téléphone, plusieurs photos possibles

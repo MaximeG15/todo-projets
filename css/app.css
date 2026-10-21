@@ -1143,3 +1143,10 @@ body.visopen{overflow:hidden}
 .visedit footer .btn.ico{flex:none;width:56px;padding:0;display:grid;place-items:center}
 .visf .visdone:not(.primary){background:var(--panel);border:1px solid var(--field);color:var(--ink);font-weight:600}
 @media (max-width:760px){.task.mtgrow .acts .sbtn[data-fin]{display:inline-flex;align-items:center}}
+/* Visionneuse photo : navigation entre les photos d'une note */
+.visphv{position:relative;flex:1;min-height:0;display:flex;touch-action:pan-y}
+.visphv img{flex:1;min-height:0;min-width:0;object-fit:contain;width:100%;user-select:none;-webkit-user-drag:none}
+.visnav{position:absolute;top:50%;transform:translateY(-50%);width:48px;height:48px;border:0;border-radius:50%;background:rgba(14,26,34,.72);color:#fff;display:grid;place-items:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.visnav.prev{left:max(10px,env(safe-area-inset-left,0px))}.visnav.next{right:max(10px,env(safe-area-inset-right,0px))}
+.visnav:disabled{opacity:.25;cursor:default}
+.visphn{position:absolute;top:max(12px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);padding:4px 12px;border-radius:14px;background:rgba(14,26,34,.72);color:#fff;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}

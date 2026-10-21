@@ -31,11 +31,11 @@ with sync_playwright() as pw:
     ok("Préparer une visite" in pg.locator("#lists").inner_text(),"onglet Visites")
     pg.locator("#lists [data-new]").click();pg.wait_for_timeout(500)
     v=pg.locator("#visview")
-    ok(v.is_visible() and v.locator(".vistile:not(.add)").count()==8,"nouvelle visite : 8 flux par défaut")
+    ok(v.is_visible() and v.locator(".vistile:not(.add)").count()==7 and v.locator(".vistile",has_text="Généralités").count()==0,"nouvelle visite : 7 flux par défaut, sans « Généralités »")
     pg.screenshot(path=OUT+"visit_home.png")
     # ajouter un flux
     v.locator("[data-addf]").click();pg.wait_for_timeout(200)
-    ok(v.locator(".vistile:not(.add)").count()==8,"ajout de flux annulé si nom vide")
+    ok(v.locator(".vistile:not(.add)").count()==7,"ajout de flux annulé si nom vide")
     RESP["Nom du nouveau flux"]="Quais"
     v.locator("[data-addf]").click();pg.wait_for_timeout(300)
     ok(v.locator(".vistile",has_text="Quais").count()==1,"flux ajouté")
@@ -65,6 +65,18 @@ with sync_playwright() as pw:
     v.locator("[data-add]").click();pg.wait_for_timeout(800)
     ok(v.locator(".visnote").count()==2 and v.locator(".visnote .vph img[src^='blob:']").count()==2,"note « Action » avec ses 2 photos affichées")
     pg.screenshot(path=OUT+"visit_flow.png")
+    # visionneuse : flèches entre les photos d'une même note
+    v.locator(".visnote").last.locator(".vph").first.click();pg.wait_for_timeout(600)
+    vw=pg.locator("dialog.visphoto")
+    ok(vw.locator(".visphn").inner_text()=="1 / 2" and vw.locator(".visnav.prev").is_disabled() and vw.locator("input").input_value()=="Quai 3","visionneuse : photo 1 sur 2, flèche précédente grisée")
+    vw.locator(".visnav.next").click();pg.wait_for_timeout(400)
+    ok(vw.locator(".visphn").inner_text()=="2 / 2" and vw.locator(".visnav.next").is_disabled() and (vw.locator("img").get_attribute("src") or "").startswith("blob:"),"flèche suivante : photo 2")
+    pg.screenshot(path=OUT+"visit_viewer.png")
+    vw.locator("input").fill("Quai 4");vw.locator(".visnav.prev").click();pg.wait_for_timeout(300)
+    ok(vw.locator(".visphn").inner_text()=="1 / 2" and vw.locator("input").input_value()=="Quai 3","retour à la photo 1")
+    pg.keyboard.press("ArrowRight");pg.wait_for_timeout(300)
+    ok(vw.locator("input").input_value()=="Quai 4","flèche du clavier, légende de la photo 2 conservée")
+    vw.locator("[data-x]").click();pg.wait_for_timeout(300)
     info=pg.evaluate("""async()=>{const d=await new Promise(r=>{const q=indexedDB.open('todo-projets-visites');q.onsuccess=()=>r(q.result)});
       const all=await new Promise(r=>{const q=d.transaction('photos').objectStore('photos').getAll();q.onsuccess=()=>r(q.result)});
       const out=[];for(const p of all){const bm=await createImageBitmap(p.blob);out.push([p.blob.size,bm.width,bm.height])}return out}""")
