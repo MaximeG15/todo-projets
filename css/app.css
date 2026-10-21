@@ -1296,3 +1296,15 @@ body.visopen{overflow:hidden}
 .trq span{display:flex;flex-direction:column;gap:2px}.trq small{font-size:13px;color:var(--muted)}
 .trdl{display:flex;flex-direction:column;gap:6px}.trdl small{font-size:13px;color:var(--muted)}
 .trnote{margin:0;padding:10px 12px;border-radius:8px;background:var(--soft);font-size:13px;color:var(--chipink)}
+/* lecteur d'enregistrement */
+.visau{display:flex;align-items:center;gap:10px;min-width:0}
+.aup{flex:none;width:44px;height:44px;border:0;border-radius:50%;background:var(--nav);color:#fff;display:grid;place-items:center;cursor:pointer}
+.aup svg{margin-left:1px}
+.aubar{flex:1;min-width:0;height:44px;padding:0;border:0;background:none;cursor:pointer;display:flex;align-items:center}
+.aubar::before{content:"";position:absolute}
+.aubar{position:relative}
+.aubar::after{content:"";position:absolute;left:0;right:0;top:50%;height:6px;margin-top:-3px;border-radius:3px;background:var(--line2)}
+.aubar i{position:relative;z-index:1;display:block;height:6px;border-radius:3px;background:#4B3A8C;width:0}
+.aut{flex:none;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:42px;text-align:right}
+.auspin{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;animation:auspin .8s linear infinite}
+@keyframes auspin{to{transform:rotate(360deg)}}

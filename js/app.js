@@ -3854,6 +3854,7 @@
     visScreen=v.status==="prep"?"prep":flowId?"flow":"home";visFlowId=flowId||null;visStage=[];visText="";visReply=null;renderVisit()}
   async function visClose(){
     if(visRec&&visCur&&visRec.vid===visCur.id){if(!await uiConfirm("Un enregistrement est en cours. L'arrêter et le garder avant de quitter la visite ?",{ok:"Arrêter et quitter"}))return;recStop();await new Promise(r=>setTimeout(r,400))}
+    auStopAll();
     if(visStage.length)visDropPhotos(visCur,visStage.map(s=>s.id));visCur=null;visStage=[];renderVisit();render()}
   function visSet(fn){fn(visCur);visPut(visCur);renderVisit()}
   function visQuiet(fn){fn(visCur);visPut(visCur)} // modification sans redessiner (saisie en cours)
@@ -4515,17 +4516,46 @@
     const pill=o.querySelector(".vish .visrow");if(pill&&!pill.querySelector(".recpill"))pill.insertAdjacentHTML("beforeend",`<span class="recpill"><span class="recdot" aria-hidden="true"></span>REC <span data-rectime>${mmss(recElapsed(r))}</span></span>`);
     recTick(r);
   }
-  // lecteur d'un enregistrement (le fichier est chargé au premier clic)
-  function recFillPlayers(root,v){
-    root.querySelectorAll("audio[data-au]").forEach(au=>{
-      const n=(v.notes||[]).find(x=>x.audio&&x.audio.id===au.dataset.au);if(!n)return;
-      const load=async()=>{if(au.src)return;const u=await visAudioUrl(v,n.audio);if(u){au.src=u}else{au.closest(".visau").classList.add("missing")}};
-      if(vis.urls[n.audio.id])au.src=vis.urls[n.audio.id];
-      else au.addEventListener("play",()=>{if(!au.src){au.pause();load().then(()=>au.play().catch(()=>{}))}},{once:true});
-      au.addEventListener("pointerdown",load,{once:true});
+  // lecteur d'un enregistrement : lecteur de l'appli (le fichier est chargé au premier appui sur Lecture,
+  // depuis l'appareil ou le stockage en ligne) ; la lecture continue si l'écran est redessiné
+  const visPlayers={};
+  const PLAY_SVG=`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>`;
+  const PAUSE_SVG=`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>`;
+  function auPaint(id){
+    const p=visPlayers[id];
+    document.querySelectorAll(`.visau[data-au="${id}"]`).forEach(el=>{
+      const au=p&&p.a, dur=au&&isFinite(au.duration)&&au.duration>0?au.duration:+el.dataset.dur||0, t=au?au.currentTime:0, on=!!(au&&!au.paused);
+      const b=el.querySelector(".aup");b.innerHTML=p&&p.busy?`<span class="auspin" aria-hidden="true"></span>`:on?PAUSE_SVG:PLAY_SVG;b.setAttribute("aria-label",on?"Mettre en pause":"Écouter l'enregistrement");
+      el.querySelector(".aubar i").style.width=(dur?Math.min(100,100*t/dur):0)+"%";
+      el.querySelector(".aut").textContent=(t>0.05||on?mmss(t)+" / ":"")+mmss(dur);
     });
   }
-
+  function auStopAll(except){Object.entries(visPlayers).forEach(([k,p])=>{if(k!==except&&p.a&&!p.a.paused){p.a.pause();auPaint(k)}})}
+  async function auToggle(v,a){
+    let p=visPlayers[a.id];
+    if(p&&p.busy)return;
+    if(!p||!p.a){
+      p=visPlayers[a.id]={busy:true,a:null,dur:a.dur||0};auPaint(a.id);
+      const u=await visAudioUrl(v,a);
+      if(!u){delete visPlayers[a.id];auPaint(a.id);toast(navigator.onLine===false?"Enregistrement pas encore sur cet appareil : il sera lisible avec du réseau.":"Enregistrement introuvable : il n'a peut-être pas encore été envoyé depuis l'autre appareil.");return}
+      const au=new Audio();au.preload="auto";au.src=u;p.a=au;p.busy=false;
+      au.ontimeupdate=au.onpause=au.onplay=au.onloadedmetadata=()=>auPaint(a.id);
+      au.onended=()=>{au.currentTime=0;auPaint(a.id)};
+      au.onerror=()=>{toast("Lecture impossible : format non pris en charge par ce navigateur.");auPaint(a.id)};
+    }
+    if(p.a.paused){auStopAll(a.id);try{await p.a.play()}catch(e){toast("Lecture impossible : "+(e&&e.message||"erreur du navigateur"))}}
+    else p.a.pause();
+    auPaint(a.id);
+  }
+  function recFillPlayers(root,v){
+    root.querySelectorAll(".visau[data-au]").forEach(el=>{
+      const n=(v.notes||[]).find(x=>x.audio&&x.audio.id===el.dataset.au);if(!n)return;
+      el.querySelector(".aup").onclick=()=>auToggle(v,n.audio);
+      // déplacement dans l'enregistrement : appui sur la barre
+      el.querySelector(".aubar").onclick=e=>{const p=visPlayers[n.audio.id];if(!p||!p.a)return;const r=e.currentTarget.getBoundingClientRect(), dur=isFinite(p.a.duration)&&p.a.duration>0?p.a.duration:n.audio.dur;if(dur){try{p.a.currentTime=Math.max(0,Math.min(dur,dur*(e.clientX-r.left)/r.width))}catch(x){}auPaint(n.audio.id)}};
+      auPaint(n.audio.id);
+    });
+  }
   // ---------- Transcription sur l'ordinateur (Whisper, dans le navigateur) ----------
   // Bibliothèque transformers.js hébergée avec l'appli (vendor/transformers) ; le modèle est téléchargé une fois
   // depuis huggingface.co puis gardé dans le cache du navigateur. Le son ne quitte jamais l'ordinateur.
@@ -4662,7 +4692,7 @@
     else if(st)trh=`<div class="trwait"><span>En attente : sera transcrit après l'enregistrement en cours.</span><button type="button" class="btn" data-trcancel="${esc(n.id)}">Retirer</button></div>`;
     else if(canTr)trh=`<div class="trwait"><span>Pas encore transcrit.</span><button type="button" class="btn trgo" data-tr="${esc(n.id)}">Transcrire</button></div>`;
     else trh=`<div class="trpc">${svgI("M3 4h18v12H3zM8 20h8M12 16v4")} À transcrire sur l'ordinateur</div>`;
-    return `<div class="visau"><audio controls preload="none" data-au="${esc(a.id)}"></audio><span class="visaud">${mmss(a.dur||0)}</span></div>${trh}`;
+    return `<div class="visau" data-au="${esc(a.id)}" data-dur="${+a.dur||0}"><button type="button" class="aup" aria-label="Écouter l'enregistrement">${PLAY_SVG}</button><button type="button" class="aubar" aria-label="Se déplacer dans l'enregistrement"><i></i></button><span class="aut">${mmss(a.dur||0)}</span></div>${trh}`;
   }
   function renderVisits(L,p){
     visEnsure();if(vis.loaded)visLoad();
@@ -4689,6 +4719,7 @@
     L.appendChild(g);
   }
   window.__visState=()=>({map:vis.map,pending:vis.pending}); // utilisé par les tests
+  window.__auState=()=>Object.fromEntries(Object.entries(visPlayers).map(([k,p])=>[k,{playing:!!(p.a&&!p.a.paused),t:p.a?p.a.currentTime:0}]));
   // ---------- Téléphone : écran Projets (icônes) et accueil du projet ----------
   // Sur téléphone, « Projets » (barre du bas) ouvre la grille des projets ; un projet s'ouvre sur son accueil
   // (alerte, quatre rubriques, prochaines échéances) et chaque rubrique s'affiche en plein écran avec un retour.
