@@ -48,7 +48,7 @@ with sync_playwright() as pw:
     pg.locator("#toast button").click(); pg.wait_for_timeout(100)
     ok(not task("e")[0].get("deletedAt") and pg.locator('.task[data-id="e"]').count()==1,"Annuler restaure la tâche")
     row=pg.locator('.task[data-id="e"]'); row.locator("details.more summary").click(); row.locator('[data-a="del"]').click()
-    pg.locator("#trashbtn").click()
+    pg.locator(".vbtn",has_text="Corbeille").click()
     ok(pg.locator(".trow").count()==1,"corbeille : 1 ligne")
     pg.screenshot(path=S+"v3_trash.png")
     pg.locator(".trow [data-r]").click()

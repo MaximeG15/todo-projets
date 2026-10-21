@@ -37,7 +37,7 @@ with sync_playwright() as pw:
     ok(pg.locator(".phnext .phrow").count()>=1,"prochaines échéances")
     pg.screenshot(path=OUT+"mobile_home.png")
     RESP["Ajouter au projet"]="Une tâche"
-    pg.locator(".fab").click();pg.wait_for_timeout(400)
+    pg.locator(".bnav [data-b=add]").click();pg.wait_for_timeout(400)
     ok(pg.evaluate("document.body.dataset.mode")=="list" and pg.locator("#qt").is_visible(),"bouton + : ajout d'une tâche")
     pg.locator("#pback").click();pg.wait_for_timeout(200)
     ok(pg.evaluate("document.body.dataset.mode")=="home","retour à l'accueil du projet")

@@ -39,7 +39,7 @@ with sync_playwright() as pw:
     m.add_init_script("localStorage.setItem('todo-projets',%s);localStorage.setItem('todo-mode','local');localStorage.setItem('todo-projets-ui','{}')"%json.dumps(json.dumps(data)))
     m.goto(APP);m.wait_for_timeout(300)
     m.mouse.wheel(0,3000);m.wait_for_timeout(200)
-    ok(not m.locator("#quick").is_visible() and m.locator("#fab").is_visible(),"téléphone : barre d'ajout repliée, bouton + flottant")
+    ok(not m.locator("#quick").is_visible() and m.locator(".bnav [data-b=add]").is_visible(),"téléphone : barre d'ajout repliée, bouton + dans la barre du bas")
     b.close()
 print("ERREURS :",errs or "aucune")
 sys.exit(1 if errs else 0)

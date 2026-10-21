@@ -66,7 +66,7 @@ with sync_playwright() as pw:
     ok(rq(rid)[0].get("deletedAt"),"demande à la corbeille")
     lt=[t for t in st()["tasks"] if t.get("requestId")==rid]
     ok(len(lt)==2 and all(t.get("deletedAt") for t in lt),"tâches liées aussi à la corbeille (confirmation acceptée)")
-    pg.locator("#trashbtn").click()
+    pg.locator(".vbtn",has_text="Corbeille").click()
     ok("Demande client" in pg.locator("#lists").inner_text(),"demande listée dans la corbeille")
     pg.locator(".trow",has_text="étiquette colis").filter(has=pg.locator(".reqtag")).locator("[data-r]").click()
     ok(not rq(rid)[0].get("deletedAt"),"demande restaurée")

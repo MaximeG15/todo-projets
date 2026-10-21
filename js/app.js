@@ -1186,14 +1186,60 @@
     const at=Date.now();
     undoable(`${pool.length} tâche${pool.length>1?"s":""} terminée${pool.length>1?"s":""} mise${pool.length>1?"s":""} à la corbeille`,pool,()=>pool.forEach(t=>t.deletedAt=at));
   }
+  // ---------- Ajout en une ligne : « Relancer le client demain @Alice !haute #Alpha » ----------
+  // Les mots reconnus remplissent l'échéance, le responsable, la priorité et le projet ;
+  // un champ rempli à la main garde toujours la priorité sur ce qui est deviné.
+  const WDAYS=["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
+  function qParse(raw){
+    let t=" "+String(raw||"")+" ";const out={};
+    const cut=re=>{const m=t.match(re);if(m){t=t.replace(m[0]," ");return m}return null};
+    // priorité
+    let m=cut(/\s!(haute|urgent(?:e)?|h|basse|b|normale|n)(?=\s)/i);
+    if(m){const k=m[1].toLowerCase();out.prio=/^h|^u/.test(k)?"haute":/^b/.test(k)?"basse":"normale"}
+    // projet (#nom, mots collés ou début du nom)
+    m=t.match(/\s#([^\s#@!]+)(?=\s)/);
+    if(m){const k=norm(m[1]).replace(/[^a-z0-9]/g,"");const pr=k&&state.projects.filter(x=>!x.archived).find(x=>{const n=norm(x.name).replace(/[^a-z0-9 ]/g,"");return n.replace(/ /g,"").startsWith(k)||n.split(" ").some(w=>w&&w.startsWith(k))});if(pr){out.pid=pr.id;t=t.replace(m[0]," ")}}
+    // responsable (@nom, comparé aux personnes connues)
+    m=cut(/\s@([^\s@#!]+)(?=\s)/);
+    if(m){const k=norm(m[1]);const pp=[...document.querySelectorAll("#people option")].map(o=>o.value).filter(Boolean);
+      out.who=pp.find(n=>norm(n).startsWith(k))||pp.find(n=>norm(n).split(/\s+/).some(w=>w.startsWith(k)))||(m[1].charAt(0).toUpperCase()+m[1].slice(1))}
+    // échéance
+    const d0=today();let d=null;
+    if((m=cut(/\s(aujourd'hui|aujourd’hui|auj)(?=\s)/i)))d=d0;
+    else if((m=cut(/\s(apr[eè]s-demain)(?=\s)/i)))d=addDays(d0,2);
+    else if((m=cut(/\s(demain)(?=\s)/i)))d=addDays(d0,1);
+    else if((m=cut(/\sdans\s+(\d{1,3})\s+(jours?|semaines?|mois)(?=\s)/i))){const n=+m[1];d=/^j/i.test(m[2])?addDays(d0,n):/^s/i.test(m[2])?addDays(d0,7*n):(x=>{x.setMonth(x.getMonth()+n);return x})(new Date(d0))}
+    else if((m=cut(/\s(semaine prochaine)(?=\s)/i)))d=addDays(mondayOf(d0),7);
+    else if((m=cut(/\s(?:le\s+)?(\d{1,2})[\/.](\d{1,2})(?:[\/.](\d{2,4}))?(?=\s)/i))){let y=m[3]?+m[3]:d0.getFullYear();if(y<100)y+=2000;const x=new Date(y,+m[2]-1,+m[1]);if(!m[3]&&x<d0)x.setFullYear(y+1);if(x.getMonth()===+m[2]-1)d=x}
+    else if((m=cut(new RegExp("\\s(?:(?:ce|le)\\s+)?("+WDAYS.join("|")+")(?:\\s+prochain)?(?=\\s)","i")))){const w=WDAYS.indexOf(m[1].toLowerCase());d=addDays(d0,(w-d0.getDay()+7)%7||7)}
+    if(d)out.due=iso(d);
+    out.title=t.replace(/\s+/g," ").trim();
+    return out;
+  }
+  function qPreview(){
+    const el=$("#qparse"),q=$("#quick");if(!el)return;
+    const v=$("#qt").value, r=qParse(v);q.classList.toggle("has",!!v.trim());
+    const bits=[];
+    if(r.due&&!$("#qd").value)bits.push(`<span class="tag today">Échéance : ${esc(shortDay(r.due))}</span>`);
+    if(r.who&&!$("#qw").value.trim())bits.push(`<span class="tag">Responsable : ${esc(r.who)}</span>`);
+    if(r.prio&&$("#qprio").value==="normale"&&r.prio!=="normale")bits.push(`<span class="tag">Priorité ${esc(r.prio)}</span>`);
+    if(r.pid&&proj(r.pid))bits.push(`<span class="tag">${pMark(proj(r.pid))}${esc(proj(r.pid).name)}</span>`);
+    el.innerHTML=bits.length?`<span class="qpl">Compris :</span>${bits.join("")}`:"";el.hidden=!bits.length;
+  }
   function addTask(){
-    const title=$("#qt").value.trim(); const pid=$("#qp").value;
+    const r=qParse($("#qt").value);
+    const title=r.title||$("#qt").value.trim(); let pid=$("#qp").value;
     if(!title)return;
+    if(r.pid&&proj(r.pid))pid=r.pid;
     if(!pid){uiAlert("Créez d'abord un projet.");return}
-    state.tasks.push({id:uid(),projectId:pid,title,priority:$("#qprio").value,due:$("#qd").value||"",status:"todo",note:"",who:resolveWho($("#qw").value,pid),createdAt:Date.now(),checklist:[],repeat:null});
-    $("#qt").value="";$("#qd").value="";$("#qprio").value="normale";
+    const prio=$("#qprio").value!=="normale"?$("#qprio").value:(r.prio||"normale");
+    const due=$("#qd").value||r.due||"";
+    const who=$("#qw").value.trim()||r.who||"";
+    state.tasks.push({id:uid(),projectId:pid,title,priority:prio,due,status:"todo",note:"",who:resolveWho(who,pid),createdAt:Date.now(),checklist:[],repeat:null});
+    $("#qt").value="";$("#qd").value="";$("#qprio").value="normale";qPreview();
     save(); render(); $("#qt").focus();
   }
+  window.__qParse=qParse; // utilisé par les tests
   // ---------- Tâches récurrentes ----------
   const REPEATS=[["","Ne se répète pas"],["1-day","Tous les jours"],["1-week","Toutes les semaines"],["2-week","Toutes les 2 semaines"],["1-month","Tous les mois"]];
   const repKey=r=>r&&r.n&&r.unit?`${r.n}-${r.unit}`:"";
@@ -1266,10 +1312,11 @@
     if(view!=="all"&&!proj(view))view="all";
     if(ui.mode==="kanban")ui.mode="list"; // ancien mode Kanban (retiré)
     if(ui.taskMode==="kanban")ui.taskMode="list";
-    if(!["list","agenda","dash","trash","requests","points","meetings","visits","home","projects"].includes(ui.mode))ui.mode="list";
+    if(!["list","agenda","dash","trash","requests","points","meetings","visits","home","projects","overview"].includes(ui.mode))ui.mode="list";
+    if(ui.mode==="overview"&&isPhone())ui.mode=view==="all"?"list":"home"; // sur téléphone, l'accueil du projet tient lieu de vue d'ensemble
     if(ui.mode==="projects"){if(isPhone())view="all";else ui.mode="list"}
     if(ui.mode==="home"&&(view==="all"||!isPhone()))ui.mode="list";
-    if((ui.mode==="points"||ui.mode==="meetings"||ui.mode==="visits")&&view==="all")ui.mode="list";
+    if((ui.mode==="points"||ui.mode==="meetings"||ui.mode==="visits"||ui.mode==="overview")&&view==="all")ui.mode="list";
     if(ui.mode==="requests"&&view!=="all")ui.mode="list"; // les demandes client se consultent depuis la vue globale
     if(["list","agenda"].includes(ui.mode))ui.taskMode=ui.mode;
     if(ui.mode==="trash"||ui.mode==="dash")view="all";
@@ -1302,6 +1349,7 @@
       bn.querySelector('[data-b="mine"] .bl').textContent=mine?"Mes tâches":"Toutes";
       const act={today:view==="all"&&mode==="list"&&ui.scope==="today",mine:view==="all"&&mode==="list"&&ui.scope==="all"&&(mine?ui.who==="__me":true),agenda:mode==="agenda",menu:mode==="projects"||view!=="all"};
       bn.querySelectorAll("[data-b]").forEach(x=>{const k=x.dataset.b;x.setAttribute("aria-current",!!act[k]);
+        if(k==="add"){x.onclick=()=>$("#fab").click();x.setAttribute("aria-expanded",document.body.classList.contains("addopen"));return}
         x.onclick=k==="menu"?()=>{closeMenu();query="";$("#search").value="";ui.mode="projects";view="all";editing=null;saveUi();render();window.scrollTo({top:0})}
           :k==="today"?()=>{if(ui.who==="__me")ui.who="";go("list","today")()}
           :k==="agenda"?()=>{go("agenda","all")()}
@@ -1346,7 +1394,7 @@
     // en-tête
     const p=view==="all"?null:proj(view);
     const agenda=mode==="agenda";
-    $("#quick").hidden=mode==="dash"||mode==="trash"||mode==="requests"||mode==="points"||mode==="home"||mode==="projects";
+    $("#quick").hidden=mode==="dash"||mode==="trash"||mode==="requests"||mode==="points"||mode==="home"||mode==="projects"||mode==="overview";
     $("#wrap").classList.toggle("wide",agenda||mode==="dash");
     // onglets du projet : tâches / demandes client
     const tabs=$("#ptabs");$("#stucklbl").textContent=p?p.name:"";
@@ -1354,7 +1402,7 @@
       const nT=alive.filter(t=>t.projectId===p.id&&t.status!=="done").length, nR=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)).length;
       tabs.hidden=false;
       const nO=livePts().filter(o=>o.projectId===p.id&&o.status!=="closed").length;
-      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"&&mode!=="meetings"&&mode!=="visits"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points<span class="tlx"> ouverts</span> <span>${nO}</span>${ansOf(p.id).length?`<i class="ansdot" title="${ansTxt(ansOf(p.id).length)}" aria-label="${ansTxt(ansOf(p.id).length)}"></i>`:""}</button><button type="button" role="tab" aria-selected="${mode==="meetings"}" data-tab="meetings">Réunions <span>${mtgList(p.id).length}</span></button><button type="button" role="tab" aria-selected="${mode==="visits"}" data-tab="visits">Visites <span>${(visEnsure(),visList(p.id).length)}</span></button>`;
+      tabs.innerHTML=`${isPhone()?"":`<button type="button" role="tab" aria-selected="${mode==="overview"}" data-tab="overview">Vue d'ensemble</button>`}<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"&&mode!=="meetings"&&mode!=="visits"&&mode!=="overview"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points<span class="tlx"> ouverts</span> <span>${nO}</span>${ansOf(p.id).length?`<i class="ansdot" title="${ansTxt(ansOf(p.id).length)}" aria-label="${ansTxt(ansOf(p.id).length)}"></i>`:""}</button><button type="button" role="tab" aria-selected="${mode==="meetings"}" data-tab="meetings">Réunions <span>${mtgList(p.id).length}</span></button><button type="button" role="tab" aria-selected="${mode==="visits"}" data-tab="visits">Visites <span>${(visEnsure(),visList(p.id).length)}</span></button>`;
       tabs.querySelectorAll("[data-tab]").forEach(x=>x.onclick=()=>{const k=x.dataset.tab;ui.mode=k==="tasks"?(ui.taskMode||"list"):k;if(ui.mode!=="list")ui.scope="all";saveUi();editing=null;editingReq=null;editingPt=null;render()});
     } else {tabs.hidden=true;tabs.innerHTML=""}
     if(!weekStart)weekStart=mondayOf(new Date());
@@ -1382,7 +1430,7 @@
     } else if(mode==="projects"){
       const na=state.projects.filter(x=>!x.archived).length;
       title="Projets";sub=`${na} projet${na>1?"s":""} en cours`;
-    } else if(mode==="home"){
+    } else if(mode==="home"||mode==="overview"){
       title=`${pMark(p)}${esc(p.name)}${archTag}`;
       const m=MODE==="cloud"?cloud.meta[p.id]:null, others=m?[m.ownerEmail,...m.members].filter(e=>e!==cloud.email):[];
       sub=cap(longDay(today()))+(others.length?` · partagé avec ${others.map(nameOf).join(", ")}`:"");
@@ -1550,6 +1598,7 @@
     if(mode==="trash"&&!query.trim()){renderTrash(L);return}
     if(mode==="projects"&&!query.trim()){renderProjects(L);return}
     if(mode==="home"&&p&&!query.trim()){renderProjHome(L,p);return}
+    if(mode==="overview"&&p&&!query.trim()){renderOverview(L,p);return}
     if(!state.projects.length){
       L.innerHTML=`<div class="empty">Commencez par créer un projet (« + Nouveau projet » dans la colonne de gauche), puis ajoutez vos tâches ici.</div>`;return;
     }
@@ -4759,8 +4808,65 @@
     const alert=late.length||relance.length?`<button type="button" class="phalert" data-go="list">${svgI("M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2")}<span>${[late.length?`<b>${late.length} tâche${late.length>1?"s":""} en retard</b>`:"",relance.length?`${relance.length} relance${relance.length>1?"s":""} à faire`:""].filter(Boolean).join(" · ")}</span>${svgI("M9 6l6 6-6 6")}</button>`:"";
     L.innerHTML=`${alert}<section class="phtiles" aria-label="Rubriques du projet">${tiles.map(([m,t,ic,c,n,u,s,w])=>`<button type="button" class="phtile ${c}" data-go="${m}"><span class="phic">${svgI(ICO[ic])}</span><b>${t}</b><span class="phn"><strong>${n}</strong> ${u}</span><span class="phs${w?" warn":""}">${esc(s)}</span></button>`).join("")}</section>
       ${nxt.length?`<section class="phnext" aria-label="Prochaines échéances"><h3>Prochaines échéances</h3>${nxt.map(t=>`<button type="button" class="phrow" data-t="${esc(t.id)}"><span class="phck" aria-hidden="true"></span><span class="pht">${esc(t.title)}</span><span class="phd${isLate(t)?" late":""}">${isLate(t)?"En retard":esc(shortDay(t.due))}</span></button>`).join("")}</section>`:""}`;
+    L.querySelector(".phtiles").insertAdjacentHTML("afterend",`<div class="phacts"><button type="button" class="btn primary" data-act="visit">${svgI("M4 8h3l2-3h6l2 3h3v11H4zM12 9.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z")}Démarrer une visite</button><button type="button" class="btn" data-act="mtg">${svgI("M3 6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v14H3zM3 10h18M8 3v4M16 3v4")}Nouvelle réunion</button></div>`);
+    L.querySelector('[data-act="visit"]').onclick=()=>{ui.mode="visits";saveUi();render();visNew(p)};
+    L.querySelector('[data-act="mtg"]').onclick=async()=>{const r=await mtgNewDialog({projectId:p.id});if(r){ui.mode="meetings";saveUi();render();mtgOpen(r,"prep")}};
     L.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{ui.mode=b.dataset.go;if(ui.mode==="list")ui.scope="all";saveUi();editing=null;render();window.scrollTo({top:0})});
     L.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{ui.mode="list";ui.scope="all";saveUi();editing=b.dataset.t;render();const el=document.querySelector(`.task[data-id="${b.dataset.t}"]`);if(el)el.scrollIntoView({block:"center"})});
+  }
+  // ---------- Vue d'ensemble du projet (ordinateur) : où en est-on, que faut-il traiter ----------
+  function renderOverview(L,p){
+    const alive=live(), all=alive.filter(t=>t.projectId===p.id), open=all.filter(t=>t.status!=="done");
+    const late=open.filter(isLate), today_=open.filter(isToday), relance=open.filter(needsRelance);
+    const pts=livePts().filter(o=>o.projectId===p.id), po=pts.filter(o=>o.status!=="closed"), cli=po.filter(o=>o.owner==="client"), ans=ansOf(p.id);
+    const reqs=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)), reqLateL=reqs.filter(reqLate);
+    const ms=mtgList(p.id), now=Date.now(), nextM=ms.filter(m=>m.startsAt&&m.startsAt>=now-3600e3).sort((a,b)=>a.startsAt-b.startsAt)[0], drafts=ms.filter(m=>m.status==="draft");
+    visEnsure();const vs=visList(p.id), lastV=vs[0], toTr=vs.reduce((k,v)=>k+(v.notes||[]).filter(n=>n.audio&&!n.tr).length,0);
+    const dlong=ms_=>new Date(ms_).toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"});
+    const pct=(a,b)=>b?Math.round(100*a/b):0;
+    const card=(go,k,n,u,d,cls,bar)=>`<button type="button" class="ovcard" data-go="${go}"><span class="ovk">${k}</span><span class="ovn"><b>${n}</b> ${u}</span><span class="ovd${cls?" "+cls:""}">${d}</span>${bar||""}</button>`;
+    const doneN=all.length-open.length;
+    const cards=[
+      card("list","Tâches",open.length,open.length>1?"ouvertes":"ouverte",[late.length&&`${late.length} en retard`,relance.length&&`${plural(relance.length,"relance")}`].filter(Boolean).join(" · ")||"Rien en retard",late.length?"late":"",`<span class="ovbar"><i style="width:${pct(doneN,all.length)}%;background:var(--ok)"></i></span>`),
+      card("points","Points ouverts",po.length,po.length>1?"ouverts":"ouvert",ans.length?ansTxt(ans.length):`${cli.length} à répondre par le client`,ans.length?"new":"",po.length?`<span class="ovbar"><i style="width:${pct(cli.length,po.length)}%;background:var(--cli)"></i><i style="width:${pct(po.length-cli.length,po.length)}%;background:#8A99A3"></i></span>`:""),
+      card("meetings","Réunions",nextM?esc(dlong(nextM.startsAt)):ms.length,nextM?`· ${new Date(nextM.startsAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}`:(ms.length>1?"comptes rendus":"compte rendu"),nextM?esc(nextM.title):drafts.length?`${plural(drafts.length,"brouillon")} à finaliser`:"Aucune réunion prévue",""),
+      card("visits","Visites",lastV?esc(new Date(visDate(lastV)).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})):"0",lastV?"dernière visite":"visite",lastV?(toTr?`${plural(toTr,"enregistrement")} à transcrire`:`${plural((lastV.notes||[]).length,"note")} · ${lastV.status==="done"?"terminée":lastV.status==="prep"?"préparée":"en cours"}`):"Aucune visite","")
+    ].join("");
+    // à traiter
+    const rows=[];
+    late.forEach(t=>rows.push({k:"t",id:t.id,ic:"!",c:"late",t:t.title,d:`Tâche · échéance ${shortDay(t.due).toLowerCase()}`,tag:`<span class="tag late">En retard</span>`}));
+    ans.forEach(o=>rows.push({k:"o",id:o.id,ic:"R",c:"new",t:(ptNumOf(o)?ptNumOf(o)+" · ":"")+o.text.split("\n")[0],d:`Point ouvert · réponse reçue ${fmtWhen(o.ansNew)}`,tag:`<span class="tag ansnew">Nouvelle réponse</span>`}));
+    reqLateL.forEach(r=>rows.push({k:"r",id:r.id,ic:"D",c:"late",t:"Demande client : "+r.title,d:`Réponse attendue le ${shortDay(r.due).toLowerCase()}`,tag:`<span class="tag late">En retard</span>`}));
+    today_.filter(t=>!isLate(t)&&!needsRelance(t)).forEach(t=>rows.push({k:"t",id:t.id,ic:"✓",c:"today",t:t.title,d:"Tâche · aujourd'hui",tag:`<span class="tag today">Aujourd'hui</span>`}));
+    relance.forEach(t=>rows.push({k:"t",id:t.id,ic:"↻",c:"wait",t:t.title,d:`En attente${t.waitingFor?" : "+t.waitingFor:""}`,tag:`<span class="tag wait">Relance</span>`}));
+    const todo=rows.slice(0,8).map((r,i)=>`<button type="button" class="ovrow" data-i="${i}"><span class="ovic ${r.c}">${esc(r.ic)}</span><span class="ovrt"><b>${esc(r.t)}</b><span>${esc(r.d)}</span></span>${r.tag}</button>`).join("");
+    // points par thème
+    const th={};po.forEach(o=>{const k=o.theme||"Sans thème";(th[k]=th[k]||{c:0,m:0});if(o.owner==="client")th[k].c++;else th[k].m++});
+    const thl=Object.entries(th).sort((a,b)=>(b[1].c+b[1].m)-(a[1].c+a[1].m)).slice(0,7), mx=Math.max(1,...thl.map(([,x])=>x.c+x.m));
+    const themes=thl.map(([k,x])=>`<div class="ovth"><span>${esc(k)}</span><span class="ovthb"><i style="width:${100*x.c/mx}%;background:var(--cli)"></i><i style="width:${100*x.m/mx}%;background:#8A99A3"></i></span><b>${x.c+x.m}</b></div>`).join("");
+    // activité récente
+    const ev=[];
+    all.filter(t=>t.status==="done"&&t.doneAt).forEach(t=>ev.push([t.doneAt,"✓",`Tâche terminée : ${t.title}`]));
+    pts.filter(o=>o.status==="closed"&&o.closedAt).forEach(o=>ev.push([o.closedAt,"✓",`Point levé${ptNumOf(o)?" "+ptNumOf(o):""} : ${o.text.split("\n")[0]}`]));
+    pts.filter(o=>o.ansNew).forEach(o=>ev.push([o.ansNew,"R",`Réponse du client${ptNumOf(o)?" sur le "+ptNumOf(o):""} (Excel)`]));
+    ms.forEach(m=>ev.push([m.startsAt||m.createdAt||0,"C",`Réunion : ${m.title}${m.status==="draft"?" (brouillon)":""}`]));
+    vs.forEach(v=>ev.push([v.endedAt||v.startedAt||v.createdAt||0,"V",`Visite${v.status==="done"?" clôturée":v.status==="prep"?" préparée":" en cours"} : ${v.title}`]));
+    const evs=ev.filter(e=>e[0]&&e[0]<=now+864e5).sort((a,b)=>b[0]-a[0]).slice(0,6).map(e=>`<li><span class="ovic sm">${e[1]}</span><span><b>${esc(e[2])}</b><span>${esc(fmtWhen(e[0]))}</span></span></li>`).join("");
+    L.innerHTML=`<section class="ovcards" aria-label="État du projet">${cards}</section>
+      <div class="ovgrid">
+        <section class="ovbox"><h2>À traiter</h2>${todo||`<p class="hint">Rien d'urgent : aucune tâche en retard, aucune nouvelle réponse du client.</p>`}${rows.length>8?`<button type="button" class="btn ghost" data-go="list">Voir toutes les tâches</button>`:""}</section>
+        <div class="ovcol">
+          ${po.length?`<section class="ovbox"><div class="ovh"><h2>Points ouverts par thème</h2><span class="ovlg"><i style="background:var(--cli)"></i>Client <i style="background:#8A99A3"></i>Autres</span></div>${themes}</section>`:""}
+          <section class="ovbox"><h2>Activité récente</h2>${evs?`<ul class="ovfeed">${evs}</ul>`:`<p class="hint">Pas encore d'activité enregistrée.</p>`}</section>
+        </div>
+      </div>`;
+    L.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{ui.mode=b.dataset.go;if(ui.mode==="list")ui.scope="all";saveUi();editing=null;render();window.scrollTo({top:0})});
+    L.querySelectorAll(".ovrow").forEach(b=>b.onclick=()=>{
+      const r=rows[+b.dataset.i];
+      if(r.k==="t"){ui.mode="list";ui.scope="all";saveUi();editing=r.id;render();const el=document.querySelector(`.task[data-id="${r.id}"]`);if(el)el.scrollIntoView({block:"center"})}
+      else if(r.k==="o"){ansShow(p.id)}
+      else{const rq=liveReq().find(x=>x.id===r.id);if(rq)openRequest(rq)}
+    });
   }
   // Bouton + de l'accueil du projet : choix de ce qu'on ajoute
   async function phoneAdd(p){
@@ -5044,13 +5150,14 @@
   $("#srchbtn").onclick=()=>{const sd=$("#side"),on=!sd.classList.contains("srch");sd.classList.toggle("srch",on);$("#srchbtn").setAttribute("aria-expanded",on);if(on)setTimeout(()=>$("#search").focus(),30);else{if($("#search").value){$("#search").value="";$("#search").dispatchEvent(new Event("input"))}}};
   $("#addp").onsubmit=e=>{e.preventDefault();addProject($("#newp").value);$("#newp").value=""};
   $("#quick").onsubmit=e=>{e.preventDefault();addTask()};
+  $("#qt").addEventListener("input",qPreview);["#qd","#qw","#qprio"].forEach(k=>$(k).addEventListener("input",qPreview));
   $("#qt").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addTask()}});
   $("#gcloud").onclick=()=>{if(cloudReady())startCloud()};
   $("#glocal").onclick=()=>{try{localStorage.setItem("todo-mode","local")}catch(e){}$("#gate").hidden=true;startLocal()};
   $("#lback").onclick=()=>showGate("choice");
   $("#glogin").onsubmit=login;
   document.addEventListener("click",e=>{if(!document.contains(e.target))return;document.querySelectorAll("details.more[open],details.pfilter[open]").forEach(d=>{if(!d.contains(e.target)){d.open=false;if(d.classList.contains("pfilter"))pfOpen=false}})});
-  document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&(e.key==="k"||e.key==="K")){e.preventDefault();const s=$("#search");s.focus();s.select()}});
+  document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&(e.key==="k"||e.key==="K")){e.preventDefault();if(document.querySelector("dialog.cmdk[open]"))return;cmdOpen()}});
   let searchT=null;
   $("#search").addEventListener("input",e=>{clearTimeout(searchT);searchT=setTimeout(()=>{query=e.target.value;editing=null;render()},150)});
   $("#search").addEventListener("keydown",e=>{
@@ -5219,6 +5326,107 @@
   }
   {const r0=render;render=function(){r0();try{notifRefresh()}catch(e){}}}
   window.__notifData=()=>{const d=notifData();return {ans:d.ans.length,late:d.late.length,soon:d.soon.length,count:notifCount(d)}}; // utilisé par les tests
+
+  // ---------- Téléphone : glisser une tâche (droite = terminer, gauche = reporter d'un jour) ----------
+  (function swipeInit(){
+    const L=$("#lists");if(!L)return;
+    let st=null, swiped=0;
+    L.addEventListener("click",e=>{if(Date.now()-swiped<400){e.stopPropagation();e.preventDefault()}},true);
+    const reset=li=>{li.classList.remove("swiping","sw-r","sw-l");li.style.removeProperty("--sx")};
+    L.addEventListener("pointerdown",e=>{
+      if(!isPhone()||selMode||e.pointerType==="mouse")return;
+      const li=e.target.closest(".task[data-id]:not(.pt):not(.req):not(.open)");
+      if(!li||e.target.closest("input,button,a,select,textarea,summary,.menu,.edit"))return;
+      st={li,x:e.clientX,y:e.clientY,dx:0,on:false,id:e.pointerId};
+    },{passive:true});
+    L.addEventListener("pointermove",e=>{
+      if(!st||e.pointerId!==st.id)return;
+      const dx=e.clientX-st.x, dy=e.clientY-st.y;
+      if(!st.on){if(Math.abs(dy)>12&&Math.abs(dy)>Math.abs(dx)){st=null;return}if(Math.abs(dx)<14)return;st.on=true;st.li.classList.add("swiping");try{st.li.setPointerCapture(e.pointerId)}catch(x){}}
+      st.dx=Math.max(-160,Math.min(160,dx));
+      st.li.style.setProperty("--sx",st.dx+"px");
+      st.li.classList.toggle("sw-r",st.dx>0);st.li.classList.toggle("sw-l",st.dx<0);
+    });
+    const end=e=>{
+      if(!st||e.pointerId!==st.id)return;
+      const {li,dx,on}=st;st=null;if(!on)return;
+      swiped=Date.now();
+      const t=state.tasks.find(x=>x.id===li.dataset.id);
+      reset(li);
+      if(!t)return;
+      if(dx>90){if(t.status!=="done")changeStatus(t,"done")}
+      else if(dx<-90){
+        const base=t.due&&parseD(t.due)>today()?parseD(t.due):today();
+        const nd=iso(addDays(base,1));
+        undoable(`« ${short(t.title)} » reportée au ${shortDay(nd).toLowerCase()}`,[t],()=>{t.due=nd;t.updatedAt=Date.now()});
+      }
+    };
+    L.addEventListener("pointerup",end);L.addEventListener("pointercancel",e=>{if(st&&e.pointerId===st.id){reset(st.li);st=null}});
+  })();
+
+  // ---------- Rechercher ou créer (Ctrl+K) ----------
+  // Une seule fenêtre pour chercher partout, créer une tâche en une phrase, ouvrir un projet ou une vue.
+  function cmdOpen(){
+    if(!state||!state.projects)return;
+    const d=document.createElement("dialog");d.className="uidlg cmdk";d.setAttribute("aria-label","Rechercher ou créer");
+    d.innerHTML=`<div class="cmdin"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg><input type="text" aria-label="Rechercher ou créer" placeholder="Rechercher, ou écrire une tâche : « Relancer le client demain @Alice »" autocomplete="off"><kbd>Échap</kbd></div>
+      <div class="cmdl" role="listbox" aria-label="Résultats"></div>
+      <div class="cmdf"><span>↑ ↓ choisir</span><span>Entrée valider</span><span>« # » projet · « @ » personne · « ! » priorité</span></div>`;
+    document.body.appendChild(d);
+    const inp=d.querySelector("input"), list=d.querySelector(".cmdl");
+    let items=[], sel=0;
+    const close=()=>{try{d.close()}catch(e){}d.remove()};
+    d.addEventListener("cancel",e=>{e.preventDefault();close()});
+    d.addEventListener("click",e=>{if(e.target===d)close()});
+    const cur=view!=="all"?proj(view):null;
+    const words=q=>norm(q).split(/\s+/).filter(Boolean);
+    const hit=(txt,ws)=>{const n=norm(txt);return ws.every(w=>n.includes(w))};
+    const goView=(mode,scope)=>()=>{query="";$("#search").value="";view="all";ui.mode=mode;ui.scope=scope||"all";if(mode==="list"&&scope==="mine"){ui.scope="all";ui.who="__me"}saveUi();editing=null;render();window.scrollTo({top:0})};
+    const build=()=>{
+      const q=inp.value.trim(), ws=words(q);items=[];
+      const add=(sec,ic,t,m,fn,cls)=>items.push({sec,ic,t,m:m||"",fn,cls:cls||""});
+      if(q){
+        add("Actions","⌕",`Rechercher « ${q} » partout`,"tâches, points ouverts, demandes",()=>{const s=$("#search");s.value=q;query=q;editing=null;render();s.focus()});
+        const r=qParse(q), pid=(r.pid&&proj(r.pid)?r.pid:null)||(cur&&!cur.archived?cur.id:null)||(state.projects.find(x=>!x.archived)||{}).id;
+        if(r.title&&pid){
+          const bits=[proj(pid).name,r.due&&("échéance "+shortDay(r.due).toLowerCase()),r.who&&("pour "+r.who),r.prio&&r.prio!=="normale"&&("priorité "+r.prio)].filter(Boolean).join(" · ");
+          add("Actions","+",`Créer la tâche « ${r.title} »`,bits,()=>{
+            const t={id:uid(),projectId:pid,title:r.title,priority:r.prio||"normale",due:r.due||"",status:"todo",note:"",who:resolveWho(r.who||"",pid),createdAt:Date.now(),checklist:[],repeat:null};
+            state.tasks.push(t);save();render();toast(`Tâche ajoutée à « ${proj(pid).name} ».`,()=>{view=pid;ui.mode="list";ui.scope="all";saveUi();editing=t.id;render()},"Voir")},"new");
+        }
+        if(cur&&!cur.archived)add("Actions","?",`Nouveau point ouvert « ${q} »`,cur.name,()=>{addPoints([q],cur.id,"","");const x=state.points[state.points.length-1];view=cur.id;ui.mode="points";saveUi();editingPt=x&&x.id;render()});
+        live().filter(t=>hit(t.title+" "+(t.note||""),ws)).slice(0,5).forEach(t=>add("Tâches",t.status==="done"?"✓":"○",t.title,(proj(t.projectId)||{}).name||"",()=>{view=t.projectId;ui.mode="list";ui.scope="all";saveUi();query="";$("#search").value="";editing=t.id;render();const el=document.querySelector(`.task[data-id="${t.id}"]`);if(el)el.scrollIntoView({block:"center"})}));
+        livePts().filter(o=>hit(o.text+" "+(o.answer||"")+" "+(o.theme||""),ws)).slice(0,5).forEach(o=>add("Points ouverts",ptNumOf(o)?ptNumOf(o).replace("N° ",""):"?",o.text.split("\n")[0],[(proj(o.projectId)||{}).name,o.status==="closed"?"levé":""].filter(Boolean).join(" · "),()=>{view=o.projectId;ui.mode="points";saveUi();query="";$("#search").value="";editingPt=o.id;render();const el=document.querySelector(`.task.pt[data-o="${o.id}"]`);if(el)el.scrollIntoView({block:"center"})}));
+        liveReq().filter(x=>hit(x.title+" "+(x.description||""),ws)).slice(0,3).forEach(x=>add("Demandes client","D",x.title,(proj(x.projectId)||{}).name||"",()=>openRequest(x)));
+        state.projects.filter(x=>hit(x.name,ws)).slice(0,4).forEach(x=>add("Aller à",x.name.slice(0,2).toUpperCase(),x.name,x.archived?"archivé":"projet",()=>openProject(x.id)));
+      } else {
+        if(cur){
+          add("Ce projet","◎",`${cur.name} · Vue d'ensemble`,"",()=>{ui.mode=isPhone()?"home":"overview";saveUi();render()});
+          add("Ce projet","!",`${cur.name} · Points ouverts`,"",()=>{ui.mode="points";saveUi();render()});
+          add("Ce projet","R","Nouvelle réunion",cur.name,async()=>{const r=await mtgNewDialog({projectId:cur.id});if(r){ui.mode="meetings";saveUi();render();mtgOpen(r,"prep")}});
+          add("Ce projet","V","Démarrer une visite",cur.name,()=>{ui.mode="visits";saveUi();render();visNew(cur)});
+        }
+        state.projects.filter(x=>!x.archived).forEach(x=>add("Projets",x.name.slice(0,2).toUpperCase(),x.name,"",()=>openProject(x.id)));
+        [["Ma journée","list","today"],["Agenda de la semaine","agenda"],["Toutes les tâches","list"],...(MODE==="cloud"?[["Mes tâches","list","mine"]]:[]),["Demandes client","requests"],["Tableau de bord","dash"],["Corbeille","trash"]].forEach(([l,m,sc])=>add("Vues","→",l,"",goView(m,sc)));
+      }
+      sel=Math.min(sel,Math.max(0,items.length-1));
+      let lastSec="";
+      list.innerHTML=items.map((it,i)=>{const h=it.sec!==lastSec?`<div class="cmdh">${esc(it.sec)}</div>`:"";lastSec=it.sec;return h+`<button type="button" role="option" class="cmdi${it.cls?" "+it.cls:""}" aria-selected="${i===sel}" data-i="${i}"><span class="cmdic">${esc(it.ic)}</span><span class="cmdt">${esc(it.t)}</span><span class="cmdm">${esc(it.m)}</span></button>`}).join("")||`<p class="hint" style="padding:12px">Aucun résultat.</p>`;
+      list.querySelectorAll("[data-i]").forEach(b=>{b.onclick=()=>run(+b.dataset.i);b.onmousemove=()=>{if(sel!==+b.dataset.i){sel=+b.dataset.i;mark()}}});
+    };
+    const mark=()=>list.querySelectorAll("[data-i]").forEach(b=>{const on=+b.dataset.i===sel;b.setAttribute("aria-selected",on);if(on)b.scrollIntoView({block:"nearest"})});
+    const run=i=>{const it=items[i];if(!it)return;close();it.fn()};
+    inp.addEventListener("input",()=>{sel=0;build()});
+    inp.addEventListener("keydown",e=>{
+      if(e.key==="ArrowDown"){e.preventDefault();sel=Math.min(items.length-1,sel+1);mark()}
+      else if(e.key==="ArrowUp"){e.preventDefault();sel=Math.max(0,sel-1);mark()}
+      else if(e.key==="Enter"){e.preventDefault();run(sel)}
+    });
+    build();
+    if(d.showModal)d.showModal();else d.setAttribute("open","");
+    inp.focus();
+  }
+  window.__cmdOpen=cmdOpen;
 
   // ---------- Bouton « retour » du téléphone (et du navigateur) : retour en arrière dans l'appli ----------
   // Une entrée d'historique « garde » est toujours posée : le bouton retour la consomme et l'appli revient à

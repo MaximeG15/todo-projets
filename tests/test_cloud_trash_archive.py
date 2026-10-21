@@ -29,7 +29,7 @@ with sync_playwright() as pw:
     pg.locator("#toast button").click();pg.wait_for_timeout(300)
     ok(tk("t2")[0]["deleted_at"] is None,"cloud : annulation renvoyée au serveur")
     # corbeille : t4 avec auteur
-    pg.locator("#trashbtn").click()
+    pg.locator(".vbtn",has_text="Corbeille").click()
     txt=pg.locator(".trow").first.inner_text();print("   ",txt.replace("\n"," | "))
     ok("par Bruno D" in txt,"cloud : corbeille indique qui a supprimé")
     pg.locator(".trow [data-r]").first.click();pg.wait_for_timeout(300)

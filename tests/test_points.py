@@ -80,7 +80,7 @@ with sync_playwright() as pw:
     # corbeille
     r=pg.locator(f'.pt[data-o="{second}"]');r.locator("details.more summary").click();r.locator('[data-a="del"]').click()
     ok(len(pts())==4,"point à la corbeille")
-    pg.locator("#trashbtn").click()
+    pg.locator(".vbtn",has_text="Corbeille").click()
     ok("Point ouvert" in pg.locator("#lists").inner_text(),"listé dans la corbeille")
     pg.locator(".trow",has=pg.locator(".reqtag",has_text="Point ouvert")).locator("[data-r]").click()
     ok(len(pts())==5,"restauré")
@@ -116,7 +116,7 @@ with sync_playwright() as pw:
     ok(d.value.suggested_filename.startswith("plan-actions-"),"export tâches renommé Plan d'actions : "+d.value.suggested_filename)
     pg.locator("#expdlg .btn.ghost").click()
     pg.locator(".vbtn",has_text="Tableau de bord").click()
-    ok("Points ouverts" in pg.locator(".dtable").first.inner_text(),"colonne Points ouverts au tableau de bord")
+    ok("Points ouverts" in pg.locator(".dtable").first.text_content(),"colonne Points ouverts au tableau de bord")
     pg.set_viewport_size({"width":390,"height":844});pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Bêta").click();pg.locator(".phtile",has_text="Points ouverts").click();pg.wait_for_timeout(200)
     ok(pg.evaluate("document.documentElement.scrollWidth")<=390,"mobile : pas de débordement")
     pg.screenshot(path=S+"pts_m.png",full_page=True)
