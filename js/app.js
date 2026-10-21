@@ -5220,6 +5220,57 @@
   {const r0=render;render=function(){r0();try{notifRefresh()}catch(e){}}}
   window.__notifData=()=>{const d=notifData();return {ans:d.ans.length,late:d.late.length,soon:d.soon.length,count:notifCount(d)}}; // utilisé par les tests
 
+  // ---------- Bouton « retour » du téléphone (et du navigateur) : retour en arrière dans l'appli ----------
+  // Une entrée d'historique « garde » est toujours posée : le bouton retour la consomme et l'appli revient à
+  // l'écran précédent (ou ferme la fenêtre, le panneau ou la visite ouverts) au lieu de se fermer.
+  // À l'écran de départ, un premier appui affiche un message ; un second appui quitte l'appli.
+  const nav={stack:[],restoring:false,armed:false,exitAt:0};
+  const navSnap=()=>({view,mode:ui.mode,scope:ui.scope,who:ui.who||""});
+  const navKey=x=>[x.view,x.mode,x.scope,x.who].join("|");
+  function navArm(){if(nav.armed)return;try{history.pushState({todoNav:Date.now()},"");nav.armed=true}catch(e){}}
+  function navRecord(){
+    if(nav.restoring||!state||!state.projects)return;
+    const x=navSnap(), top=nav.stack[nav.stack.length-1];
+    if(!top||navKey(top)!==navKey(x)){nav.stack.push(x);if(nav.stack.length>60)nav.stack.shift();if(nav.stack.length>1)navArm()}
+  }
+  function navOverlayBack(){
+    // fenêtres (boîtes de dialogue, choix, visionneuse photo…) : la plus récente d'abord
+    const dl=[...document.querySelectorAll("dialog[open]")].pop();
+    if(dl){const ev=new Event("cancel",{cancelable:true});dl.dispatchEvent(ev);if(!ev.defaultPrevented){try{dl.close()}catch(e){}dl.remove()}return true}
+    const ed=document.querySelector(".visedit [data-x]");if(ed){ed.click();return true}
+    const sc=document.querySelector(".visscan [data-x]");if(sc){sc.click();return true}
+    const pop=$("#notifpop");if(pop&&!pop.hidden){notifClose();return true}
+    const side=$("#side");
+    if(side&&side.classList.contains("open")){side.classList.remove("open");$("#menubtn").setAttribute("aria-expanded","false");return true}
+    if(side&&side.classList.contains("srch")){$("#srchbtn").click();return true}
+    const vb=document.querySelector("#visview [data-back]");if(visCur&&vb){vb.click();return true}
+    const mc=document.querySelector("#mtgview [data-close]");if(mtgCur&&mc){mc.click();return true}
+    if(editing||editingPt||editingReq){const dc=document.querySelector(".edit.drawer .dclose,.drawer .dclose");if(dc)dc.click();else{editing=null;editingPt=null;editingReq=null;render()}return true}
+    if(query&&query.trim()){query="";const q=$("#search");if(q)q.value="";render();return true}
+    return false;
+  }
+  function navBack(){
+    if(navOverlayBack())return true;
+    if(nav.stack.length>1){
+      nav.stack.pop();const x=nav.stack[nav.stack.length-1];
+      nav.restoring=true;
+      try{if(x.view!=="all"&&!proj(x.view))x.view="all";view=x.view;ui.mode=x.mode;ui.scope=x.scope;ui.who=x.who;editing=null;editingPt=null;editingReq=null;saveUi();render()}
+      finally{nav.restoring=false}
+      window.scrollTo({top:0});return true;
+    }
+    return false;
+  }
+  window.addEventListener("popstate",()=>{
+    nav.armed=false;
+    if(navBack()){navArm();return}
+    // écran de départ : on laisse le prochain appui quitter l'appli
+    nav.exitAt=Date.now();toast("Appuyez encore sur Retour pour quitter l'appli.");
+  });
+  // toute action dans l'appli repose la garde (après le message « appuyez encore… »)
+  ["click","keydown"].forEach(t=>document.addEventListener(t,()=>{if(!nav.armed&&Date.now()-nav.exitAt>400)navArm()},true));
+  {const r1=render;render=function(){r1();try{navRecord()}catch(e){}}}
+  window.__navState=()=>({stack:nav.stack.length,armed:nav.armed}); // utilisé par les tests
+
   // ---------- Application installable ----------
   if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol)){
     window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
