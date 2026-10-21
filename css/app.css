@@ -945,3 +945,57 @@ body.visopen{overflow:hidden}
 @media (min-width:900px){.vism{padding:20px 24px}.visf,.viscap{padding-left:24px;padding-right:24px}}
 .visedit input.viscapt,.visphoto .visphb input{background:#1F3342!important;color:#E8EEF2!important;border:1px solid #4A6577!important}
 .visedit input.viscapt::placeholder,.visphoto .visphb input::placeholder{color:#9FB3C0}
+
+/* =====================================================================
+   Téléphone : interface allégée (en-tête compact, actions regroupées, filtres repliés)
+   ===================================================================== */
+.srchbtn{display:none}
+.mobonly-v{display:none!important}
+.ddm summary{white-space:nowrap}
+@media (max-width:760px){
+  /* en-tête : logo, loupe et menu sur une seule ligne ; recherche et projets à la demande */
+  .side:not(.open){gap:10px;padding:10px 14px}
+  .side:not(.open) .brand svg{width:30px;height:30px}
+  .brand b{font-size:21px}
+  .srchbtn{display:grid;margin-left:auto}
+  .srchbtn + .menubtn{margin-left:6px}
+  .side:not(.open):not(.srch) .search{display:none}
+  .side:not(.open) .psec{display:none}
+  .side.srch .srchbtn{background:var(--signal);color:#16232B}
+  .side.open .mobonly-v{display:flex!important}
+  .trashbtn{display:none!important}
+  main{padding-top:14px;gap:12px}
+  /* titre de la page et actions sur une ligne */
+  .head{flex-direction:row;align-items:flex-start;gap:10px}
+  .head > div:first-child{flex:1;min-width:0}
+  .head h1{font-size:26px;line-height:1.1}
+  .psub{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+  .tools{flex-wrap:nowrap;gap:6px}
+  #ptools:has(.ddmore) .ddexp,#ptools .sharebtn,#ptools .deskonly{display:none}
+  .menu hr.mobonly{display:block}
+  /* indicateurs du projet : déjà résumés sous le titre */
+  #kpis:has(.hk){display:none!important}
+  /* onglets : défilement horizontal, libellés courts */
+  .ptabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:0}
+  .ptabs::-webkit-scrollbar{display:none}
+  .ptabs button{flex:none;padding-left:12px;padding-right:12px}
+  .tlx{display:none}
+  /* réglages d'affichage repliés derrière « Filtres » */
+  .viewbar{gap:8px}
+  .viewbar:not(.open) .vbr{display:none}
+  .viewbar .vbr{flex-basis:100%;padding:10px;border-radius:10px;background:var(--panel);border:1px solid var(--line)}
+  .viewbar .vbr .whobox{flex:1 1 100%;justify-content:space-between}
+  .viewbar .vbr .whobox select{flex:1;max-width:65%}
+  .vbfilt{display:inline-flex;align-items:center;gap:6px;margin-left:auto}
+  .vbfilt b{min-width:18px;height:18px;border-radius:9px;background:var(--signal);color:#16232B;font-size:11px;display:inline-grid;place-items:center;padding:0 4px}
+  .vbfilt[aria-expanded="true"]{background:var(--nav);color:#fff;border-color:var(--nav)}
+  .viewbar .vbl{flex:1;min-width:0}
+}
+@media (min-width:761px){.vbfilt{display:none!important}}
+@media (max-width:760px){
+  .app{align-content:flex-start}
+  .head .tools{flex:none}
+}
+@media (max-width:760px){
+  .head .tools .ddm > summary{height:40px;min-height:40px;padding:0 12px;display:flex;align-items:center;gap:4px}
+}

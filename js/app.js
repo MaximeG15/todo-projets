@@ -728,7 +728,7 @@
     if(leaving){for(const k of [...cloud.dirty.keys()]){const t=state.tasks.find(x=>"t:"+x.id===k)||(state.requests||[]).find(x=>"r:"+x.id===k)||(state.points||[]).find(x=>"o:"+x.id===k);if(k==="p:"+pid||(t&&t.projectId===pid))cloud.dirty.delete(k)}view="all"}
     await cloud.fetch();
   }
-  let shareOpen=false;
+  let shareOpen=false, vbOpen=false;
   function renderShare(p){
     const box=$("#share");
     if(MODE!=="cloud"||!p||!cloud.user){box.hidden=true;return}
@@ -1248,6 +1248,7 @@
     if(MODE==="cloud")vb("mine","Mes tâches",open.filter(isMyTask).length,view==="all"&&mode==="list"&&ui.scope==="all"&&ui.who==="__me",()=>{ui.who="__me";go("list","all")()});
     vb("req","Demandes client",nReq||"",view==="all"&&mode==="requests",go("requests","all"));
     vb("dash","Tableau de bord","",mode==="dash",go("dash","all"));
+    vb("trash","Corbeille",nTrash||"",mode==="trash",go("trash","all"));V.lastChild.classList.add("mobonly-v");
     const tb=$("#trashbtn");
     if(tb){
       tb.setAttribute("aria-pressed",mode==="trash");
@@ -1291,7 +1292,7 @@
       const nT=alive.filter(t=>t.projectId===p.id&&t.status!=="done").length, nR=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)).length;
       tabs.hidden=false;
       const nO=livePts().filter(o=>o.projectId===p.id&&o.status!=="closed").length;
-      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"&&mode!=="meetings"&&mode!=="visits"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points ouverts <span>${nO}</span></button><button type="button" role="tab" aria-selected="${mode==="requests"}" data-tab="requests">Demandes client <span>${nR}</span></button><button type="button" role="tab" aria-selected="${mode==="meetings"}" data-tab="meetings">Réunions <span>${mtgList(p.id).length}</span></button><button type="button" role="tab" aria-selected="${mode==="visits"}" data-tab="visits">Visites <span>${(visEnsure(),visList(p.id).length)}</span></button>`;
+      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"&&mode!=="meetings"&&mode!=="visits"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points<span class="tlx"> ouverts</span> <span>${nO}</span></button><button type="button" role="tab" aria-selected="${mode==="requests"}" data-tab="requests">Demandes<span class="tlx"> client</span> <span>${nR}</span></button><button type="button" role="tab" aria-selected="${mode==="meetings"}" data-tab="meetings">Réunions <span>${mtgList(p.id).length}</span></button><button type="button" role="tab" aria-selected="${mode==="visits"}" data-tab="visits">Visites <span>${(visEnsure(),visList(p.id).length)}</span></button>`;
       tabs.querySelectorAll("[data-tab]").forEach(x=>x.onclick=()=>{const k=x.dataset.tab;ui.mode=k==="tasks"?(ui.taskMode||"list"):k;if(ui.mode!=="list")ui.scope="all";saveUi();editing=null;editingReq=null;editingPt=null;render()});
     } else {tabs.hidden=true;tabs.innerHTML=""}
     if(!weekStart)weekStart=mondayOf(new Date());
@@ -1369,7 +1370,7 @@
       const d=document.createElement("details");d.className="more ddm"+(cls?" "+cls:"");
       d.innerHTML=`<summary class="btn" aria-label="${esc(label.replace(/[▾⋯]/g,"").trim()||"Plus d'actions")}">${label}</summary><div class="menu"></div>`;
       const m=d.querySelector(".menu");
-      items.filter(Boolean).forEach(it=>{if(it==="-"){m.insertAdjacentHTML("beforeend",`<hr>`);return}
+      items.filter(Boolean).forEach(it=>{if(it==="-"){m.insertAdjacentHTML("beforeend",`<hr>`);return}if(it.hr){m.insertAdjacentHTML("beforeend",`<hr class="${it.cls||""}">`);return}
         if(it.colors){const pr=it.colors, taken=new Set(state.projects.filter(x=>x.id!==pr.id).map(x=>String(x.color||"").toUpperCase()));
           const w=document.createElement("div");w.className="swatches";w.innerHTML=`<div class="mh">Couleur du projet</div><div class="sw">${COLORS.map(c=>`<button type="button" data-c="${c}" style="background:${c}" aria-label="Couleur ${c}${taken.has(c)?" (déjà utilisée par un autre projet)":""}" title="${taken.has(c)?"Déjà utilisée par un autre projet":"Choisir cette couleur"}" class="${String(pr.color).toUpperCase()===c?"on":""}${taken.has(c)?" taken":""}"></button>`).join("")}</div>`;
           w.querySelectorAll("[data-c]").forEach(bt=>bt.onclick=()=>{d.open=false;const cur=proj(pr.id);if(cur){cur.color=bt.dataset.c;save();render()}});
@@ -1386,11 +1387,14 @@
         sb.innerHTML=`${who.length>1?`<span class="avs">${who.slice(0,4).map((e,i)=>`<span style="background:${AVC[i%AVC.length]}" title="${esc(nameOf(e))}">${esc(initials(nameOf(e)))}</span>`).join("")}${who.length>4?`<span class="more4">+${who.length-4}</span>`:""}</span>`:""}${shareOpen?"Fermer le partage":"Partager"}`;
         sb.title=who.length>1?"Partagé avec "+m.members.map(nameOf).join(", "):"Partager ce projet avec un collègue";
       }
-      if(p&&mode==="points"&&xlOn(p.id)&&(MODE!=="cloud"||isOwner(p.id)))b("Synchroniser avec Excel",()=>xlQuick(p),"");
+      if(p&&mode==="points"&&xlOn(p.id)&&(MODE!=="cloud"||isOwner(p.id))&&xlFsOk())b("Synchroniser avec Excel",()=>xlQuick(p),"deskonly");
       ddMenu("Exporter ▾",[{h:"Documents"},{t:"Récap de la semaine",fn:openRecap},{t:"Plan d'actions (Excel / PDF)",fn:()=>openExport(p,"tasks")},{t:"Points ouverts (Excel / PDF)",fn:()=>openExport(p,"points")}],"ddexp");
+      // éléments affichés seulement sur téléphone, où Partager et Exporter sont regroupés dans le menu ⋯
+      const mob=p?[...(MODE==="cloud"&&isOwner(p.id)?[{t:shareOpen?"Fermer le partage":"Partager le projet…",fn:()=>{shareOpen=!shareOpen;render()},cls:"mobonly"}]:[]),
+        {t:"Exporter le plan d'actions",fn:()=>openExport(p,"tasks"),cls:"mobonly"},{t:"Exporter les points ouverts",fn:()=>openExport(p,"points"),cls:"mobonly"},{t:"Récap de la semaine",fn:openRecap,cls:"mobonly"},{t:"-",cls:"mobonly",hr:true}]:[];
       if(p){
-        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[{t:"Renommer le projet",fn:()=>renameProject(p)},{colors:p},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},...(MODE==="cloud"?[{t:"Ajouter les points ouverts standard…",fn:()=>tplDialog(p,false)}]:[]),...(xlOn(p.id)?["-",{h:"Lien Excel des points ouverts"},{t:"Synchroniser avec Excel",fn:()=>xlQuick(p)},...(xlFsOk()?[{t:"Choisir le fichier Excel lié…",fn:()=>xlLink(p)}]:[]),{t:"Importer un fichier Excel…",fn:()=>xlPick(p)},{t:"Désactiver le lien Excel",fn:()=>xlToggle(p,false)},{t:"Supprimer tous les points ouverts…",fn:()=>xlPurge(p),cls:"danger"}]:[]),"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
-        else ddMenu("⋯",[{t:"Quitter le projet",fn:()=>shareRemove(p.id,cloud.email,true),cls:"danger"}],"ddmore");
+        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[...mob,{t:"Renommer le projet",fn:()=>renameProject(p)},{colors:p},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},...(MODE==="cloud"?[{t:"Ajouter les points ouverts standard…",fn:()=>tplDialog(p,false)}]:[]),...(xlOn(p.id)?["-",{h:"Lien Excel des points ouverts"},{t:"Synchroniser avec Excel",fn:()=>xlQuick(p)},...(xlFsOk()?[{t:"Choisir le fichier Excel lié…",fn:()=>xlLink(p)}]:[]),{t:"Importer un fichier Excel…",fn:()=>xlPick(p)},{t:"Désactiver le lien Excel",fn:()=>xlToggle(p,false)},{t:"Supprimer tous les points ouverts…",fn:()=>xlPurge(p),cls:"danger"}]:[]),"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
+        else ddMenu("⋯",[...mob,{t:"Quitter le projet",fn:()=>shareRemove(p.id,cloud.email,true),cls:"danger"}],"ddmore");
       }
     }
     // ---- Barre d'affichage propre à l'onglet (au-dessus de la liste) ----
@@ -1448,6 +1452,14 @@
       const sb=b(selMode?"Annuler la sélection":"Sélectionner",()=>selMode?selEnd():selStart(k),"selbtn",vr);
       sb.setAttribute("aria-pressed",!!selMode);sb.title="Sélectionner plusieurs éléments pour les modifier en une fois";
     }
+    if(vr.children.length){
+      const act=(ui.who?1:0)+((mode==="list"&&!agenda&&(ui.groupBy||"due")!=="due")?1:0)+(selMode?1:0);
+      const fb=document.createElement("button");fb.type="button";fb.className="btn vbfilt";fb.setAttribute("aria-expanded",!!vbOpen);
+      fb.innerHTML=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"></path></svg>Filtres${act?` <b>${act}</b>`:""}`;
+      fb.onclick=()=>{vbOpen=!vbOpen;vbar.classList.toggle("open",vbOpen);fb.setAttribute("aria-expanded",vbOpen)};
+      vl.appendChild(fb);
+    }
+    vbar.classList.toggle("open",!!vbOpen);
     vbar.append(vl,vr);vbar.hidden=!vl.children.length&&!vr.children.length;
     renderShare(p);
 
@@ -4139,6 +4151,8 @@
 
   // ---------- Init ----------
   $("#privacybtn").onclick=openPrivacy;
+  // Téléphone : la recherche s'ouvre avec la loupe de l'en-tête
+  $("#srchbtn").onclick=()=>{const sd=$("#side"),on=!sd.classList.contains("srch");sd.classList.toggle("srch",on);$("#srchbtn").setAttribute("aria-expanded",on);if(on)setTimeout(()=>$("#search").focus(),30);else{if($("#search").value){$("#search").value="";$("#search").dispatchEvent(new Event("input"))}}};
   $("#addp").onsubmit=e=>{e.preventDefault();addProject($("#newp").value);$("#newp").value=""};
   $("#quick").onsubmit=e=>{e.preventDefault();addTask()};
   $("#qt").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addTask()}});
