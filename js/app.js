@@ -274,11 +274,14 @@
     }
     return cloud.client;
   }
+  const LOGO_RX=/^data:image\/(png|webp|jpeg);base64,[A-Za-z0-9+/=]+$/;
+  function pLogo(p){return p&&typeof p.logo==="string"&&p.logo.length<=150000&&LOGO_RX.test(p.logo)?p.logo:""}
+  function pMark(p,cls){return pLogo(p)?`<img class="plogo${cls?" "+cls:""}" src="${p.logo}" alt="">`:`<span class="dot" style="background:${p.color}"></span>`}
   const isOwner=pid=>{const m=cloud.meta[pid];return !m||m.owner===cloud.user.id};
   const rowT=t=>({id:t.id,project_id:t.projectId,title:t.title,priority:t.priority||"normale",due:t.due||null,status:t.status==="waiting"?"todo":(t.status||"todo"),waiting:t.status==="waiting",waiting_for:t.waitingFor||"",deleted_at:t.deletedAt||null,note:t.note||"",who:t.who||"",created_at:t.createdAt||Date.now(),done_at:t.doneAt||null,updated_at:t.updatedAt||Date.now(),updated_by:cloud.email,checklist:Array.isArray(t.checklist)?t.checklist:[],repeat:t.repeat||null,family:t.family||null,request_id:t.requestId||null});
-  const rowP=p=>({id:p.id,name:p.name,color:p.color||null,archived:!!p.archived,updated_at:p.updatedAt||Date.now()});
+  const rowP=p=>({id:p.id,name:p.name,color:p.color||null,archived:!!p.archived,logo:pLogo(p)||null,updated_at:p.updatedAt||Date.now()});
   const fromT=r=>({id:r.id,projectId:r.project_id,title:r.title,priority:r.priority,due:r.due||"",status:r.waiting&&r.status==="todo"?"waiting":r.status,waitingFor:r.waiting_for||"",deletedAt:r.deleted_at?Number(r.deleted_at):null,note:r.note||"",who:r.who||"",createdAt:Number(r.created_at),doneAt:r.done_at?Number(r.done_at):null,updatedAt:Number(r.updated_at),updatedBy:r.updated_by||"",checklist:Array.isArray(r.checklist)?r.checklist:[],repeat:r.repeat||null,family:r.family||"",requestId:r.request_id||null});
-  const fromP=r=>({id:r.id,name:r.name,color:r.color||COLORS[0],archived:!!r.archived});
+  const fromP=r=>{const p={id:r.id,name:r.name,color:r.color||COLORS[0],archived:!!r.archived};if(r.logo&&LOGO_RX.test(r.logo))p.logo=r.logo;return p};
   const rowR=r=>({id:r.id,project_id:r.projectId,title:r.title,description:r.description||"",requester:r.requester||"",received:r.received||null,due:r.due||null,priority:r.priority||"normale",status:r.status||"new",scope:r.scope||"",estimate:r.estimate==null||r.estimate===""?null:Number(r.estimate),quote:r.quote||"",created_at:r.createdAt||Date.now(),updated_at:r.updatedAt||Date.now(),closed_at:r.closedAt||null,deleted_at:r.deletedAt||null,updated_by:cloud.email});
   const rowO=o=>({id:o.id,project_id:o.projectId,text:o.text,answer:o.answer||"",hypothesis:o.hypothesis||"",erp:o.erp||"",theme:o.theme||"",owner:o.owner||"",owner_name:o.ownerName||"",status:o.status==="closed"?"closed":"open",task_id:o.taskId||null,request_id:o.requestId||null,created_at:o.createdAt||Date.now(),updated_at:o.updatedAt||Date.now(),closed_at:o.closedAt||null,deleted_at:o.deletedAt||null,updated_by:cloud.email,excel_ref:o.xl||null});
   const fromO=r=>({id:r.id,projectId:r.project_id,text:r.text,answer:r.answer||"",hypothesis:r.hypothesis||"",erp:r.erp||"",theme:r.theme||"",owner:r.owner||"",ownerName:r.owner_name||"",status:r.status,taskId:r.task_id||null,requestId:r.request_id||null,createdAt:Number(r.created_at),updatedAt:Number(r.updated_at),closedAt:r.closed_at?Number(r.closed_at):null,deletedAt:r.deleted_at?Number(r.deleted_at):null,updatedBy:r.updated_by||"",xl:r.excel_ref||null});
@@ -683,7 +686,7 @@
         (Array.isArray(p.families)?p.families:[]).forEach(f=>{if(f&&f.id&&f.name){fmap[f.id]=nid();fams.push({id:fmap[f.id],pid:p.id,name:String(f.name).slice(0,60)})}});
         (Array.isArray(p.pointThemes)?p.pointThemes:[]).forEach(t=>{if(t&&t.name)themes.push({pid:p.id,name:String(t.name).slice(0,80)})});
       });
-      d.projects.forEach((p,i)=>{ids[p.id]=nid();const used=state.projects.map(x=>String(x.color||"").toUpperCase());const col=p.color&&!used.includes(String(p.color).toUpperCase())?p.color:nextColor();state.projects.push({id:ids[p.id],name:String(p.name||"Projet"),color:col})});
+      d.projects.forEach((p,i)=>{ids[p.id]=nid();const used=state.projects.map(x=>String(x.color||"").toUpperCase());const col=p.color&&!used.includes(String(p.color).toUpperCase())?p.color:nextColor();state.projects.push(Object.assign({id:ids[p.id],name:String(p.name||"Projet"),color:col},pLogo(p)?{logo:p.logo}:{}))});
       const rids={};
       (Array.isArray(d.requests)?d.requests:[]).forEach(r=>{if(!ids[r.projectId]||r.deletedAt||!r.title)return;rids[r.id]=nid();state.requests.push({id:rids[r.id],projectId:ids[r.projectId],title:String(r.title).slice(0,300),description:String(r.description||""),requester:String(r.requester||""),received:/^\d{4}-\d{2}-\d{2}$/.test(r.received||"")?r.received:"",due:/^\d{4}-\d{2}-\d{2}$/.test(r.due||"")?r.due:"",priority:["haute","normale","basse"].includes(r.priority)?r.priority:"normale",status:REQL[r.status]?r.status:"new",scope:["","in","out"].includes(r.scope)?r.scope:"",estimate:r.estimate==null||isNaN(+r.estimate)?null:+r.estimate,quote:QUOTE[r.quote]!==undefined?r.quote:"",createdAt:Number(r.createdAt)||Date.now(),closedAt:r.closedAt||null})});
       (Array.isArray(d.points)?d.points:[]).forEach(o=>{if(!ids[o.projectId]||o.deletedAt||!o.text)return;state.points.push({id:nid(),projectId:ids[o.projectId],text:String(o.text).slice(0,2000),answer:String(o.answer||""),hypothesis:String(o.hypothesis||""),erp:["oui","non"].includes(o.erp)?o.erp:"",theme:String(o.theme||"").slice(0,80),owner:OWNER[o.owner]!==undefined?o.owner:"",ownerName:String(o.ownerName||"").slice(0,120),status:o.status==="closed"?"closed":"open",taskId:null,requestId:null,createdAt:Number(o.createdAt)||Date.now(),closedAt:o.closedAt||null})});
@@ -1102,6 +1105,61 @@
   }
 
   // ---------- Actions ----------
+  // Logo du client : image recadrée sur son contenu, réduite à 240 px, stockée avec le projet (data URL)
+  async function logoMake(file){
+    const url=URL.createObjectURL(file);
+    try{
+      const img=await new Promise((ok,ko)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>ko(new Error("img"));i.src=url});
+      let w=img.naturalWidth||512, h=img.naturalHeight||512;const k0=Math.min(1,1200/Math.max(w,h));w=Math.max(1,Math.round(w*k0));h=Math.max(1,Math.round(h*k0));
+      const c=document.createElement("canvas");c.width=w;c.height=h;const g=c.getContext("2d");g.drawImage(img,0,0,w,h);
+      // recadrage : on retire les marges transparentes ou blanches
+      let x0=w,y0=h,x1=-1,y1=-1;
+      try{const d=g.getImageData(0,0,w,h).data;
+        for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=(y*w+x)*4;if(d[i+3]>16&&!(d[i]>244&&d[i+1]>244&&d[i+2]>244)){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}}}catch(e){}
+      if(x1<0){x0=0;y0=0;x1=w-1;y1=h-1}
+      const pad=Math.round(Math.max(x1-x0,y1-y0)*0.04);x0=Math.max(0,x0-pad);y0=Math.max(0,y0-pad);x1=Math.min(w-1,x1+pad);y1=Math.min(h-1,y1+pad);
+      const cw=x1-x0+1, ch=y1-y0+1;
+      for(const max of [240,160,110]){
+        const k=Math.min(1,max/Math.max(cw,ch)), o=document.createElement("canvas");o.width=Math.max(1,Math.round(cw*k));o.height=Math.max(1,Math.round(ch*k));
+        const og=o.getContext("2d");og.imageSmoothingQuality="high";og.drawImage(c,x0,y0,cw,ch,0,0,o.width,o.height);
+        let u=o.toDataURL("image/webp",0.92);if(!/^data:image\/webp/.test(u))u=o.toDataURL("image/png");
+        if(u.length<=100000&&LOGO_RX.test(u))return u;
+      }
+      return null;
+    }catch(e){return null}finally{URL.revokeObjectURL(url)}
+  }
+  function logoDialog(p){
+    let cur=pLogo(p)||"";
+    const d=document.createElement("dialog");d.className="uidlg logodlg";d.setAttribute("aria-label","Logo du client");
+    d.innerHTML=`<form method="dialog"><h3>Logo du client</h3>
+      <p class="uimsg">Affiché dans la liste des projets, en tête du projet, sur les comptes rendus, les exports de points ouverts et les rapports de visite.</p>
+      <div class="logodrop" tabindex="0" role="button" aria-label="Choisir une image"><img alt="" hidden><span>Glissez l'image ici, collez-la (Ctrl+V) ou cliquez pour choisir un fichier.<small>PNG, JPEG, WebP ou SVG. Les marges blanches sont retirées automatiquement.</small></span></div>
+      <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" hidden>
+      <p class="uierr" hidden></p>
+      <div class="uibtns"><button type="button" class="btn ghost logodel" data-del>Retirer le logo</button><span style="flex:1"></span><button type="button" class="btn ghost" data-x>Annuler</button><button type="button" class="btn primary" data-ok>Enregistrer</button></div></form>`;
+    document.body.appendChild(d);
+    const zone=d.querySelector(".logodrop"), im=zone.querySelector("img"), txt=zone.querySelector("span"), inp=d.querySelector("input"), err=d.querySelector(".uierr");
+    const show=()=>{im.hidden=!cur;txt.hidden=!!cur;if(cur)im.src=cur;d.querySelector("[data-del]").hidden=!cur;zone.classList.toggle("has",!!cur)};
+    const take=async f=>{
+      if(!f||!/^image\//.test(f.type)){err.hidden=false;err.textContent="Ce fichier n'est pas une image.";return}
+      err.hidden=true;zone.classList.add("busy");const u=await logoMake(f);zone.classList.remove("busy");
+      if(!u){err.hidden=false;err.textContent="Image illisible. Essayez un fichier PNG ou JPEG.";return}
+      cur=u;show();
+    };
+    const onPaste=e=>{const it=[...(e.clipboardData&&e.clipboardData.items||[])].find(x=>x.kind==="file"&&/^image\//.test(x.type));if(it){e.preventDefault();take(it.getAsFile())}};
+    document.addEventListener("paste",onPaste);
+    zone.onclick=()=>inp.click();zone.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();inp.click()}};
+    inp.onchange=()=>{if(inp.files[0])take(inp.files[0]);inp.value=""};
+    zone.ondragover=e=>{e.preventDefault();zone.classList.add("over")};zone.ondragleave=()=>zone.classList.remove("over");
+    zone.ondrop=e=>{e.preventDefault();zone.classList.remove("over");const f=e.dataTransfer&&e.dataTransfer.files[0];if(f)take(f)};
+    const close=()=>{document.removeEventListener("paste",onPaste);try{d.close()}catch(e){}d.remove()};
+    d.addEventListener("cancel",e=>{e.preventDefault();close()});
+    d.querySelector("[data-x]").onclick=close;
+    d.querySelector("[data-del]").onclick=()=>{cur="";show()};
+    d.querySelector("[data-ok]").onclick=()=>{const pr=proj(p.id);if(pr&&(pLogo(pr)||"")!==cur){if(cur)pr.logo=cur;else delete pr.logo;save();render();toast(cur?"Logo du client enregistré.":"Logo du client retiré.")}close()};
+    show();
+    if(d.showModal)d.showModal();else d.setAttribute("open","");
+  }
   function addProject(name){
     name=name.trim(); if(!name)return;
     const p={id:uid(),name,color:nextColor()};
@@ -1270,7 +1328,7 @@
       const m=MODE==="cloud"&&cloud.meta[p.id];
       const badge=m?(m.owner!==cloud.user.id?`<span class="pshared" title="Partagé par ${esc(nameOf(m.ownerEmail))}">invité</span>`:(m.members.length?`<span class="pshared" title="Partagé avec ${esc(m.members.map(nameOf).join(", "))}">partagé</span>`:"")):"";
       const li=document.createElement("li");
-      li.innerHTML=`<button class="pbtn${p.archived?" arch":""}" type="button" aria-current="${view===p.id}"><span class="dot" style="background:${p.color}"></span><span class="pname">${esc(p.name)}</span>${badge}<span class="count">${nOpen}</span><span class="pbar" title="${pct} % terminé"><i style="width:${pct}%;background:${p.color}"></i></span></button>`;
+      li.innerHTML=`<button class="pbtn${p.archived?" arch":""}" type="button" aria-current="${view===p.id}">${pMark(p)}<span class="pname">${esc(p.name)}</span>${badge}<span class="count">${nOpen}</span><span class="pbar" title="${pct} % terminé"><i style="width:${pct}%;background:${p.color}"></i></span></button>`;
       li.firstChild.onclick=()=>openProject(p.id);
       pl.appendChild(li);
     };
@@ -1304,7 +1362,7 @@
     let title, sub;
     const archTag=p&&p.archived?` <span class="archtag">Archivé</span>`:"";
     if(agenda){
-      title=(p?`<span class="dot" style="background:${p.color}"></span>${esc(p.name)} · `:"")+`Semaine ${isoWeek(weekStart)}`+archTag;
+      title=(p?`${pMark(p)}${esc(p.name)} · `:"")+`Semaine ${isoWeek(weekStart)}`+archTag;
       const sm=weekStart.getMonth()===wEnd.getMonth();
       sub=(sm?`${weekStart.getDate()} – ${wEnd.toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}`:`${weekStart.toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} – ${wEnd.toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"})}`);
     } else if(mode==="dash"){
@@ -1312,12 +1370,12 @@
       const na=actP.length;
       sub=`${cap(longDay(today()))} · ${na} projet${na>1?"s":""} actif${na>1?"s":""}${archP.length?`, ${archP.length} archivé${archP.length>1?"s":""}`:""}`;
     } else if(mode==="requests"){
-      title=p?`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`:"Demandes client";
+      title=p?`${pMark(p)}${esc(p.name)}${archTag}`:"Demandes client";
       const rs=liveReq().filter(r=>(p?r.projectId===p.id:!isArch(r.projectId))&&reqOpen(r));
       const late=rs.filter(reqLate).length, out=rs.filter(r=>r.scope==="out").length, q=rs.filter(r=>r.quote==="todo").length;
       sub=`${rs.length} demande${rs.length>1?"s":""} client ouverte${rs.length>1?"s":""}`+(late?`, ${late} réponse${late>1?"s":""} en retard`:"")+(out?`, ${out} hors périmètre`:"")+(q?`, ${q} devis à faire`:"");
     } else if(mode==="points"){
-      title=`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`;
+      title=`${pMark(p)}${esc(p.name)}${archTag}`;
       const ps=livePts().filter(o=>o.projectId===p.id), no=ps.filter(o=>o.status!=="closed");
       const byO=k=>no.filter(o=>o.owner===k).length;
       sub=`${no.length} point${no.length>1?"s":""} ouvert${no.length>1?"s":""}`+(ps.length-no.length?`, ${ps.length-no.length} levé${ps.length-no.length>1?"s":""}`:"")+([["client","côté client"],["mecalux","côté Mecalux"],["tiers","côté tiers"]].filter(([k])=>byO(k)).map(([k,l])=>` · ${byO(k)} ${l}`).join(""));
@@ -1325,22 +1383,22 @@
       const na=state.projects.filter(x=>!x.archived).length;
       title="Projets";sub=`${na} projet${na>1?"s":""} en cours`;
     } else if(mode==="home"){
-      title=`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`;
+      title=`${pMark(p)}${esc(p.name)}${archTag}`;
       const m=MODE==="cloud"?cloud.meta[p.id]:null, others=m?[m.ownerEmail,...m.members].filter(e=>e!==cloud.email):[];
       sub=cap(longDay(today()))+(others.length?` · partagé avec ${others.map(nameOf).join(", ")}`:"");
     } else if(mode==="visits"){
-      title=`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`;
+      title=`${pMark(p)}${esc(p.name)}${archTag}`;
       const vs=visList(p.id), nOpen=vs.filter(x=>x.status==="open").length, nPrep=vs.filter(x=>x.status==="prep").length;
       sub=`${vs.length} visite${vs.length>1?"s":""} sur site`+(nOpen?`, ${nOpen} en cours`:"")+(nPrep?`, ${nPrep} préparée${nPrep>1?"s":""}`:"");
     } else if(mode==="meetings"){
-      title=`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`;
+      title=`${pMark(p)}${esc(p.name)}${archTag}`;
       const ms=mtgList(p.id), nd=ms.filter(x=>x.status==="draft").length;
       sub=`${ms.length} compte${ms.length>1?"s":""} rendu${ms.length>1?"s":""} de réunion`+(nd?`, dont ${nd} brouillon${nd>1?"s":""}`:"");
     } else if(mode==="trash"){
       title="Corbeille";
       sub=nTrash?`${nTrash} élément${nTrash>1?"s":""} supprimé${nTrash>1?"s":""}`:"La corbeille est vide";
     } else {
-      title=p?`<span class="dot" style="background:${p.color}"></span>${esc(p.name)}${archTag}`:(ui.scope==="today"?"Ma journée":ui.who==="__me"?"Mes tâches":"Toutes les tâches");
+      title=p?`${pMark(p)}${esc(p.name)}${archTag}`:(ui.scope==="today"?"Ma journée":ui.who==="__me"?"Mes tâches":"Toutes les tâches");
       const poolOpen=alive.filter(t=>t.status!=="done"&&(p?t.projectId===p.id:!isArch(t.projectId)));
       const pToday=poolOpen.filter(t=>isToday(t)).length, pLate=poolOpen.filter(isLate).length, pWait=poolOpen.filter(t=>t.status==="waiting").length;
       sub=`${cap(longDay(today()))} · ${poolOpen.length} tâche${poolOpen.length>1?"s":""} ouverte${poolOpen.length>1?"s":""}`+(pToday?`, ${pToday} pour aujourd'hui`:"")+(pLate?`, ${pLate} en retard`:"")+(pWait?`, ${pWait} en attente`:"");
@@ -1411,7 +1469,7 @@
       const mob=p?[...(MODE==="cloud"&&isOwner(p.id)?[{t:shareOpen?"Fermer le partage":"Partager le projet…",fn:()=>{shareOpen=!shareOpen;render()},cls:"mobonly"}]:[]),
         {t:"Exporter le plan d'actions",fn:()=>openExport(p,"tasks"),cls:"mobonly"},{t:"Exporter les points ouverts",fn:()=>openExport(p,"points"),cls:"mobonly"},{t:"Récap de la semaine",fn:openRecap,cls:"mobonly"},{t:"-",cls:"mobonly",hr:true}]:[];
       if(p){
-        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[...mob,{t:"Renommer le projet",fn:()=>renameProject(p)},{colors:p},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},...(MODE==="cloud"?[{t:"Ajouter les points ouverts standard…",fn:()=>tplDialog(p,false)}]:[]),...(xlOn(p.id)?["-",{h:"Lien Excel des points ouverts"},{t:"Synchroniser avec Excel",fn:()=>xlQuick(p)},...(xlFsOk()?[{t:"Choisir le fichier Excel lié…",fn:()=>xlLink(p)}]:[]),{t:"Importer un fichier Excel…",fn:()=>xlPick(p)},{t:"Désactiver le lien Excel",fn:()=>xlToggle(p,false)},{t:"Supprimer tous les points ouverts…",fn:()=>xlPurge(p),cls:"danger"}]:[]),"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
+        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[...mob,{t:"Renommer le projet",fn:()=>renameProject(p)},{t:pLogo(p)?"Changer le logo du client…":"Ajouter le logo du client…",fn:()=>logoDialog(p)},{colors:p},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},...(MODE==="cloud"?[{t:"Ajouter les points ouverts standard…",fn:()=>tplDialog(p,false)}]:[]),...(xlOn(p.id)?["-",{h:"Lien Excel des points ouverts"},{t:"Synchroniser avec Excel",fn:()=>xlQuick(p)},...(xlFsOk()?[{t:"Choisir le fichier Excel lié…",fn:()=>xlLink(p)}]:[]),{t:"Importer un fichier Excel…",fn:()=>xlPick(p)},{t:"Désactiver le lien Excel",fn:()=>xlToggle(p,false)},{t:"Supprimer tous les points ouverts…",fn:()=>xlPurge(p),cls:"danger"}]:[]),"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
         else ddMenu("⋯",[...mob,{t:"Quitter le projet",fn:()=>shareRemove(p.id,cloud.email,true),cls:"danger"}],"ddmore");
       }
     }
@@ -2384,14 +2442,14 @@
       const cnt=[`${op.length} point${op.length>1?"s":""} ouvert${op.length>1?"s":""}`,op.filter(r=>r.cls==="late").length&&`${op.filter(r=>r.cls==="late").length} en retard`,op.filter(r=>r.cls==="wait").length&&`${op.filter(r=>r.cls==="wait").length} en attente`,s.rows.length-op.length&&`${s.rows.length-op.length} terminé(s) récemment`].filter(Boolean).join(" · ");
       const head=`<tr><th>Statut</th><th>Tâche</th><th>Famille</th><th>Priorité</th>${o.who?"<th>Responsable</th>":""}<th>Échéance</th><th>En attente de</th></tr>`;
       const rows=s.rows.map(r=>`<tr><td class="st ${r.cls}">${esc(r.st)}</td><td><div class="tt">${esc(r.t.title)}${r.steps?` <span class="mut">(étapes ${esc(r.steps)})</span>`:""}</div>${o.note&&r.note?`<div class="nt">${esc(r.note)}</div>`:""}${o.com&&r.com?`<div class="nt">Dernier commentaire – ${esc(r.com)}</div>`:""}</td><td>${esc(r.fam)}</td><td>${esc(r.prio)}</td>${o.who?`<td>${esc(r.who)}</td>`:""}<td class="nw">${r.due?esc(parseD(r.due).toLocaleDateString("fr-FR")):""}</td><td>${esc(r.wf)}</td></tr>`).join("");
-      return `<section><h2 style="border-color:${s.p.color}">${esc(s.p.name)}</h2><p class="sub">${cnt}</p>${s.rows.length?`<table><thead>${head}</thead><tbody>${rows}</tbody></table>`:`<p class="mut">Aucun point ouvert.</p>`}</section>`;
+      return `<section><h2 style="border-color:${s.p.color}">${pLogo(s.p)?`<img class="lg" src="${s.p.logo}" alt="">`:""}${esc(s.p.name)}</h2><p class="sub">${cnt}</p>${s.rows.length?`<table><thead>${head}</thead><tbody>${rows}</tbody></table>`:`<p class="mut">Aucun point ouvert.</p>`}</section>`;
     }).join("");
     const title=expTitle(ps);
     const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(expBase(ps))}</title><style>
       @page{size:A4 landscape;margin:12mm}
       *{box-sizing:border-box}body{margin:0;font:10pt/1.4 "Segoe UI",Arial,sans-serif;color:#16232B}
       h1{font-size:19pt;margin:0}.lead{color:#51646F;margin:3px 0 14px}
-      section{margin:0 0 18px}h2{font-size:13pt;margin:0;padding-bottom:3px;border-bottom:3px solid #2F4A5A}
+      section{margin:0 0 18px}h2{font-size:13pt;margin:0;padding-bottom:3px;border-bottom:3px solid #2F4A5A;display:flex;align-items:center;gap:10px}h2 .lg{max-height:30px;max-width:120px;object-fit:contain}
       .sub{color:#51646F;margin:4px 0 8px;font-size:9.5pt}
       table{width:100%;border-collapse:collapse}thead{display:table-header-group}tr{page-break-inside:avoid}
       th{background:#EEF1F3;text-align:left;font-size:8.5pt;font-weight:600;text-transform:uppercase;letter-spacing:.03em;padding:5px 6px;border-bottom:1px solid #C9D3D9}
@@ -2746,7 +2804,7 @@
       const nOpen=s.rows.filter(r=>r.st==="Ouvert").length, nClosed=s.rows.length-nOpen;
       const byTheme=new Map();s.rows.forEach(r=>{if(!byTheme.has(r.theme))byTheme.set(r.theme,[]);byTheme.get(r.theme).push(r)});
       const tables=[...byTheme].map(([th,rs])=>`<h3>${esc(th)}</h3><table><thead><tr><th class="n">N°</th><th class="pc">Point ouvert</th>${o.owner?"<th class=\"ow\">Qui doit répondre</th>":""}<th class="st">Statut</th>${o.ans?"<th>Réponse / décision</th>":""}</tr></thead><tbody>${rs.map(r=>`<tr><td class="n">${esc(r.n)}</td><td class="pre">${esc(r.x.text)}${r.x.hypothesis?`<div class="hyp"><b>Hypothèse Mecalux :</b> ${esc(r.x.hypothesis)}</div>`:""}${r.x.erp==="oui"?`<div class="erp">Sujet ERP</div>`:""}</td>${o.owner?`<td>${esc(r.owner)}</td>`:""}<td class="st ${r.st==="Levé"?"done":"open"}">${r.st}</td>${o.ans?`<td class="pre">${esc(r.x.answer||"")}</td>`:""}</tr>`).join("")}</tbody></table>`).join("");
-      return `<section><h2 style="border-color:${s.p.color}">${esc(s.p.name)}</h2><p class="sub">${nOpen} point${nOpen>1?"s":""} ouvert${nOpen>1?"s":""}${nClosed?` · ${nClosed} levé${nClosed>1?"s":""}`:""}</p>${s.rows.length?tables:`<p class="mut">Aucun point ouvert.</p>`}</section>`;
+      return `<section><h2 style="border-color:${s.p.color}">${pLogo(s.p)?`<img class="lg" src="${s.p.logo}" alt="">`:""}${esc(s.p.name)}</h2><p class="sub">${nOpen} point${nOpen>1?"s":""} ouvert${nOpen>1?"s":""}${nClosed?` · ${nClosed} levé${nClosed>1?"s":""}`:""}</p>${s.rows.length?tables:`<p class="mut">Aucun point ouvert.</p>`}</section>`;
     }).join("");
     const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(ptBase(ps))}</title><style>
       @page{size:A4 portrait;margin:14mm}
@@ -3426,13 +3484,13 @@
     if(opt.notes&&(m.notes||"").trim())S.push(["Notes",`<p class="pre">${esc(m.notes.trim())}</p>`]);
     if((m.nextMeeting||"").trim())S.push(["Prochaine réunion",`<p>${esc(m.nextMeeting.trim())}</p>`]);
     const p=proj(m.projectId)||{name:""};
-    const head=`<header><div class="k">Compte rendu${m.kind!=="autre"?" – "+esc(MTG_KIND[m.kind]):""}</div><h1>${esc(p.name)} – ${esc(m.title)}</h1><div class="when">${esc(mtgWhen(m))}</div></header>
+    const head=`<header${pLogo(p)?` class="hl"`:""}><div><div class="k">Compte rendu${m.kind!=="autre"?" – "+esc(MTG_KIND[m.kind]):""}</div><h1>${esc(p.name)} – ${esc(m.title)}</h1><div class="when">${esc(mtgWhen(m))}</div></div>${pLogo(p)?`<img class="crlogo" src="${p.logo}" alt="Logo ${esc(p.name)}">`:""}</header>
       <dl>${present.length?`<dt>Présents</dt><dd>${esc(present.map(x=>x.name+(x.side?" ("+(SIDE[x.side]||"")+")":"")).join(", "))}</dd>`:""}${absent.length?`<dt>Absents</dt><dd>${esc(absent.map(x=>x.name).join(", "))}</dd>`:""}</dl>`;
     return head+(S.length?S.map(([t,h],i)=>`<section><h2>${i+1}. ${t}</h2>${h}</section>`).join(""):`<p class="mut">Aucun élément relevé pour le moment.</p>`)
       +`<footer>Compte rendu établi${MODE==="cloud"&&cloud.email?" par "+esc(nameOf(cloud.email)):""} le ${new Date().toLocaleDateString("fr-FR")}</footer>`;
   }
   const CR_CSS=`.crdoc{font:10.5pt/1.45 Arial,Helvetica,sans-serif;color:#16232B}
-    .crdoc header{border-bottom:2px solid #16232B;padding-bottom:8px;margin-bottom:10px}.crdoc .k{font-size:8.5pt;letter-spacing:.08em;text-transform:uppercase;color:#51646F}
+    .crdoc header{border-bottom:2px solid #16232B;padding-bottom:8px;margin-bottom:10px}.crdoc header.hl{display:flex;justify-content:space-between;align-items:center;gap:16px}.crdoc .crlogo{max-height:52px;max-width:160px;object-fit:contain;flex:none}.crdoc .k{font-size:8.5pt;letter-spacing:.08em;text-transform:uppercase;color:#51646F}
     .crdoc h1{font-size:17pt;margin:2px 0}.crdoc .when{color:#3A4B55}.crdoc dl{display:grid;grid-template-columns:70px 1fr;gap:3px 8px;margin:0 0 6px}.crdoc dt{color:#51646F}.crdoc dd{margin:0}
     .crdoc h2{font-size:11pt;text-transform:uppercase;letter-spacing:.04em;color:#1F4A66;margin:14px 0 4px}.crdoc ul{margin:0;padding-left:18px}.crdoc table{width:100%;border-collapse:collapse}
     .crdoc th{text-align:left;font-size:8.5pt;text-transform:uppercase;color:#51646F;padding:3px 6px 3px 0;border-bottom:1px solid #C7D1D8}.crdoc td{padding:5px 6px 5px 0;border-bottom:1px solid #E6EBEE;vertical-align:top}
@@ -4170,7 +4228,7 @@
     const sec=visFlows(v).map(f=>{const ns=visNotes(v,f.id), it=visItems(v,f.id);if(!ns.length&&!it.length)return "";
       return `<section><h2>${esc(f.name)}</h2>${it.length?`<ul class="it">${it.map(i=>`<li class="${i.seen?"ok":"ko"}">${i.seen?"Vu":"Non vu"} · ${i.kind==="point"?esc(i.label||"Point ouvert")+" – ":""}${esc(i.text)}</li>`).join("")}</ul>`:""}${ns.map(n=>`<div class="n"><div class="h"><span class="t ${n.type}">${(NTYPE[n.type]||NTYPE.note)[0]}</span> ${hm(n.at)}${n.item&&its.find(i=>i.id===n.item)?` · réponse à : ${esc(its.find(i=>i.id===n.item).text)}`:""}</div>${n.text?`<p>${esc(n.text).replace(/\n/g,"<br>")}</p>`:""}${(n.photos||[]).length?`<div class="ph">${n.photos.map(ph=>urls[ph.id]?`<figure><img src="${urls[ph.id]}" alt=""><figcaption>${esc(ph.caption||"")}</figcaption></figure>`:"").join("")}</div>`:""}</div>`).join("")}</section>`}).join("");
     const css=`body{font-family:Arial,sans-serif;color:#16232B;margin:0;font-size:11pt}h1{font-size:18pt;margin:0}.sub{color:#51646F;margin:4px 0 16px}h2{font-size:13pt;color:#1D4E78;border-bottom:1px solid #C7D1D8;padding-bottom:3px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.03em}.n{margin:0 0 10px;break-inside:avoid}.h{font-size:9pt;color:#51646F}.t{font-weight:bold;padding:1px 6px;border-radius:8px;background:#EEF1F3}.t.question{background:#DCEAF7;color:#1D4E78}.t.action{background:#FFF4CC;color:#6B5200}p{margin:3px 0}.ph{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}figure{margin:0;width:48%;break-inside:avoid}figure img{width:100%;border-radius:4px}figcaption{font-size:9pt;color:#51646F}.it{margin:0 0 10px;padding-left:18px;font-size:10pt}.it li.ok{color:#1F5C43}.it li.ko{color:#9A3412}.meta{display:grid;grid-template-columns:110px 1fr;gap:3px 10px;margin:0 0 14px;font-size:10pt}.meta b{color:#51646F;font-weight:normal}@page{margin:15mm}`;
-    const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(v.title)}</title><style>${css}</style></head><body><h1>${esc(v.title)}</h1><p class="sub">${esc(p.name)} · ${esc(new Date(visDate(v)).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))}${v.endedAt&&v.startedAt?` · ${hm(v.startedAt)} – ${hm(v.endedAt)}`:""}</p>${pr.location||pr.goal||(pr.participants||[]).length?`<div class="meta">${pr.location?`<b>Lieu</b><span>${esc(pr.location)}</span>`:""}${pr.goal?`<b>Objectif</b><span>${esc(pr.goal)}</span>`:""}${(pr.participants||[]).length?`<b>Participants</b><span>${esc(pr.participants.map(x=>x.name+(SIDE[x.side]?` (${SIDE[x.side]})`:"")).join(", "))}</span>`:""}</div>`:""}${sec||"<p>Aucune note.</p>"}</body></html>`;
+    const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(v.title)}</title><style>${css}.vh{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.vh img{max-height:52px;max-width:160px;object-fit:contain}</style></head><body><div class="vh"><h1>${esc(v.title)}</h1>${pLogo(p)?`<img src="${p.logo}" alt="">`:""}</div><p class="sub">${esc(p.name)} · ${esc(new Date(visDate(v)).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))}${v.endedAt&&v.startedAt?` · ${hm(v.startedAt)} – ${hm(v.endedAt)}`:""}</p>${pr.location||pr.goal||(pr.participants||[]).length?`<div class="meta">${pr.location?`<b>Lieu</b><span>${esc(pr.location)}</span>`:""}${pr.goal?`<b>Objectif</b><span>${esc(pr.goal)}</span>`:""}${(pr.participants||[]).length?`<b>Participants</b><span>${esc(pr.participants.map(x=>x.name+(SIDE[x.side]?` (${SIDE[x.side]})`:"")).join(", "))}</span>`:""}</div>`:""}${sec||"<p>Aucune note.</p>"}</body></html>`;
     if(missing)toast(`${plural(missing,"photo")} non disponible${missing>1?"s":""} hors connexion : absente${missing>1?"s":""} du PDF.`);
     printHtml(html,`visite-${(p.name||"projet").replace(/[^\wÀ-ÿ-]+/g,"-")}-${iso(new Date(visDate(v)))}`);
   }
@@ -4211,7 +4269,7 @@
   function renderProjects(L){
     const alive=live(), act=state.projects.filter(p=>!p.archived), arch=state.projects.filter(p=>p.archived);
     const tile=p=>{const open=alive.filter(t=>t.projectId===p.id&&t.status!=="done"), late=open.filter(isLate).length;
-      return `<button type="button" class="pjt" data-p="${esc(p.id)}"><span class="pjic" style="background:${esc(p.color||"#999")}">${esc(projIni(p.name))}${late?`<em aria-label="${late} en retard">${late}</em>`:""}</span><b>${esc(p.name)}</b><span>${open.length} tâche${open.length>1?"s":""}</span></button>`};
+      return `<button type="button" class="pjt" data-p="${esc(p.id)}"><span class="pjic${pLogo(p)?" haslogo":""}" style="${pLogo(p)?`--pc:${esc(p.color||"#999")}`:`background:${esc(p.color||"#999")}`}">${pLogo(p)?`<img src="${p.logo}" alt="">`:esc(projIni(p.name))}${late?`<em aria-label="${late} en retard">${late}</em>`:""}</span><b>${esc(p.name)}</b><span>${open.length} tâche${open.length>1?"s":""}</span></button>`};
     L.innerHTML=`<section class="pjgrid" aria-label="Projets en cours">${act.map(tile).join("")}<button type="button" class="pjt" data-newp><span class="pjic add">${svgI("M12 5v14M5 12h14")}</span><b>Nouveau</b></button></section>
       ${arch.length?`<details class="pjarch"${ui.showArch?" open":""}><summary>Projets archivés <span>${arch.length}</span></summary><section class="pjgrid">${arch.map(tile).join("")}</section></details>`:""}
       <section class="pjviews" aria-label="Autres vues"></section>`;

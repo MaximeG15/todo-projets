@@ -611,3 +611,8 @@ alter table public.visits add column if not exists items jsonb not null default 
 alter table public.visits drop constraint if exists visits_status_check;
 alter table public.visits add constraint visits_status_check check (status in ('prep','open','done'));
 alter table public.visits add column if not exists sync jsonb not null default '{}'::jsonb;
+
+-- Logo du client sur le projet (image réduite, stockée en data URL, 150 000 caractères au plus)
+alter table public.projects add column if not exists logo text;
+alter table public.projects drop constraint if exists projects_logo_chk;
+alter table public.projects add constraint projects_logo_chk check (logo is null or (length(logo) <= 150000 and logo ~ '^data:image/(png|webp|jpeg);base64,[A-Za-z0-9+/=]+$'));
