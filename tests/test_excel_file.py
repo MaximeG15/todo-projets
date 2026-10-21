@@ -39,6 +39,7 @@ with sync_playwright() as pw:
     s=st()["points"]
     ok(pg.evaluate("window.__picks")==1,"clic suivant : pas de nouveau choix de fichier")
     ok(len(s)==2 and any(x["status"]=="closed" and "100x150" in x["answer"] for x in s),"modifications de l'Excel reprises en un clic")
+    pg.wait_for_timeout(1000)  # laisse passer l'alerte « nouvelle réponse du client » de la synchro précédente
     pg.locator("button",has_text="Synchroniser avec Excel").first.click();pg.wait_for_timeout(600)
     ok("déjà à jour" in pg.locator("#toast").inner_text(),"sans changement : message « déjà à jour »")
     # synchronisation automatique : fichier modifié (date de modification changée)
@@ -46,7 +47,7 @@ with sync_playwright() as pw:
     pg.evaluate("c=>{window.__xlContent=c;window.__mod=2}",v3);pg.evaluate("window.__xlAutoNow()");pg.wait_for_timeout(800)
     s=st()["points"]
     ok(len(s)==3 and any(x.get("answer")=="Réponse ajoutée dans l'Excel" for x in s),"auto : modification et nouveau point appliqués sans confirmation")
-    ok("mis à jour depuis Excel" in pg.locator("#toast").inner_text(),"auto : message avec annulation")
+    ok("1 nouvelle réponse du client" in pg.locator("#toast").inner_text(),"auto : réponse du client ajoutée dans l'Excel, alerte « nouvelle réponse »")
     n=len(seen);pg.evaluate("window.__xlAutoNow()");pg.wait_for_timeout(500)
     ok(len(seen)==n and len(st()["points"])==3,"auto : fichier inchangé, rien à faire")
     # point retiré de l'Excel : pas d'application automatique, repère à valider

@@ -283,8 +283,8 @@
   const fromT=r=>({id:r.id,projectId:r.project_id,title:r.title,priority:r.priority,due:r.due||"",status:r.waiting&&r.status==="todo"?"waiting":r.status,waitingFor:r.waiting_for||"",deletedAt:r.deleted_at?Number(r.deleted_at):null,note:r.note||"",who:r.who||"",createdAt:Number(r.created_at),doneAt:r.done_at?Number(r.done_at):null,updatedAt:Number(r.updated_at),updatedBy:r.updated_by||"",checklist:Array.isArray(r.checklist)?r.checklist:[],repeat:r.repeat||null,family:r.family||"",requestId:r.request_id||null});
   const fromP=r=>{const p={id:r.id,name:r.name,color:r.color||COLORS[0],archived:!!r.archived};if(r.logo&&LOGO_RX.test(r.logo))p.logo=r.logo;return p};
   const rowR=r=>({id:r.id,project_id:r.projectId,title:r.title,description:r.description||"",requester:r.requester||"",received:r.received||null,due:r.due||null,priority:r.priority||"normale",status:r.status||"new",scope:r.scope||"",estimate:r.estimate==null||r.estimate===""?null:Number(r.estimate),quote:r.quote||"",created_at:r.createdAt||Date.now(),updated_at:r.updatedAt||Date.now(),closed_at:r.closedAt||null,deleted_at:r.deletedAt||null,updated_by:cloud.email});
-  const rowO=o=>({id:o.id,project_id:o.projectId,text:o.text,answer:o.answer||"",hypothesis:o.hypothesis||"",erp:o.erp||"",theme:o.theme||"",owner:o.owner||"",owner_name:o.ownerName||"",status:o.status==="closed"?"closed":"open",task_id:o.taskId||null,request_id:o.requestId||null,created_at:o.createdAt||Date.now(),updated_at:o.updatedAt||Date.now(),closed_at:o.closedAt||null,deleted_at:o.deletedAt||null,updated_by:cloud.email,excel_ref:o.xl||null});
-  const fromO=r=>({id:r.id,projectId:r.project_id,text:r.text,answer:r.answer||"",hypothesis:r.hypothesis||"",erp:r.erp||"",theme:r.theme||"",owner:r.owner||"",ownerName:r.owner_name||"",status:r.status,taskId:r.task_id||null,requestId:r.request_id||null,createdAt:Number(r.created_at),updatedAt:Number(r.updated_at),closedAt:r.closed_at?Number(r.closed_at):null,deletedAt:r.deleted_at?Number(r.deleted_at):null,updatedBy:r.updated_by||"",xl:r.excel_ref||null});
+  const rowO=o=>({id:o.id,project_id:o.projectId,text:o.text,answer:o.answer||"",hypothesis:o.hypothesis||"",erp:o.erp||"",theme:o.theme||"",owner:o.owner||"",owner_name:o.ownerName||"",status:o.status==="closed"?"closed":"open",task_id:o.taskId||null,request_id:o.requestId||null,created_at:o.createdAt||Date.now(),updated_at:o.updatedAt||Date.now(),closed_at:o.closedAt||null,deleted_at:o.deletedAt||null,updated_by:cloud.email,excel_ref:o.xl||null,answer_new_at:o.ansNew||null});
+  const fromO=r=>({id:r.id,projectId:r.project_id,text:r.text,answer:r.answer||"",hypothesis:r.hypothesis||"",erp:r.erp||"",theme:r.theme||"",owner:r.owner||"",ownerName:r.owner_name||"",status:r.status,taskId:r.task_id||null,requestId:r.request_id||null,createdAt:Number(r.created_at),updatedAt:Number(r.updated_at),closedAt:r.closed_at?Number(r.closed_at):null,deletedAt:r.deleted_at?Number(r.deleted_at):null,updatedBy:r.updated_by||"",xl:r.excel_ref||null,ansNew:r.answer_new_at?Number(r.answer_new_at):null});
   const fromR=r=>({id:r.id,projectId:r.project_id,title:r.title,description:r.description||"",requester:r.requester||"",received:r.received||"",due:r.due||"",priority:r.priority,status:r.status,scope:r.scope||"",estimate:r.estimate==null?null:Number(r.estimate),quote:r.quote||"",createdAt:Number(r.created_at),updatedAt:Number(r.updated_at),closedAt:r.closed_at?Number(r.closed_at):null,deletedAt:r.deleted_at?Number(r.deleted_at):null,updatedBy:r.updated_by||""});
   const transient=e=>!e||!e.code; // pas de code PostgreSQL = problème réseau
   function cloudStatus(){
@@ -1328,7 +1328,7 @@
       const m=MODE==="cloud"&&cloud.meta[p.id];
       const badge=m?(m.owner!==cloud.user.id?`<span class="pshared" title="Partagé par ${esc(nameOf(m.ownerEmail))}">invité</span>`:(m.members.length?`<span class="pshared" title="Partagé avec ${esc(m.members.map(nameOf).join(", "))}">partagé</span>`:"")):"";
       const li=document.createElement("li");
-      li.innerHTML=`<button class="pbtn${p.archived?" arch":""}" type="button" aria-current="${view===p.id}">${pMark(p)}<span class="pname">${esc(p.name)}</span>${badge}<span class="count">${nOpen}</span><span class="pbar" title="${pct} % terminé"><i style="width:${pct}%;background:${p.color}"></i></span></button>`;
+      li.innerHTML=`<button class="pbtn${p.archived?" arch":""}" type="button" aria-current="${view===p.id}">${pMark(p)}<span class="pname">${esc(p.name)}</span>${badge}${ansOf(p.id).length?`<span class="pansn" title="${ansTxt(ansOf(p.id).length)} (Excel)">${ansOf(p.id).length}</span>`:""}<span class="count">${nOpen}</span><span class="pbar" title="${pct} % terminé"><i style="width:${pct}%;background:${p.color}"></i></span></button>`;
       li.firstChild.onclick=()=>openProject(p.id);
       pl.appendChild(li);
     };
@@ -1354,7 +1354,7 @@
       const nT=alive.filter(t=>t.projectId===p.id&&t.status!=="done").length, nR=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)).length;
       tabs.hidden=false;
       const nO=livePts().filter(o=>o.projectId===p.id&&o.status!=="closed").length;
-      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"&&mode!=="meetings"&&mode!=="visits"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points<span class="tlx"> ouverts</span> <span>${nO}</span></button><button type="button" role="tab" aria-selected="${mode==="meetings"}" data-tab="meetings">Réunions <span>${mtgList(p.id).length}</span></button><button type="button" role="tab" aria-selected="${mode==="visits"}" data-tab="visits">Visites <span>${(visEnsure(),visList(p.id).length)}</span></button>`;
+      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"&&mode!=="meetings"&&mode!=="visits"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points<span class="tlx"> ouverts</span> <span>${nO}</span>${ansOf(p.id).length?`<i class="ansdot" title="${ansTxt(ansOf(p.id).length)}" aria-label="${ansTxt(ansOf(p.id).length)}"></i>`:""}</button><button type="button" role="tab" aria-selected="${mode==="meetings"}" data-tab="meetings">Réunions <span>${mtgList(p.id).length}</span></button><button type="button" role="tab" aria-selected="${mode==="visits"}" data-tab="visits">Visites <span>${(visEnsure(),visList(p.id).length)}</span></button>`;
       tabs.querySelectorAll("[data-tab]").forEach(x=>x.onclick=()=>{const k=x.dataset.tab;ui.mode=k==="tasks"?(ui.taskMode||"list"):k;if(ui.mode!=="list")ui.scope="all";saveUi();editing=null;editingReq=null;editingPt=null;render()});
     } else {tabs.hidden=true;tabs.innerHTML=""}
     if(!weekStart)weekStart=mondayOf(new Date());
@@ -2620,12 +2620,13 @@
   function ptNum(x){const l=livePts().filter(y=>y.projectId===x.projectId).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));return l.findIndex(y=>y.id===x.id)+1}
   function ptRow(x,num,showProj){
     const li=document.createElement("li");
-    li.className=`task pt${x.status==="closed"?" done":""}${editingPt===x.id?" open":""}`;li.dataset.o=x.id;
+    li.className=`task pt${x.status==="closed"?" done":""}${editingPt===x.id?" open":""}${x.ansNew?" ansnew":""}`;li.dataset.o=x.id;
     const tags=[];
     const ow=ownerTxt(x);
     const pp=proj(x.projectId);
     if(showProj&&pp)tags.push(`<span class="tag"><span class="dot" style="background:${pp.color}"></span>${esc(pp.name)}</span>`);
     if(showProj&&x.theme)tags.push(`<span class="tag fam">${hl(x.theme)}</span>`);
+    if(x.ansNew)tags.unshift(`<button type="button" class="tag ansnew" data-a="seen" title="Réponse reçue par l'Excel le ${esc(fmtWhen(x.ansNew))}. Cliquer pour la marquer comme lue.">Nouvelle réponse client<span aria-hidden="true">✓</span></button>`);
     if(ow)tags.push(`<span class="tag who" title="Qui doit répondre">${hl(ow)}</span>`);
     if(!(x.xl&&x.xl.n)&&ptLinkedProj(x.projectId))tags.push(`<span class="tag" title="Point créé dans l'appli, absent du fichier Excel">Hors Excel</span>`);
     if(x.erp==="oui")tags.push(`<span class="tag erp" title="Sujet ERP">Sujet ERP</span>`);
@@ -2642,12 +2643,13 @@
         <div class="menu"><button type="button" data-a="edit">${editingPt===x.id?"Fermer le détail":"Modifier / répondre"}</button>${t?"":`<button type="button" data-a="task">Créer une tâche liée</button>`}${r?"":`<button type="button" data-a="req">Créer une demande client</button>`}<button type="button" data-a="del" class="danger">Mettre à la corbeille</button></div>
       </details></div>`;
     li.querySelector(".chk").onchange=e=>closePoint(x,e.target.checked);
-    li.querySelector(".ttl").onclick=()=>{editingPt=editingPt===x.id?null:x.id;render()};
+    li.querySelector(".ttl").onclick=()=>{editingPt=editingPt===x.id?null:x.id;if(editingPt&&x.ansNew)ansSeen([x]);else render()};
     const lt=li.querySelector("[data-l=t]");if(lt)lt.onclick=()=>{editing=t.id;openInList(t)};
     const lr=li.querySelector("[data-l=r]");if(lr)lr.onclick=()=>openRequest(r);
     li.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>{
       const a=b.dataset.a;
-      if(a==="edit"){editingPt=editingPt===x.id?null:x.id;render()}
+      if(a==="edit"){editingPt=editingPt===x.id?null:x.id;if(editingPt&&x.ansNew)ansSeen([x]);else render()}
+      if(a==="seen")ansSeen([x]);
       if(a==="task")pointToTask(x);
       if(a==="req")pointToRequest(x);
       if(a==="del")deletePoint(x);
@@ -2727,10 +2729,23 @@
     bar.querySelector("[data-erp]").onclick=()=>setF({...fl,erp:!fl.erp});
     const rs=bar.querySelector("[data-reset]");if(rs)rs.onclick=()=>setF({themes:[],erp:false});
     if(keys.length>1||fl.erp||all.some(x=>x.erp))L.appendChild(bar);
-    const pass=x=>(!fl.themes.length||fl.themes.includes(x.theme||""))&&(!fl.erp||x.erp==="oui");
+    // nouvelles réponses du client reçues par l'Excel : bandeau, filtre, tout marquer comme lu
+    const fresh=all.filter(x=>x.ansNew);
+    if(fl.ans&&!fresh.length)fl.ans=false;
+    if(fresh.length){
+      const ab=document.createElement("div");ab.className="ansbar";ab.setAttribute("role","status");
+      const ask=notifOk()&&Notification.permission!=="granted"&&ptLinkedProj(p.id);
+      ab.innerHTML=`<span class="ansdot" aria-hidden="true"></span><span class="anst"><b>${ansTxt(fresh.length)}</b> dans l'Excel${fresh.length>1?"":` : ${esc(short(fresh[0].text))}`}</span><span class="ansb">${fl.ans?`<button type="button" class="btn ghost" data-ansall>Afficher tous les points</button>`:`<button type="button" class="btn" data-ansonly>Afficher ${fresh.length>1?"ces réponses":"la réponse"}</button>`}<button type="button" class="btn ghost" data-ansread>Tout marquer comme lu</button>${ask?`<button type="button" class="btn ghost" data-ansnotif title="Alerte Windows quand l'appli est en arrière-plan">Activer les alertes Windows</button>`:""}</span>`;
+      const ao=ab.querySelector("[data-ansonly]");if(ao)ao.onclick=()=>setF({...fl,ans:true});
+      const aa=ab.querySelector("[data-ansall]");if(aa)aa.onclick=()=>setF({...fl,ans:false});
+      ab.querySelector("[data-ansread]").onclick=()=>{fl.ans=false;ui.ptFilter[p.id]=fl;saveUi();ansSeen(fresh)};
+      const an=ab.querySelector("[data-ansnotif]");if(an)an.onclick=ansNotifAsk;
+      L.appendChild(ab);
+    }
+    const pass=x=>(!fl.themes.length||fl.themes.includes(x.theme||""))&&(!fl.erp||x.erp==="oui")&&(!fl.ans||x.ansNew);
     const filtered=all.filter(pass);
     const open=filtered.filter(x=>x.status!=="closed"), closed=filtered.filter(x=>x.status==="closed").sort((a,b)=>(b.closedAt||0)-(a.closedAt||0));
-    if(fl.themes.length||fl.erp)L.insertAdjacentHTML("beforeend",`<p class="hint">${open.length} point${open.length>1?"s":""} ouvert${open.length>1?"s":""} affiché${open.length>1?"s":""} sur ${allOpen.length}${fl.themes.length?` · thème${fl.themes.length>1?"s":""} : ${fl.themes.map(k=>esc(k||"Sans thème")).join(", ")}`:""}${fl.erp?" · sujets ERP":""}</p>`);
+    if(fl.themes.length||fl.erp||fl.ans)L.insertAdjacentHTML("beforeend",`<p class="hint">${fl.ans?"Nouvelles réponses du client uniquement · ":""}${open.length} point${open.length>1?"s":""} ouvert${open.length>1?"s":""} affiché${open.length>1?"s":""} sur ${allOpen.length}${fl.themes.length?` · thème${fl.themes.length>1?"s":""} : ${fl.themes.map(k=>esc(k||"Sans thème")).join(", ")}`:""}${fl.erp?" · sujets ERP":""}</p>`);
     if(!open.length)L.insertAdjacentHTML("beforeend",`<div class="empty">${fl.themes.length||fl.erp?"Aucun point ouvert ne correspond aux filtres.":"Tous les points sont levés."}</div>`);
     const groups=new Map();open.forEach(x=>{const k=x.theme||"";if(!groups.has(k))groups.set(k,[]);groups.get(k).push(x)});
     // thèmes repliables (mémorisés par projet) et vue tableau compacte
@@ -2857,11 +2872,11 @@
     // colonnes reconnues par leur titre (l'ordre peut changer)
     const H=[["n",h=>/^(n|no|num|numero|n o|ref|id)$/.test(h)],["date",h=>/date/.test(h)],["text",h=>/description|point ouvert|question/.test(h)],
       ["erp",h=>/erp/.test(h)],["status",h=>/statut|etat/.test(h)],["owner",h=>/acteur|qui doit|responsable/.test(h)],
-      ["hypothesis",h=>/hypothese|mecalux/.test(h)],["answer",h=>/retour|reponse|decision|client|diamond|commentaire/.test(h)],["theme",h=>/sujet|theme|famille/.test(h)]];
+      ["hypothesis",h=>/hypothese|mecalux/.test(h)],["answer",[h=>/retour|reponse|decision|client|diamond/.test(h),h=>/commentaire/.test(h)]],["theme",h=>/sujet|theme|famille/.test(h)]];
     for(const sh of sheets){
       for(let hr=0;hr<Math.min(10,sh.rows.length);hr++){
         const hd=(sh.rows[hr]||[]).map(v=>xlKey(v)), col={}, used=new Set();
-        H.forEach(([f,t])=>{const i=hd.findIndex((h,k)=>h&&!used.has(k)&&t(h));if(i>=0){col[f]=i;used.add(i)}});
+        H.forEach(([f,t])=>{for(const tt of [].concat(t)){const i=hd.findIndex((h,k)=>h&&!used.has(k)&&tt(h));if(i>=0){col[f]=i;used.add(i);break}}});
         if(col.text==null)continue;
         const rows=[];
         sh.rows.slice(hr+1).forEach((r,i)=>{
@@ -2968,13 +2983,18 @@
     if(ui.xlPend)delete ui.xlPend[p.id];saveUi();
     const nAdd=plan.added.length;
     toast(`Mise à jour Excel appliquée : ${nUpAll} modifié${nUpAll>1?"s":""}, ${nAdd} ajouté${nAdd>1?"s":""}${plan.gone.length?`, ${plan.gone.length} retiré${plan.gone.length>1?"s":""}${ch==="trash"?" (corbeille)":" (conservé"+(plan.gone.length>1?"s":"")+")"}`:""}`,undo);
+    if(undo.fresh.length)setTimeout(()=>ansAlert(p,undo.fresh),1200);
     return "ok";
   }
   // Applique un plan (gone : "trash", "keep" ou null pour ne pas toucher aux points retirés de l'Excel) ; renvoie l'annulation
   function xlApply(p,plan,prefer,gone){
     const before=JSON.parse(JSON.stringify((state.points||[]).filter(x=>x.projectId===p.id)));
     const now=Date.now();
-    const setF=(x,f,v)=>{if(f==="status"){v=v||"open";x.closedAt=v==="closed"?(x.closedAt||now):null}x[f]=v};
+    const fresh=[];
+    const setF=(x,f,v)=>{if(f==="status"){v=v||"open";x.closedAt=v==="closed"?(x.closedAt||now):null}
+      // réponse du client nouvelle ou modifiée dans l'Excel : signalée jusqu'à ce qu'elle soit lue
+      if(f==="answer"&&xlStr(v)&&xlStr(v)!==xlStr(x.answer)){x.ansNew=now;fresh.push(x)}
+      x[f]=v};
     plan.updates.forEach(u=>u.fields.forEach(f=>setF(u.pt,f,u.row.v[f])));
     if(prefer==="xl")plan.conflicts.forEach(c=>setF(c.pt,c.f,c.row.v[c.f]));
     plan.refs.forEach(f=>f());plan.silent.forEach(f=>f());
@@ -2982,18 +3002,45 @@
     if(gone)plan.gone.forEach(x=>{delete x.xl;if(gone==="trash")x.deletedAt=now});
     ui.xlLast=ui.xlLast||{};ui.xlLast[p.id]=now;saveUi();
     save();render();
-    return ()=>{state.points=(state.points||[]).filter(x=>x.projectId!==p.id).concat(before);save();render()};
+    const undo=()=>{state.points=(state.points||[]).filter(x=>x.projectId!==p.id).concat(before);save();render()};
+    undo.fresh=fresh;return undo;
   }
   // ---------- Synchronisation automatique (appli ouverte, fichier lié, accès autorisé) ----------
   // Toutes les 10 minutes, à l'ouverture et au retour sur l'onglet. Les changements faits dans l'Excel et les nouveaux points
   // sont appliqués sans confirmation (annulables) ; les points retirés de l'Excel et les écarts d'un premier rapprochement
   // attendent un clic sur « Synchroniser avec Excel ».
+  // ---------- Alerte « nouvelle réponse du client » (colonne Commentaires <client> de l'Excel) ----------
+  function ansOf(pid){return livePts().filter(o=>o.projectId===pid&&o.ansNew)}
+  function ansTxt(n){return n>1?`${n} nouvelles réponses du client`:"1 nouvelle réponse du client"}
+  function notifOk(){return "Notification" in window}
+  function ansShow(pid){
+    view=pid;ui.mode="points";ui.ptFilter=ui.ptFilter&&typeof ui.ptFilter==="object"?ui.ptFilter:{};
+    ui.ptFilter[pid]={...(ui.ptFilter[pid]||{themes:[],erp:false}),themes:[],erp:false,ans:true};saveUi();editingPt=null;render();
+  }
+  function ansSeen(list){const now=Date.now();list.forEach(x=>{x.ansNew=null;x.updatedAt=now});save();render()}
+  function ansAlert(p,fresh){
+    const n=fresh.length;if(!n)return;
+    toast(`« ${p.name} » : ${ansTxt(n)} dans l'Excel.`,()=>ansShow(p.id),"Voir");
+    // notification Windows si l'appli n'est pas au premier plan (autorisation donnée une fois)
+    if(notifOk()&&Notification.permission==="granted"&&(document.hidden||!document.hasFocus())){
+      try{
+        const x=fresh[0], nt=new Notification(`${p.name} : ${ansTxt(n)}`,{body:n>1?fresh.slice(0,3).map(o=>"• "+short(o.text)).join("\n")+(n>3?`\n… et ${n-3} autre(s)`:""):`${short(x.text)}\nRéponse : ${short(x.answer)}`,tag:"ans-"+p.id,icon:"icons/icon-192-v3.png"});
+        nt.onclick=()=>{try{window.focus()}catch(e){}ansShow(p.id);nt.close()};
+      }catch(e){}
+    }
+  }
+  async function ansNotifAsk(){
+    if(!notifOk()){uiAlert("Ce navigateur ne permet pas les notifications.");return}
+    if(Notification.permission==="denied"){uiAlert("Les notifications sont bloquées pour cette appli.\n\nPour les autoriser : cliquez sur le cadenas (ou ⋯ › Autorisations de l'application) à gauche de l'adresse, puis Notifications › Autoriser.");return}
+    const r=await Notification.requestPermission();
+    toast(r==="granted"?"Notifications activées : vous serez alerté des réponses du client, même appli en arrière-plan.":"Notifications non autorisées.");render();
+  }
   const XL_AUTO_MS=10*60e3;
   const xlNeed={};let xlAutoBusy=false,xlAutoAt=0;
   const xlCanSync=pid=>xlOn(pid)&&(MODE!=="cloud"||isOwner(pid));
   async function xlAuto(force){
     if(xlAutoBusy||!xlFsOk()||(!force&&Date.now()-xlAutoAt<60e3))return;
-    if(document.hidden||document.querySelector("dialog[open]")||editingPt||mtgCur)return;
+    if(document.querySelector("dialog[open]")||editingPt||mtgCur)return;
     xlAutoBusy=true;xlAutoAt=Date.now();
     try{
       for(const p of state.projects.filter(p=>!p.archived&&xlCanSync(p.id))){
@@ -3015,7 +3062,8 @@
         ui.xlMod[p.id]=file.lastModified;saveUi();
         if(!nUp&&!nAdd&&!plan.silent.length&&!plan.refs.length){ui.xlLast=ui.xlLast||{};ui.xlLast[p.id]=Date.now();saveUi();render();continue}
         const undo=xlApply(p,plan,"xl",null);
-        if(nUp||nAdd)toast(`« ${p.name} » mis à jour depuis Excel : ${nUp} point${nUp>1?"s":""} modifié${nUp>1?"s":""}, ${nAdd} ajouté${nAdd>1?"s":""}.`,undo);
+        if(undo.fresh.length)ansAlert(p,undo.fresh);
+        else if(nUp||nAdd)toast(`« ${p.name} » mis à jour depuis Excel : ${nUp} point${nUp>1?"s":""} modifié${nUp>1?"s":""}, ${nAdd} ajouté${nAdd>1?"s":""}.`,undo);
       }
     }finally{xlAutoBusy=false}
   }
@@ -4373,7 +4421,7 @@
   function renderProjects(L){
     const alive=live(), act=state.projects.filter(p=>!p.archived), arch=state.projects.filter(p=>p.archived);
     const tile=p=>{const open=alive.filter(t=>t.projectId===p.id&&t.status!=="done"), late=open.filter(isLate).length;
-      return `<button type="button" class="pjt" data-p="${esc(p.id)}"><span class="pjic${pLogo(p)?" haslogo":""}" style="${pLogo(p)?`--pc:${esc(p.color||"#999")}`:`background:${esc(p.color||"#999")}`}">${pLogo(p)?`<img src="${p.logo}" alt="">`:esc(projIni(p.name))}${late?`<em aria-label="${late} en retard">${late}</em>`:""}</span><b>${esc(p.name)}</b><span>${open.length} tâche${open.length>1?"s":""}</span></button>`};
+      return `<button type="button" class="pjt" data-p="${esc(p.id)}"><span class="pjic${pLogo(p)?" haslogo":""}" style="${pLogo(p)?`--pc:${esc(p.color||"#999")}`:`background:${esc(p.color||"#999")}`}">${pLogo(p)?`<img src="${p.logo}" alt="">`:esc(projIni(p.name))}${late?`<em aria-label="${late} en retard">${late}</em>`:""}</span><b>${esc(p.name)}</b>${ansOf(p.id).length?`<span class="pjans">${ansTxt(ansOf(p.id).length).replace(" du client"," client")}</span>`:`<span>${open.length} tâche${open.length>1?"s":""}</span>`}</button>`};
     L.innerHTML=`<section class="pjgrid" aria-label="Projets en cours">${act.map(tile).join("")}<button type="button" class="pjt" data-newp><span class="pjic add">${svgI("M12 5v14M5 12h14")}</span><b>Nouveau</b></button></section>
       ${arch.length?`<details class="pjarch"${ui.showArch?" open":""}><summary>Projets archivés <span>${arch.length}</span></summary><section class="pjgrid">${arch.map(tile).join("")}</section></details>`:""}
       <section class="pjviews" aria-label="Autres vues"></section>`;
@@ -4394,7 +4442,7 @@
     const dshort=ms=>new Date(ms).toLocaleDateString("fr-FR",{day:"numeric",month:"long"});
     const tiles=[
       ["list","Tâches","tasks","t-tasks",open.length,open.length>1?"ouvertes":"ouverte",late.length?`${late.length} en retard`:"Rien en retard",!!late.length],
-      ["points","Points ouverts","points","t-points",po.length,po.length>1?"ouverts":"ouvert",po.length?`${pcli} à répondre par le client`:"Aucun point ouvert",false],
+      ["points","Points ouverts","points","t-points",po.length,po.length>1?"ouverts":"ouvert",ansOf(p.id).length?ansTxt(ansOf(p.id).length):po.length?`${pcli} à répondre par le client`:"Aucun point ouvert",!!ansOf(p.id).length],
       ["meetings","Réunions","meetings","t-mtg",ms.length,ms.length>1?"comptes rendus":"compte rendu",drafts?`${drafts} brouillon${drafts>1?"s":""} à finaliser`:ms.length?`Dernier : ${dshort(ms[0].startsAt||ms[0].createdAt)}`:"Aucun compte rendu",false],
       ["visits","Visites","visits","t-vis",vs.length,vs.length>1?"visites":"visite",vOpen?`${vOpen} en cours`:vPrep.length?`Préparée${vPrep[0].prep&&vPrep[0].prep.plannedAt?" : "+dshort(vPrep[0].prep.plannedAt):""}`:vs.length?`Dernière : ${dshort(visDate(vs[0]))}`:"Aucune visite",false]];
     const nxt=open.filter(t=>t.due).sort((a,b)=>(isLate(b)-isLate(a))||(a.due<b.due?-1:1)).slice(0,3);
@@ -4764,6 +4812,103 @@
       fileOk=false; showFile();
     })();
   }
+
+  // ---------- Cloche de notifications : réponses du client (Excel), retards, échéances ----------
+  // Les réponses du client restent comptées tant qu'elles ne sont pas lues ; les retards et échéances
+  // ne sont comptés qu'une fois (vus à l'ouverture du panneau), pour ne pas laisser une pastille permanente.
+  const BELL_SVG=`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>`;
+  const NOTIF_DAYS=2; // échéances : aujourd'hui et les 2 jours suivants
+  function notifData(){
+    const act=pid=>{const p=proj(pid);return !!p&&!p.archived};
+    const mine=t=>MODE!=="cloud"||!(t.who||"").trim()||isMyTask(t);
+    const byDue=(a,b)=>a.due<b.due?-1:a.due>b.due?1:0;
+    const ans=livePts().filter(o=>o.ansNew&&act(o.projectId)).sort((a,b)=>b.ansNew-a.ansNew).map(o=>({k:"a:"+o.id+":"+o.ansNew,kind:"ans",o}));
+    const ts=live().filter(t=>t.status!=="done"&&t.due&&act(t.projectId)&&mine(t));
+    const late=ts.filter(isLate).sort(byDue).map(t=>({k:"l:"+t.id+":"+t.due,kind:"task",t}))
+      .concat(liveReq().filter(r=>act(r.projectId)&&reqLate(r)).sort(byDue).map(r=>({k:"r:"+r.id+":"+r.due,kind:"req",r})));
+    const lim=addDays(today(),NOTIF_DAYS);
+    const soon=ts.filter(t=>!isLate(t)&&(needsRelance(t)||parseD(t.due)<=lim)).sort(byDue).map(t=>({k:"s:"+t.id+":"+t.due+":"+t.status,kind:"task",t}));
+    return {ans,late,soon};
+  }
+  function notifSeenSet(){return new Set(Array.isArray(ui.notifSeen)?ui.notifSeen:[])}
+  function notifCount(d){const seen=notifSeenSet();return d.ans.length+d.late.concat(d.soon).filter(x=>!seen.has(x.k)).length}
+  function notifBtn(cls){const b=document.createElement("button");b.type="button";b.className="bellbtn "+cls;b.innerHTML=BELL_SVG+`<span class="belln" hidden></span>`;b.onclick=e=>{e.stopPropagation();notifOpen(b)};return b}
+  function notifRefresh(){
+    if(!state||!state.projects)return;
+    const tools=$("#ptools");
+    if(tools&&!tools.querySelector(".bellbtn"))tools.prepend(notifBtn("d"));
+    const brand=document.querySelector(".side .brand");
+    if(brand&&!brand.querySelector(".bellbtn"))brand.insertBefore(notifBtn("m"),$("#srchbtn"));
+    const d=notifData(), n=notifCount(d);
+    document.querySelectorAll(".bellbtn").forEach(b=>{
+      const sp=b.querySelector(".belln");sp.hidden=!n;sp.textContent=n>99?"99+":String(n);
+      b.classList.toggle("on",!!n);
+      b.setAttribute("aria-label",n?`Notifications : ${n} nouvelle${n>1?"s":""}`:"Notifications");
+    });
+    try{if(navigator.setAppBadge){if(n)navigator.setAppBadge(n);else navigator.clearAppBadge()}}catch(e){}
+    const pop=$("#notifpop");if(pop&&!pop.hidden&&!pop.dataset.busy)notifPaint(pop,d);
+  }
+  function notifClose(){const pop=$("#notifpop");if(pop)pop.hidden=true;document.querySelectorAll(".bellbtn").forEach(b=>b.setAttribute("aria-expanded","false"))}
+  function notifOpen(btn){
+    let pop=$("#notifpop");
+    if(pop&&!pop.hidden){notifClose();return}
+    if(!pop){
+      pop=document.createElement("div");pop.id="notifpop";pop.className="notifpop";pop.setAttribute("role","dialog");pop.setAttribute("aria-label","Notifications");pop.hidden=true;document.body.appendChild(pop);
+      document.addEventListener("pointerdown",e=>{if(!pop.hidden&&!pop.contains(e.target)&&!e.target.closest(".bellbtn"))notifClose()});
+      document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!pop.hidden)notifClose()});
+      window.addEventListener("resize",()=>{if(!pop.hidden)notifClose()});
+    }
+    const d=notifData(), seen=notifSeenSet();
+    pop.dataset.fresh=JSON.stringify(d.late.concat(d.soon).filter(x=>!seen.has(x.k)).map(x=>x.k));
+    // tout ce qui est affiché est considéré comme vu (les réponses du client restent jusqu'à leur lecture)
+    ui.notifSeen=d.late.concat(d.soon).map(x=>x.k);saveUi();
+    const r=btn.getBoundingClientRect(), phone=window.innerWidth<=760;
+    pop.style.top=Math.round(r.bottom+8)+"px";
+    if(phone){pop.style.left="8px";pop.style.right="8px"}else{pop.style.left="auto";pop.style.right=Math.max(8,Math.round(window.innerWidth-r.right))+"px"}
+    pop.hidden=false;btn.setAttribute("aria-expanded","true");
+    notifPaint(pop,d);notifRefresh();
+    const f=pop.querySelector("button");if(f)f.focus({preventScroll:true});
+  }
+  function notifPaint(pop,d){
+    const fresh=new Set(JSON.parse(pop.dataset.fresh||"[]"));
+    const pj=pid=>proj(pid)||{name:"",color:"#999"};
+    const dayTxt=s=>{const n=Math.round((parseD(s)-today())/864e5);return n===0?"aujourd'hui":n===1?"demain":n===-1?"hier":shortDay(s).toLowerCase()};
+    const lateBy=s=>{const n=Math.round((today()-parseD(s))/864e5);return n>1?`en retard de ${n} jours`:"en retard d'un jour"};
+    const item=(x,i)=>{
+      let p,title,meta,detail="";
+      if(x.kind==="ans"){const o=x.o;p=pj(o.projectId);const lb=ptLabel(o);title=(lb?`N° ${lb} · `:"")+o.text;meta=fmtWhen(o.ansNew);detail=`Réponse : « ${short(o.answer)} »`}
+      else if(x.kind==="req"){const r=x.r;p=pj(r.projectId);title="Demande client : "+r.title;meta=`Réponse attendue ${dayTxt(r.due)}`;detail=lateBy(r.due)}
+      else{const t=x.t;p=pj(t.projectId);title=t.title;
+        if(isLate(t)){meta=`Échéance ${dayTxt(t.due)}`;detail=lateBy(t.due)}
+        else if(needsRelance(t)){meta=`Relance ${dayTxt(t.due)}`;detail=t.waitingFor?`En attente : ${t.waitingFor}`:"Relance à faire"}
+        else{meta=cap(dayTxt(t.due));detail=t.status==="waiting"?"Relance prévue":t.priority==="haute"?"Priorité haute":""}}
+      return `<button type="button" class="npi${x.kind==="ans"||fresh.has(x.k)?" new":""}" data-i="${i}"><span class="npm">${pMark(p)}</span><span class="npb"><span class="npp">${esc(p.name)} · ${esc(meta)}</span><b>${esc(title)}</b>${detail?`<span class="npd${x.kind!=="ans"&&/retard/.test(detail)?" late":""}">${esc(detail)}</span>`:""}</span></button>`;
+    };
+    const all=[];
+    const sec=(key,label,list,more)=>{if(!list.length)return "";const shown=list.slice(0,6);const h=shown.map(x=>{all.push(x);return item(x,all.length-1)}).join("");
+      return `<section class="nps ${key}"><h3>${label} <span>${list.length}</span></h3>${h}${list.length>shown.length?`<button type="button" class="npmore" data-more="${key}">Voir les ${list.length} ${more}</button>`:""}</section>`};
+    const empty=!d.ans.length&&!d.late.length&&!d.soon.length;
+    const nAsk=notifOk()&&Notification.permission==="default";
+    pop.innerHTML=`<header class="nph"><b>Notifications</b>${d.ans.length?`<button type="button" class="npread" data-allread>Tout marquer comme lu</button>`:""}</header>
+      <div class="npl">${empty?`<p class="npe">Rien à signaler : aucune nouvelle réponse du client, aucun retard, aucune échéance dans les ${NOTIF_DAYS+1} prochains jours.</p>`:""}
+      ${sec("ans","Réponses du client",d.ans,"réponses")}${sec("late","En retard",d.late,"retards")}${sec("soon",`Échéances · ${NOTIF_DAYS+1} prochains jours`,d.soon,"échéances")}</div>
+      ${nAsk?`<footer class="npf"><span>Être alerté des réponses du client même quand l'appli est en arrière-plan</span><button type="button" class="btn" data-ask>Activer</button></footer>`:""}`;
+    pop.querySelectorAll("[data-i]").forEach(b=>b.onclick=()=>{
+      const x=all[+b.dataset.i];notifClose();
+      if(x.kind==="ans")ansShow(x.o.projectId);
+      else if(x.kind==="req")openRequest(x.r);
+      else{view="all";openInList(x.t)}
+    });
+    pop.querySelectorAll("[data-more]").forEach(b=>b.onclick=()=>{
+      const k=b.dataset.more;notifClose();
+      if(k==="ans"){const pids=[...new Set(d.ans.map(x=>x.o.projectId))];ansShow(pids[0])}
+      else{view="all";ui.mode="list";ui.scope="today";if(ui.who==="__me")ui.who="";saveUi();render()}
+    });
+    const ar=pop.querySelector("[data-allread]");if(ar)ar.onclick=()=>{pop.dataset.busy="1";ansSeen(d.ans.map(x=>x.o));delete pop.dataset.busy;notifPaint(pop,notifData());notifRefresh()};
+    const ak=pop.querySelector("[data-ask]");if(ak)ak.onclick=async()=>{await ansNotifAsk();notifPaint(pop,notifData())};
+  }
+  {const r0=render;render=function(){r0();try{notifRefresh()}catch(e){}}}
+  window.__notifData=()=>{const d=notifData();return {ans:d.ans.length,late:d.late.length,soon:d.soon.length,count:notifCount(d)}}; // utilisé par les tests
 
   // ---------- Application installable ----------
   if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol)){
