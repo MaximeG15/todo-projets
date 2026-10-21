@@ -1209,6 +1209,7 @@
     if(ui.taskMode==="kanban")ui.taskMode="list";
     if(!["list","agenda","dash","trash","requests","points","meetings","visits"].includes(ui.mode))ui.mode="list";
     if((ui.mode==="points"||ui.mode==="meetings"||ui.mode==="visits")&&view==="all")ui.mode="list";
+    if(ui.mode==="requests"&&view!=="all")ui.mode="list"; // les demandes client se consultent depuis la vue globale
     if(["list","agenda"].includes(ui.mode))ui.taskMode=ui.mode;
     if(ui.mode==="trash"||ui.mode==="dash")view="all";
     const mode=ui.mode;
@@ -1292,7 +1293,7 @@
       const nT=alive.filter(t=>t.projectId===p.id&&t.status!=="done").length, nR=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)).length;
       tabs.hidden=false;
       const nO=livePts().filter(o=>o.projectId===p.id&&o.status!=="closed").length;
-      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"&&mode!=="meetings"&&mode!=="visits"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points<span class="tlx"> ouverts</span> <span>${nO}</span></button><button type="button" role="tab" aria-selected="${mode==="requests"}" data-tab="requests">Demandes<span class="tlx"> client</span> <span>${nR}</span></button><button type="button" role="tab" aria-selected="${mode==="meetings"}" data-tab="meetings">Réunions <span>${mtgList(p.id).length}</span></button><button type="button" role="tab" aria-selected="${mode==="visits"}" data-tab="visits">Visites <span>${(visEnsure(),visList(p.id).length)}</span></button>`;
+      tabs.innerHTML=`<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"&&mode!=="meetings"&&mode!=="visits"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points<span class="tlx"> ouverts</span> <span>${nO}</span></button><button type="button" role="tab" aria-selected="${mode==="meetings"}" data-tab="meetings">Réunions <span>${mtgList(p.id).length}</span></button><button type="button" role="tab" aria-selected="${mode==="visits"}" data-tab="visits">Visites <span>${(visEnsure(),visList(p.id).length)}</span></button>`;
       tabs.querySelectorAll("[data-tab]").forEach(x=>x.onclick=()=>{const k=x.dataset.tab;ui.mode=k==="tasks"?(ui.taskMode||"list"):k;if(ui.mode!=="list")ui.scope="all";saveUi();editing=null;editingReq=null;editingPt=null;render()});
     } else {tabs.hidden=true;tabs.innerHTML=""}
     if(!weekStart)weekStart=mondayOf(new Date());
@@ -1388,7 +1389,8 @@
         sb.title=who.length>1?"Partagé avec "+m.members.map(nameOf).join(", "):"Partager ce projet avec un collègue";
       }
       if(p&&mode==="points"&&xlOn(p.id)&&(MODE!=="cloud"||isOwner(p.id))&&xlFsOk())b("Synchroniser avec Excel",()=>xlQuick(p),"deskonly");
-      ddMenu("Exporter ▾",[{h:"Documents"},{t:"Récap de la semaine",fn:openRecap},{t:"Plan d'actions (Excel / PDF)",fn:()=>openExport(p,"tasks")},{t:"Points ouverts (Excel / PDF)",fn:()=>openExport(p,"points")}],"ddexp");
+      const dx=ddMenu("Exporter ▾",[{h:"Documents"},{t:"Récap de la semaine",fn:openRecap},{t:"Plan d'actions (Excel / PDF)",fn:()=>openExport(p,"tasks")},{t:"Points ouverts (Excel / PDF)",fn:()=>openExport(p,"points")}],"ddexp");
+      dx.querySelector("summary").innerHTML=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg><span class="ddl">Exporter</span><span class="ddc" aria-hidden="true">▾</span>`;
       // éléments affichés seulement sur téléphone, où Partager et Exporter sont regroupés dans le menu ⋯
       const mob=p?[...(MODE==="cloud"&&isOwner(p.id)?[{t:shareOpen?"Fermer le partage":"Partager le projet…",fn:()=>{shareOpen=!shareOpen;render()},cls:"mobonly"}]:[]),
         {t:"Exporter le plan d'actions",fn:()=>openExport(p,"tasks"),cls:"mobonly"},{t:"Exporter les points ouverts",fn:()=>openExport(p,"points"),cls:"mobonly"},{t:"Récap de la semaine",fn:openRecap,cls:"mobonly"},{t:"-",cls:"mobonly",hr:true}]:[];
@@ -3986,7 +3988,7 @@
   function openRequest(r){
     query="";$("#search").value="";
     if(!r)return;
-    view=r.projectId;ui.mode="requests";saveUi();editingReq=r.id;editing=null;render();
+    view="all";ui.mode="requests";saveUi();editingReq=r.id;editing=null;render();
     const el=document.querySelector(`.req[data-r="${r.id}"]`);if(el)el.scrollIntoView({block:"center"});
   }
   function reqRow(r,showProj){

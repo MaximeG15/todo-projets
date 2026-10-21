@@ -18,8 +18,7 @@ with sync_playwright() as pw:
     pg.locator(".vbtn",has_text="Demandes client").click()
     t=pg.locator("#lists").inner_text()
     ok("Demande partagée" in t and "1,5 j" in t and "Devis envoyé" in t,"lecture client_requests (estimation numérique, devis)")
-    pg.locator(".pbtn",has_text="Projet Alpha").click()
-    f=pg.locator("#reqadd");f.locator('[data-q="title"]').fill("Nouvelle demande");f.locator(".qadd").click();pg.wait_for_timeout(300)
+    f=pg.locator("#reqadd");f.locator('[data-q="proj"]').select_option("p1");f.locator('[data-q="title"]').fill("Nouvelle demande");f.locator(".qadd").click();pg.wait_for_timeout(300)
     rows=[r for r in db("client_requests") if r["title"]=="Nouvelle demande"]
     ok(len(rows)==1 and rows[0]["project_id"]=="p1" and rows[0]["status"]=="new" and rows[0]["estimate"] is None,"envoi d'une nouvelle demande")
     rid=rows[0]["id"]

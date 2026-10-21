@@ -999,3 +999,5 @@ body.visopen{overflow:hidden}
 @media (max-width:760px){
   .head .tools .ddm > summary{height:40px;min-height:40px;padding:0 12px;display:flex;align-items:center;gap:4px}
 }
+.ddexp summary{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+@media (max-width:760px){.ddexp summary{width:44px;padding:0!important;justify-content:center}.ddexp .ddl,.ddexp .ddc{display:none}}

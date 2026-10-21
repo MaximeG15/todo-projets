@@ -21,10 +21,10 @@ with sync_playwright() as pw:
     rq=lambda i:[r for r in st()["requests"] if r["id"]==i]
     ok(pg.locator(".vbtn",has_text="Demandes client").locator(".n").inner_text()=="1","compteur Demandes client (vue globale)")
     pg.locator(".pbtn",has_text="Projet Alpha").click()
-    ok(pg.locator("#ptabs").is_visible(),"onglets du projet visibles")
-    pg.locator('#ptabs [data-tab="requests"]').click()
-    ok(pg.locator("#reqadd").is_visible() and pg.locator("#quick").is_hidden(),"onglet Demandes : formulaire dédié")
-    f=pg.locator("#reqadd");f.locator('[data-q="title"]').fill("Modifier l'étiquette colis");f.locator('[data-q="who"]').fill("Mme Durand");f.locator('[data-q="due"]').fill("2026-10-16");f.locator('[data-q="prio"]').select_option("haute");f.locator(".qadd").click()
+    ok(pg.locator("#ptabs").is_visible() and pg.locator('#ptabs [data-tab="requests"]').count()==0,"onglets du projet visibles, sans onglet Demandes client")
+    pg.locator(".vbtn",has_text="Demandes client").click()
+    ok(pg.locator("#reqadd").is_visible() and pg.locator("#quick").is_hidden(),"vue Demandes client : formulaire dédié")
+    f=pg.locator("#reqadd");f.locator('[data-q="proj"]').select_option(label="Projet Alpha");f.locator('[data-q="title"]').fill("Modifier l'étiquette colis");f.locator('[data-q="who"]').fill("Mme Durand");f.locator('[data-q="due"]').fill("2026-10-16");f.locator('[data-q="prio"]').select_option("haute");f.locator(".qadd").click()
     rs=[r for r in st()["requests"] if r["projectId"]=="p1"]
     ok(len(rs)==1 and rs[0]["status"]=="new" and rs[0]["received"]==time.strftime("%Y-%m-%d") and rs[0]["requester"]=="Mme Durand","demande créée (statut Nouvelle, reçue aujourd'hui)")
     rid=rs[0]["id"]
@@ -50,7 +50,7 @@ with sync_playwright() as pw:
     ok(pg.locator(f'.req[data-r="{rid}"]').count()==0 and pg.locator(".showdone").count()==1,"traitée repliée")
     pg.locator("#toast button").click();ok(rq(rid)[0]["status"]=="doing","annulation du statut")
     # tâche -> lien vers la demande
-    pg.locator('#ptabs [data-tab="tasks"]').click();pg.locator(".showdone").click()
+    pg.locator(".pbtn",has_text="Projet Alpha").click();pg.locator('#ptabs [data-tab="tasks"]').click();pg.locator(".showdone").click()
     tid=[t for t in st()["tasks"] if t.get("requestId")==rid][0]["id"]
     ok(pg.locator(f'.task[data-id="{tid}"] .reqtag').count()==1,"étiquette Demande sur la tâche")
     # lier une tâche existante via le détail

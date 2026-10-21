@@ -32,7 +32,7 @@ with sync_playwright() as pw:
     pg.keyboard.press("Escape");pg.wait_for_timeout(200)
     ok(pg.locator(".pbtn",has_text="Projet Bêta").count()==1,"projet conservé après Échap")
     # demande liée : 3 choix
-    pg.locator("#ptabs button",has_text="Demandes").click();pg.wait_for_timeout(200)
+    pg.locator(".vbtn",has_text="Demandes client").click();pg.wait_for_timeout(200)
     row=pg.locator('.req[data-r="r1"]');row.locator("details.more summary").click();row.locator('[data-a="del"]').click();pg.wait_for_timeout(200)
     ok(d.locator("button").count()==3,"suppression demande : 3 choix")
     pg.screenshot(path=S+"dlg_req.png")
