@@ -1,6 +1,6 @@
 // To do projets : fonctionnement hors connexion de l'application installée.
 // Les données en ligne (Supabase) ne passent jamais par ce cache.
-const CACHE = "todo-projets-v65";
+const CACHE = "todo-projets-v66";
 const CORE = ["./", "./index.html", "./css/app.css", "./js/config.js", "./js/xlsx.js", "./js/app.js", "./manifest.webmanifest", "./icons/icon-192-v3.png", "./icons/icon-512-v3.png", "./vendor/supabase.js"];
 
 self.addEventListener("install", e => {
@@ -15,6 +15,8 @@ self.addEventListener("fetch", e => {
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
   if (!sameOrigin) return; // Supabase : réseau direct
+  // Bibliothèque de transcription (22 Mo) : réseau et cache HTTP du navigateur, hors cache de l'appli
+  if (url.pathname.includes("/vendor/transformers/")) return;
   // Page de l'application : toujours la version la plus récente, la copie locale seulement hors connexion
   if (req.mode === "navigate") {
     e.respondWith(fetch(req.url, { cache: "no-store", credentials: "same-origin" }).then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put("./index.html", c)); return r; })

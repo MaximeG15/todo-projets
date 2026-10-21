@@ -3743,11 +3743,11 @@
     if(navigator.onLine===false){await visCount();if(visCur)visStatus();return}
     vis.flushing=true;vis.err="";
     try{
-      const acct=visAcct(), c=cloudClient(), st=c.storage.from("visit-photos");
+      const acct=visAcct(), c=cloudClient();
       for(const p of (await idbAll("photos")).filter(p=>p.acct===acct&&(p.del||!p.up))){
-        const path=`${p.pid}/${p.vid}/${p.id}.jpg`;
+        const r=visMediaRef(p), st=c.storage.from(r.b), path=r.path;
         if(p.del){const {error}=await st.remove([path]);if(error&&transient(error))throw error;await idbDel("photos",p.id);continue}
-        const {error}=await st.upload(path,p.blob,{contentType:"image/jpeg",upsert:true});
+        const {error}=await st.upload(path,p.blob,{contentType:r.ct,upsert:true});
         if(error){if(transient(error))throw error;vis.err=error.message;continue}
         p.up=true;await idbPut("photos",p);
       }
@@ -3767,6 +3767,8 @@
     await visCount();if(visCur)visStatus();
   }
   window.addEventListener("online",()=>visFlush());
+  // Emplacement d'un fichier de visite : photo (visit-photos, .jpg) ou enregistrement audio (visit-audio, .webm / .m4a)
+  function visMediaRef(p){return p.kind==="audio"?{b:"visit-audio",path:`${p.pid}/${p.vid}/${p.id}.${p.ext||"webm"}`,ct:(p.mime||"audio/webm").split(";")[0]}:{b:"visit-photos",path:`${p.pid}/${p.vid}/${p.id}.jpg`,ct:"image/jpeg"}}
   // C. Demande au navigateur de ne pas effacer les données de l'appli (photos pas encore envoyées)
   function visPersist(){try{if(vis.persistAsked||!navigator.storage||!navigator.storage.persist)return;vis.persistAsked=true;navigator.storage.persisted().then(ok=>{if(!ok)return navigator.storage.persist()}).catch(()=>{})}catch(e){}}
   // D. Les photos déjà envoyées ne restent sur l'appareil que pour les visites en cours (ou consultées dans les 7 derniers jours)
@@ -3788,12 +3790,14 @@
       for(const ph of await idbAll("photos"))if(ph.pid===pid)await idbDel("photos",ph.id);
       for(const r of Object.values(vis.map))if(r.v.projectId===pid){await idbDel("visits",r.id);delete vis.map[r.id]}
       if(MODE!=="cloud"||!cloud.user||navigator.onLine===false)return;
-      const st=cloudClient().storage.from("visit-photos");
-      const {data:dirs}=await st.list(pid,{limit:1000});
-      for(const d of dirs||[]){
-        const {data:files}=await st.list(`${pid}/${d.name}`,{limit:1000});
-        const paths=(files||[]).filter(f=>f.name).map(f=>`${pid}/${d.name}/${f.name}`);
-        for(let i=0;i<paths.length;i+=100)await st.remove(paths.slice(i,i+100));
+      for(const b of ["visit-photos","visit-audio"]){
+        const st=cloudClient().storage.from(b);
+        const {data:dirs}=await st.list(pid,{limit:1000});
+        for(const d of dirs||[]){
+          const {data:files}=await st.list(`${pid}/${d.name}`,{limit:1000});
+          const paths=(files||[]).filter(f=>f.name).map(f=>`${pid}/${d.name}/${f.name}`);
+          for(let i=0;i<paths.length;i+=100)await st.remove(paths.slice(i,i+100));
+        }
       }
     }catch(e){}
   }
@@ -3811,7 +3815,19 @@
     return vis.urls[phid]=URL.createObjectURL(rec.blob);
   }
   function visFillPhotos(root,v){root.querySelectorAll("img[data-ph]").forEach(async im=>{const u=await visPhotoUrl(v,im.dataset.ph);if(u)im.src=u;else im.closest(".vph")&&im.closest(".vph").classList.add("missing")})}
-  function visDropPhotos(v,ids){ids.forEach(async id=>{const r=await idbGet("photos",id);if(MODE!=="cloud"){idbDel("photos",id);return}await idbPut("photos",r?{...r,blob:null,del:true}:{id,acct:visAcct(),pid:v.projectId,vid:v.id,blob:null,up:true,del:true});visFlush()})}
+  function visDropPhotos(v,ids,meta){ids.forEach(async id=>{const r=await idbGet("photos",id);if(MODE!=="cloud"){idbDel("photos",id);return}await idbPut("photos",r?{...r,blob:null,del:true}:{id,acct:visAcct(),pid:v.projectId,vid:v.id,blob:null,up:true,del:true,...(meta||{})});if(vis.urls[id]){try{URL.revokeObjectURL(vis.urls[id])}catch(e){}delete vis.urls[id]}visFlush()})}
+  const visDropAudio=(v,a)=>{if(a&&a.id)visDropPhotos(v,[a.id],{kind:"audio",ext:a.ext,mime:a.mime})};
+  // Enregistrement audio : fichier local (sur l'appareil) ou téléchargé du stockage puis gardé en cache
+  async function visAudioBlob(v,a){
+    let rec=await idbGet("photos",a.id);
+    if((!rec||!rec.blob)&&MODE==="cloud"&&cloud.user&&navigator.onLine!==false){
+      const ref=visMediaRef({kind:"audio",pid:v.projectId,vid:v.id,id:a.id,ext:a.ext,mime:a.mime});
+      const {data,error}=await cloudClient().storage.from(ref.b).download(ref.path);
+      if(!error&&data){rec={id:a.id,kind:"audio",ext:a.ext,mime:a.mime,acct:visAcct(),pid:v.projectId,vid:v.id,blob:data,up:true,del:false,at:Date.now()};idbPut("photos",rec)}
+    }
+    return rec&&rec.blob||null;
+  }
+  async function visAudioUrl(v,a){if(vis.urls[a.id])return vis.urls[a.id];const b=await visAudioBlob(v,a);return b?(vis.urls[a.id]=URL.createObjectURL(b)):""}
   // ---------- Création, suppression ----------
   async function visNew(p,prep){
     const t=await uiPrompt("Intitulé de la visite","Visite d'analyse fonctionnelle",{ok:prep?"Préparer la visite":"Démarrer la visite"});
@@ -3826,7 +3842,7 @@
     const nP=(v.notes||[]).reduce((n,x)=>n+(x.photos||[]).length,0);
     if(!await uiConfirm(`Supprimer la visite « ${v.title} » du ${new Date(visDate(v)).toLocaleDateString("fr-FR")} ?\n\n${(v.notes||[]).length} note(s) et ${nP} photo(s) seront supprimées. Les points ouverts et tâches déjà créés restent dans le projet.`,{ok:"Supprimer",danger:true}))return;
     const x=JSON.parse(JSON.stringify(v));x.deletedAt=Date.now();
-    visDropPhotos(x,(x.notes||[]).flatMap(n=>(n.photos||[]).map(p=>p.id)));
+    visDropPhotos(x,(x.notes||[]).flatMap(n=>(n.photos||[]).map(p=>p.id)));(x.notes||[]).forEach(n=>visDropAudio(x,n.audio));
     visPut(x);if(visCur&&visCur.id===v.id){visCur=null;renderVisit()}render();
     toast("Visite supprimée.");
   }
@@ -3836,7 +3852,9 @@
     // flux « Généralités » retiré des flux par défaut : on l'enlève des visites en cours s'il est resté vide
     if(visCur.status!=="done"){const g=(visCur.flows||[]).filter(f=>f.name==="Généralités"&&!visNotes(visCur,f.id).length&&!visCur.items.some(i=>i.flow===f.id)).map(f=>f.id);if(g.length&&visCur.flows.length>g.length)visQuiet(x=>{x.flows=x.flows.filter(f=>!g.includes(f.id))})}
     visScreen=v.status==="prep"?"prep":flowId?"flow":"home";visFlowId=flowId||null;visStage=[];visText="";visReply=null;renderVisit()}
-  function visClose(){if(visStage.length)visDropPhotos(visCur,visStage.map(s=>s.id));visCur=null;visStage=[];renderVisit();render()}
+  async function visClose(){
+    if(visRec&&visCur&&visRec.vid===visCur.id){if(!await uiConfirm("Un enregistrement est en cours. L'arrêter et le garder avant de quitter la visite ?",{ok:"Arrêter et quitter"}))return;recStop();await new Promise(r=>setTimeout(r,400))}
+    if(visStage.length)visDropPhotos(visCur,visStage.map(s=>s.id));visCur=null;visStage=[];renderVisit();render()}
   function visSet(fn){fn(visCur);visPut(visCur);renderVisit()}
   function visQuiet(fn){fn(visCur);visPut(visCur)} // modification sans redessiner (saisie en cours)
   const visNotes=(v,fid)=>(v.notes||[]).filter(n=>n.flow===fid);
@@ -3858,6 +3876,7 @@
     o.className="visv";o.setAttribute("aria-label",v.title);
     if(visScreen==="flow"&&!visFlows(v).some(f=>f.id===visFlowId))visScreen="home";
     if(visScreen==="prep")visPrepScreen(o,v,p);else if(visScreen==="flow")visFlowScreen(o,v,p);else if(visScreen==="end")visEndScreen(o,v,p);else visHomeScreen(o,v,p);
+    o.classList.remove("recording");if(visRec&&visScreen!=="prep"&&visScreen!=="end")recPanel(o);
     visStatus();
   }
   const visBack=(label)=>`<button type="button" class="visback" data-back aria-label="${label}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button>`;
@@ -3886,7 +3905,7 @@
   function visHomeScreen(o,v,p){
     const ns=v.notes||[], nPh=ns.reduce((n,x)=>n+(x.photos||[]).length,0);
     o.innerHTML=`<header class="vish"><div class="visrow">${visBack("Quitter la visite")}<div class="vist"><b>${esc(v.title)}</b><span>${esc(p.name)} · ${esc(new Date(visDate(v)).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"}))}${v.status==="done"?" · terminée":""}</span></div><button type="button" class="visback" data-vm aria-label="Actions sur la visite">⋯</button></div><div class="visst"></div></header>
-      <main class="vism"><div class="vishd"><h2>Flux</h2><span>${plural(ns.length,"note")} · ${plural(nPh,"photo")}</span></div>
+      <main class="vism">${trBanner(v)}<div class="vishd"><h2>Flux</h2><span>${plural(ns.length,"note")} · ${plural(nPh,"photo")}</span></div>
       <div class="vistiles">${visFlows(v).map(f=>{const n=visNotes(v,f.id), ph=n.reduce((k,x)=>k+(x.photos||[]).length,0), q=n.filter(x=>x.type==="question").length, it=visItems(v,f.id), seen=it.filter(i=>i.seen).length;
         return `<button type="button" class="vistile${it.length&&seen===it.length?" alldone":""}" data-f="${esc(f.id)}"><b>${esc(f.name)}</b><span>${n.length||ph?`${plural(n.length,"note")} · ${plural(ph,"photo")}`:"Pas encore de note"}</span>${it.length?`<i class="visprog">${seen}/${it.length} vus</i>`:""}${q?`<em>${plural(q,"question")}</em>`:""}</button>`}).join("")}
       <button type="button" class="vistile add" data-addf><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Ajouter un flux</button></div></main>
@@ -3906,6 +3925,7 @@
     o.querySelector("[data-addf]").onclick=async()=>{const n=await uiPrompt("Nom du nouveau flux","",{ok:"Ajouter"});if(n&&n.trim())visSet(x=>x.flows.push({id:uid(),name:n.trim().slice(0,60)}))};
     o.querySelector("[data-end]").onclick=()=>{visScreen="end";renderVisit()};
     o.querySelector("[data-quick]").onclick=()=>visQuick("camera");
+    trBind(o,v);
     o.querySelector("[data-qgal]").onclick=()=>visQuick("gallery");
   }
   function visPickFlow(title,except){
@@ -3921,10 +3941,11 @@
     });
   }
   function visNoteHtml(n){
-    const [l,c]=NTYPE[n.type]||NTYPE.note;
+    let [l,c]=NTYPE[n.type]||NTYPE.note;if(n.audio&&n.type==="note"){l="Enregistrement";c="nt-au"}
     return `<article class="visnote" data-n="${esc(n.id)}"><div class="visnh"><span class="nt ${c}">${l}</span><span>${hm(n.at)}</span>${n.conv?`<span class="visconv">${n.conv.kind==="point"?"Point ouvert créé":"Tâche créée"}</span>`:""}<span class="sp"></span><button type="button" class="vismore" data-more aria-label="Actions sur la note">⋯</button></div>
       ${n.item&&visCur&&(visCur.items||[]).find(i=>i.id===n.item)?`<div class="visre">Réponse à : ${esc(visCur.items.find(i=>i.id===n.item).text)}</div>`:""}
       ${n.text?`<p>${esc(n.text).replace(/\n/g,"<br>")}</p>`:""}
+      ${n.audio?visAudioHtml(n):""}
       ${(n.photos||[]).length?`<div class="visphs">${n.photos.map(ph=>`<button type="button" class="vph" data-view="${esc(ph.id)}" aria-label="Voir la photo${ph.caption?" : "+esc(ph.caption):""}"><img data-ph="${esc(ph.id)}" alt="">${ph.caption?`<span>${esc(ph.caption)}</span>`:""}</button>`).join("")}</div>`:""}</article>`;
   }
   function visFlowScreen(o,v,p){
@@ -3933,10 +3954,10 @@
     if(visReply&&!rep)visReply=null;
     o.innerHTML=`<header class="vish"><div class="visrow">${visBack("Retour aux flux")}<div class="vist"><b>${esc(f.name)}</b><span>${plural(ns.length,"note")} · ${plural(ph,"photo")}${q?` · ${plural(q,"question")}`:""}</span></div><button type="button" class="visback" data-fm aria-label="Actions sur le flux">⋯</button></div>
       <div class="vischips" role="tablist" aria-label="Changer de flux">${visFlows(v).map(x=>`<button type="button" role="tab" aria-selected="${x.id===f.id}" data-f="${esc(x.id)}">${esc(x.name)}</button>`).join("")}</div><div class="visst"></div></header>
-      <main class="vism notes">${its.length?`<details class="visitems"${ui.visItemsClosed?"":" open"}><summary>À voir <b>${nSeen}/${its.length}</b></summary>${its.map(i=>`<div class="visit${i.seen?" seen":""}" data-i="${esc(i.id)}"><button type="button" class="visseen" data-seen aria-pressed="${!!i.seen}" aria-label="${i.seen?"Marquer comme non vu":"Marquer comme vu"}"></button><span class="vitx">${i.kind==="point"?`<small>${esc(i.label||"Point ouvert")}</small>`:""}${esc(i.text)}${(v.notes||[]).some(n=>n.item===i.id)?`<em>${plural((v.notes||[]).filter(n=>n.item===i.id).length,"réponse")}</em>`:""}</span><button type="button" class="btn visrep" data-rep>Répondre</button></div>`).join("")}</details>`:""}
+      <main class="vism notes">${trBanner(v)}${its.length?`<details class="visitems"${ui.visItemsClosed?"":" open"}><summary>À voir <b>${nSeen}/${its.length}</b></summary>${its.map(i=>`<div class="visit${i.seen?" seen":""}" data-i="${esc(i.id)}"><button type="button" class="visseen" data-seen aria-pressed="${!!i.seen}" aria-label="${i.seen?"Marquer comme non vu":"Marquer comme vu"}"></button><span class="vitx">${i.kind==="point"?`<small>${esc(i.label||"Point ouvert")}</small>`:""}${esc(i.text)}${(v.notes||[]).some(n=>n.item===i.id)?`<em>${plural((v.notes||[]).filter(n=>n.item===i.id).length,"réponse")}</em>`:""}</span><button type="button" class="btn visrep" data-rep>Répondre</button></div>`).join("")}</details>`:""}
         ${ns.length?ns.map(visNoteHtml).join(""):`<p class="visempty">Aucune note pour ce flux. Écrivez ou prenez une photo ci-dessous.</p>`}</main>
       <footer class="viscap">
-        <div class="vistop"><div class="visseg" role="radiogroup" aria-label="Type de note">${Object.entries(NTYPE).map(([k,[l]])=>`<button type="button" role="radio" aria-checked="${visType===k}" data-t="${k}" aria-label="${l}">${k==="question"?"Question":l}</button>`).join("")}</div><button type="button" class="vistool" data-gal aria-label="Ajouter des photos de la galerie">${GAL_SVG}</button>${bcOk()?`<button type="button" class="vistool" data-scan aria-label="Scanner un code-barres">${BC_SVG}</button>`:""}</div>
+        <div class="vistop"><div class="visseg" role="radiogroup" aria-label="Type de note">${Object.entries(NTYPE).map(([k,[l]])=>`<button type="button" role="radio" aria-checked="${visType===k}" data-t="${k}" aria-label="${l}">${k==="question"?"Question":l}</button>`).join("")}</div><button type="button" class="vistool" data-gal aria-label="Ajouter des photos de la galerie">${GAL_SVG}</button>${recOk()?`<button type="button" class="vistool rec" data-rec aria-label="Enregistrer la conversation">${MIC_SVG}</button>`:""}${bcOk()?`<button type="button" class="vistool" data-scan aria-label="Scanner un code-barres">${BC_SVG}</button>`:""}</div>
         ${rep?`<div class="visreply"><span>Réponse à : <b>${esc(rep.text)}</b></span><button type="button" data-unrep aria-label="Ne plus répondre à cet élément">✕</button></div>`:""}
         ${visStage.length?`<div class="visstage">${visStage.map(s=>`<span class="vph sm"><img data-ph="${esc(s.id)}" alt="Photo jointe"><button type="button" data-unstage="${esc(s.id)}" aria-label="Retirer la photo">✕</button></span>`).join("")}</div>`:""}
         <div class="visin"><button type="button" class="viscam" data-cam aria-label="Prendre une photo">${CAM_SVG}</button><textarea rows="2" aria-label="Texte de la note" placeholder="Écrire ou dicter (micro du clavier)…">${esc(visText)}</textarea><button type="button" class="visok" data-add aria-label="Ajouter la note"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></button></div>
@@ -3949,6 +3970,8 @@
     o.querySelectorAll("[data-unstage]").forEach(b=>b.onclick=()=>{const id=b.dataset.unstage;visDropPhotos(visCur,[id]);visStage=visStage.filter(s=>s.id!==id);renderVisit()});
     o.querySelector("[data-cam]").onclick=()=>visCapture(photos=>{visStage=visStage.concat(photos);renderVisit()});
     o.querySelector("[data-gal]").onclick=()=>visCapture(photos=>{visStage=visStage.concat(photos);renderVisit()},"gallery");
+    const rb=o.querySelector("[data-rec]");if(rb)rb.onclick=()=>recStart(f.id);
+    recFillPlayers(o,v);trBind(o,v);
     const sc=o.querySelector("[data-scan]");if(sc)sc.onclick=()=>visScan(r=>{if(!r)return;visText=(ta.value.trim()?ta.value.trim()+"\n":"")+r.text;if(r.photo)visStage=visStage.concat([r.photo]);renderVisit();const t=$("#visview .visin textarea");if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length)}});
     o.querySelector("[data-add]").onclick=()=>{
       const t=ta.value.trim();if(!t&&!visStage.length){ta.focus();return}
@@ -3988,7 +4011,7 @@
     else if(ch.startsWith("t:"))visSet(x=>{x.notes.find(y=>y.id===nid).type=ch.slice(2)});
     else if(ch==="photo"||ch==="gal")visCapture(photos=>{if(photos.length)visSet(x=>{const y=x.notes.find(z=>z.id===nid);y.photos=(y.photos||[]).concat(photos)})},ch==="gal"?"gallery":"camera");
     else if(ch==="move"){const fid=await visPickFlow("Déplacer la note vers…",n.flow);if(fid)visSet(x=>{x.notes.find(y=>y.id===nid).flow=fid})}
-    else if(ch==="del"){if(!await uiConfirm("Supprimer cette note"+((n.photos||[]).length?` et ses ${plural(n.photos.length,"photo")}`:"")+" ?",{ok:"Supprimer",danger:true}))return;visDropPhotos(visCur,(n.photos||[]).map(p=>p.id));visSet(x=>{x.notes=x.notes.filter(y=>y.id!==nid)})}
+    else if(ch==="del"){if(!await uiConfirm("Supprimer cette note"+((n.photos||[]).length?` et ses ${plural(n.photos.length,"photo")}`:"")+(n.audio?" et son enregistrement":"")+" ?",{ok:"Supprimer",danger:true}))return;visDropPhotos(visCur,(n.photos||[]).map(p=>p.id));visDropAudio(visCur,n.audio);visSet(x=>{x.notes=x.notes.filter(y=>y.id!==nid)})}
   }
   async function visFlowMenu(f){
     const n=visNotes(visCur,f.id).length;
@@ -4377,14 +4400,270 @@
     const missing=Object.values(urls).filter(u=>!u).length;
     const its=v.items||[], pr=v.prep||{};
     const sec=visFlows(v).map(f=>{const ns=visNotes(v,f.id), it=visItems(v,f.id);if(!ns.length&&!it.length)return "";
-      return `<section><h2>${esc(f.name)}</h2>${it.length?`<ul class="it">${it.map(i=>`<li class="${i.seen?"ok":"ko"}">${i.seen?"Vu":"Non vu"} · ${i.kind==="point"?esc(i.label||"Point ouvert")+" – ":""}${esc(i.text)}</li>`).join("")}</ul>`:""}${ns.map(n=>`<div class="n"><div class="h"><span class="t ${n.type}">${(NTYPE[n.type]||NTYPE.note)[0]}</span> ${hm(n.at)}${n.item&&its.find(i=>i.id===n.item)?` · réponse à : ${esc(its.find(i=>i.id===n.item).text)}`:""}</div>${n.text?`<p>${esc(n.text).replace(/\n/g,"<br>")}</p>`:""}${(n.photos||[]).length?`<div class="ph">${n.photos.map(ph=>urls[ph.id]?`<figure><img src="${urls[ph.id]}" alt=""><figcaption>${esc(ph.caption||"")}</figcaption></figure>`:"").join("")}</div>`:""}</div>`).join("")}</section>`}).join("");
-    const css=`body{font-family:Arial,sans-serif;color:#16232B;margin:0;font-size:11pt}h1{font-size:18pt;margin:0}.sub{color:#51646F;margin:4px 0 16px}h2{font-size:13pt;color:#1D4E78;border-bottom:1px solid #C7D1D8;padding-bottom:3px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.03em}.n{margin:0 0 10px;break-inside:avoid}.h{font-size:9pt;color:#51646F}.t{font-weight:bold;padding:1px 6px;border-radius:8px;background:#EEF1F3}.t.question{background:#DCEAF7;color:#1D4E78}.t.action{background:#FFF4CC;color:#6B5200}p{margin:3px 0}.ph{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}figure{margin:0;width:48%;break-inside:avoid}figure img{width:100%;border-radius:4px}figcaption{font-size:9pt;color:#51646F}.it{margin:0 0 10px;padding-left:18px;font-size:10pt}.it li.ok{color:#1F5C43}.it li.ko{color:#9A3412}.meta{display:grid;grid-template-columns:110px 1fr;gap:3px 10px;margin:0 0 14px;font-size:10pt}.meta b{color:#51646F;font-weight:normal}@page{margin:15mm}`;
+      return `<section><h2>${esc(f.name)}</h2>${it.length?`<ul class="it">${it.map(i=>`<li class="${i.seen?"ok":"ko"}">${i.seen?"Vu":"Non vu"} · ${i.kind==="point"?esc(i.label||"Point ouvert")+" – ":""}${esc(i.text)}</li>`).join("")}</ul>`:""}${ns.map(n=>`<div class="n"><div class="h"><span class="t ${n.type}">${(NTYPE[n.type]||NTYPE.note)[0]}</span> ${hm(n.at)}${n.item&&its.find(i=>i.id===n.item)?` · réponse à : ${esc(its.find(i=>i.id===n.item).text)}`:""}</div>${n.text?`<p>${esc(n.text).replace(/\n/g,"<br>")}</p>`:""}${n.audio?`<p class="au">Enregistrement de ${mmss(n.audio.dur||0)}${n.tr?" – transcription automatique :":" (non transcrit)"}</p>${n.tr?`<p class="tr">${esc(n.tr.text).replace(/\n/g,"<br>")}</p>`:""}`:""}${(n.photos||[]).length?`<div class="ph">${n.photos.map(ph=>urls[ph.id]?`<figure><img src="${urls[ph.id]}" alt=""><figcaption>${esc(ph.caption||"")}</figcaption></figure>`:"").join("")}</div>`:""}</div>`).join("")}</section>`}).join("");
+    const css=`body{font-family:Arial,sans-serif;color:#16232B;margin:0;font-size:11pt}h1{font-size:18pt;margin:0}.sub{color:#51646F;margin:4px 0 16px}h2{font-size:13pt;color:#1D4E78;border-bottom:1px solid #C7D1D8;padding-bottom:3px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.03em}.n{margin:0 0 10px;break-inside:avoid}.au{font-size:9.5pt;color:#4B3A8C;font-weight:bold;margin:2px 0}.tr{font-style:italic;color:#3A4B55;margin:2px 0 4px}.h{font-size:9pt;color:#51646F}.t{font-weight:bold;padding:1px 6px;border-radius:8px;background:#EEF1F3}.t.question{background:#DCEAF7;color:#1D4E78}.t.action{background:#FFF4CC;color:#6B5200}p{margin:3px 0}.ph{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}figure{margin:0;width:48%;break-inside:avoid}figure img{width:100%;border-radius:4px}figcaption{font-size:9pt;color:#51646F}.it{margin:0 0 10px;padding-left:18px;font-size:10pt}.it li.ok{color:#1F5C43}.it li.ko{color:#9A3412}.meta{display:grid;grid-template-columns:110px 1fr;gap:3px 10px;margin:0 0 14px;font-size:10pt}.meta b{color:#51646F;font-weight:normal}@page{margin:15mm}`;
     const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(v.title)}</title><style>${css}.vh{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.vh img{max-height:52px;max-width:160px;object-fit:contain}</style></head><body><div class="vh"><h1>${esc(v.title)}</h1>${pLogo(p)?`<img src="${p.logo}" alt="">`:""}</div><p class="sub">${esc(p.name)} · ${esc(new Date(visDate(v)).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))}${v.endedAt&&v.startedAt?` · ${hm(v.startedAt)} – ${hm(v.endedAt)}`:""}</p>${pr.location||pr.goal||(pr.participants||[]).length?`<div class="meta">${pr.location?`<b>Lieu</b><span>${esc(pr.location)}</span>`:""}${pr.goal?`<b>Objectif</b><span>${esc(pr.goal)}</span>`:""}${(pr.participants||[]).length?`<b>Participants</b><span>${esc(pr.participants.map(x=>x.name+(SIDE[x.side]?` (${SIDE[x.side]})`:"")).join(", "))}</span>`:""}</div>`:""}${sec||"<p>Aucune note.</p>"}</body></html>`;
     if(missing)toast(`${plural(missing,"photo")} non disponible${missing>1?"s":""} hors connexion : absente${missing>1?"s":""} du PDF.`);
     printHtml(html,`visite-${(p.name||"projet").replace(/[^\wÀ-ÿ-]+/g,"-")}-${iso(new Date(visDate(v)))}`);
   }
   // ---------- Onglet Visites d'un projet ----------
   function visEnsure(){if(vis.loaded&&vis.acct!==visAcct()){vis.loaded=false;vis.map={};vis.urls={}}if(!vis.loaded)visLoad()}
+
+  // ---------- Enregistrements audio (téléphone ou ordinateur) ----------
+  // L'enregistrement devient une note du flux ; il reste sur l'appareil jusqu'à son envoi (stockage privé « visit-audio »).
+  // La transcription se fait ensuite sur l'ordinateur (voir « Transcription »), sans envoi du son à un service extérieur.
+  const MIC_SVG=`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg>`;
+  const REC_MAX_S=60*60; // une heure au plus par enregistrement
+  let visRec=null;
+  const recOk=()=>!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder);
+  const mmss=s=>{s=Math.max(0,Math.round(s));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return (h?h+":"+String(m).padStart(2,"0"):String(m).padStart(2,"0"))+":"+String(x).padStart(2,"0")};
+  function recMime(){
+    for(const [m,ext] of [["audio/webm;codecs=opus","webm"],["audio/webm","webm"],["audio/mp4","m4a"],["audio/ogg;codecs=opus","ogg"]])
+      try{if(MediaRecorder.isTypeSupported(m))return {mime:m,ext}}catch(e){}
+    return {mime:"",ext:"webm"};
+  }
+  // rappel : prévenir les personnes présentes (une fois par visite, si la case est cochée)
+  function recConsent(v){
+    ui.recOk=ui.recOk&&typeof ui.recOk==="object"?ui.recOk:{};
+    if(ui.recOk[v.id])return Promise.resolve(true);
+    return new Promise(res=>{
+      const d=document.createElement("dialog");d.className="uidlg recdlg";d.setAttribute("aria-label","Avant d'enregistrer");
+      d.innerHTML=`<form method="dialog"><div class="recdh"><span class="recic">${MIC_SVG}</span><h3>Enregistrer la conversation</h3></div>
+        <p class="uimsg">Prévenez les personnes présentes que la conversation est enregistrée.</p>
+        <ul class="recul"><li>L'enregistrement est rangé dans le flux en cours et reste sur l'appareil tant qu'il n'y a pas de réseau.</li><li>La transcription se fait ensuite sur votre ordinateur : le son n'est envoyé à aucun service extérieur.</li><li>Vous pouvez prendre des photos pendant l'enregistrement.</li></ul>
+        <label class="recchk"><input type="checkbox" data-once checked><span>Ne plus demander pour cette visite</span></label>
+        <div class="uibtns"><button type="button" class="btn ghost" data-x>Annuler</button><button type="button" class="btn recgo" data-ok><span class="recdot" aria-hidden="true"></span>C'est fait, enregistrer</button></div></form>`;
+      document.body.appendChild(d);
+      const close=v2=>{try{d.close()}catch(e){}d.remove();res(v2)};
+      d.addEventListener("cancel",e=>{e.preventDefault();close(false)});
+      d.querySelector("[data-x]").onclick=()=>close(false);
+      d.querySelector("[data-ok]").onclick=()=>{if(d.querySelector("[data-once]").checked){ui.recOk[v.id]=1;saveUi()}close(true)};
+      if(d.showModal)d.showModal();else d.setAttribute("open","");
+    });
+  }
+  async function recStart(flowId){
+    if(visRec)return;
+    if(!recOk()){uiAlert("Ce navigateur ne permet pas d'enregistrer le son.");return}
+    const v=visCur;if(!v)return;
+    if(!await recConsent(v))return;
+    let stream;
+    try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false})}
+    catch(e){uiAlert("Micro inaccessible : autorisez l'accès au micro pour cette appli (cadenas à gauche de l'adresse, ou réglages du navigateur).");return}
+    const {mime,ext}=recMime();
+    let mr;try{mr=new MediaRecorder(stream,{...(mime?{mimeType:mime}:{}),audioBitsPerSecond:32000})}catch(e){mr=new MediaRecorder(stream)}
+    const r=visRec={vid:v.id,flow:flowId,mr,stream,chunks:[],mime:mr.mimeType||mime||"audio/webm",ext:/mp4|m4a|aac/.test(mr.mimeType||mime)?"m4a":/ogg/.test(mr.mimeType||mime)?"ogg":ext,
+      at:Date.now(),acc:0,since:Date.now(),paused:false,photos:[],levels:[],wake:null,timer:null,ctx:null,an:null};
+    mr.ondataavailable=e=>{if(e.data&&e.data.size)r.chunks.push(e.data)};
+    mr.onstop=()=>recSave(r);
+    mr.start(1000);
+    visPersist();
+    // niveau sonore (barres) et écran maintenu allumé
+    try{const AC=window.AudioContext||window.webkitAudioContext;r.ctx=new AC();const src=r.ctx.createMediaStreamSource(stream);r.an=r.ctx.createAnalyser();r.an.fftSize=512;src.connect(r.an)}catch(e){}
+    recWake(r);
+    r.timer=setInterval(()=>recTick(r),200);
+    renderVisit();
+  }
+  async function recWake(r){try{if(navigator.wakeLock&&!r.wake&&!document.hidden)r.wake=await navigator.wakeLock.request("screen");if(r.wake)r.wake.addEventListener("release",()=>{r.wake=null})}catch(e){}}
+  document.addEventListener("visibilitychange",()=>{if(visRec&&!document.hidden)recWake(visRec)});
+  const recElapsed=r=>(r.acc+(r.paused?0:Date.now()-r.since))/1000;
+  function recTick(r){
+    if(r.an&&!r.paused){const a=new Uint8Array(r.an.fftSize);r.an.getByteTimeDomainData(a);let sum=0;for(const x of a){const y=(x-128)/128;sum+=y*y}r.levels.push(Math.min(1,Math.sqrt(sum/a.length)*4))}
+    else r.levels.push(0);
+    if(r.levels.length>40)r.levels.shift();
+    const el=recElapsed(r);
+    document.querySelectorAll("[data-rectime]").forEach(x=>x.textContent=mmss(el));
+    const bars=document.querySelector(".recbars");if(bars)bars.innerHTML=r.levels.map(l=>`<i style="height:${Math.max(3,Math.round(l*40))}px"></i>`).join("");
+    if(el>=REC_MAX_S)recStop();
+  }
+  function recPause(){const r=visRec;if(!r)return;try{if(r.paused){r.mr.resume();r.since=Date.now();r.paused=false}else{r.mr.pause();r.acc+=Date.now()-r.since;r.paused=true}}catch(e){}renderVisit()}
+  function recStop(){
+    const r=visRec;if(!r||r.stopping)return;r.stopping=true;
+    if(!r.paused)r.acc+=Date.now()-r.since;r.paused=true;
+    clearInterval(r.timer);
+    try{r.mr.state!=="inactive"?r.mr.stop():recSave(r)}catch(e){recSave(r)}
+  }
+  async function recSave(r){
+    if(r.saved)return;r.saved=true;
+    try{r.stream.getTracks().forEach(t=>t.stop())}catch(e){}
+    try{r.ctx&&r.ctx.close()}catch(e){}
+    try{r.wake&&r.wake.release()}catch(e){}
+    visRec=null;
+    const dur=Math.round(r.acc/1000);
+    const blob=new Blob(r.chunks,{type:r.mime.split(";")[0]||"audio/webm"});
+    if(!blob.size||dur<1){if(r.photos.length&&visCur&&visCur.id===r.vid)visStage=visStage.concat(r.photos);toast("Enregistrement vide : rien n'a été gardé.");renderVisit();return}
+    const id=uid()+uid(), mime=blob.type||"audio/webm";
+    await idbPut("photos",{id,kind:"audio",ext:r.ext,mime,acct:visAcct(),pid:(vis.map[r.vid]?vis.map[r.vid].v.projectId:visCur&&visCur.projectId),vid:r.vid,blob,up:false,del:false,at:Date.now()});
+    const note={id:uid(),flow:r.flow,type:"note",text:"",photos:r.photos,audio:{id,dur,mime,ext:r.ext,size:blob.size},at:r.at,conv:null};
+    if(visCur&&visCur.id===r.vid)visSet(x=>{x.notes.push(note)});
+    else if(vis.map[r.vid]){const x=JSON.parse(JSON.stringify(vis.map[r.vid].v));x.notes.push(note);visPut(x)}
+    visCount().then(visStatus);
+    toast(`Enregistrement de ${mmss(dur)} ajouté au flux « ${((visCur||{}).flows||[]).find(f=>f.id===r.flow)?.name||""} ».`);
+  }
+  // barre d'enregistrement : remplace la saisie en bas de l'écran pendant l'enregistrement
+  function recPanel(o){
+    const r=visRec;if(!r||!visCur||r.vid!==visCur.id)return;
+    o.classList.add("recording");
+    const fl=(visCur.flows.find(f=>f.id===r.flow)||{}).name||"";
+    const el=document.createElement("footer");el.className="visrec";el.setAttribute("aria-label","Enregistrement en cours");
+    el.innerHTML=`<div class="rectop"><div class="recclk"><span class="reclbl">${r.paused?"En pause":"Enregistrement"} · ${esc(fl)}</span><b data-rectime>${mmss(recElapsed(r))}</b></div><div class="recbars" aria-hidden="true"></div></div>
+      <p class="recinfo">${r.photos.length?`${plural(r.photos.length,"photo")} prise${r.photos.length>1?"s":""} pendant l'enregistrement · `:""}Écran maintenu allumé · enregistré sur l'appareil</p>
+      <div class="recbtns"><button type="button" class="viscam" data-recph aria-label="Prendre une photo pendant l'enregistrement">${CAM_SVG}</button><button type="button" class="btn" data-recpause>${r.paused?"Reprendre":"Pause"}</button><button type="button" class="btn recstop" data-recstop><span class="recsq" aria-hidden="true"></span>Arrêter</button></div>`;
+    o.appendChild(el);
+    el.querySelector("[data-recstop]").onclick=recStop;
+    el.querySelector("[data-recpause]").onclick=recPause;
+    el.querySelector("[data-recph]").onclick=()=>visCapture(ph=>{if(ph.length&&visRec===r){r.photos=r.photos.concat(ph);renderVisit()}});
+    const pill=o.querySelector(".vish .visrow");if(pill&&!pill.querySelector(".recpill"))pill.insertAdjacentHTML("beforeend",`<span class="recpill"><span class="recdot" aria-hidden="true"></span>REC <span data-rectime>${mmss(recElapsed(r))}</span></span>`);
+    recTick(r);
+  }
+  // lecteur d'un enregistrement (le fichier est chargé au premier clic)
+  function recFillPlayers(root,v){
+    root.querySelectorAll("audio[data-au]").forEach(au=>{
+      const n=(v.notes||[]).find(x=>x.audio&&x.audio.id===au.dataset.au);if(!n)return;
+      const load=async()=>{if(au.src)return;const u=await visAudioUrl(v,n.audio);if(u){au.src=u}else{au.closest(".visau").classList.add("missing")}};
+      if(vis.urls[n.audio.id])au.src=vis.urls[n.audio.id];
+      else au.addEventListener("play",()=>{if(!au.src){au.pause();load().then(()=>au.play().catch(()=>{}))}},{once:true});
+      au.addEventListener("pointerdown",load,{once:true});
+    });
+  }
+
+  // ---------- Transcription sur l'ordinateur (Whisper, dans le navigateur) ----------
+  // Bibliothèque transformers.js hébergée avec l'appli (vendor/transformers) ; le modèle est téléchargé une fois
+  // depuis huggingface.co puis gardé dans le cache du navigateur. Le son ne quitte jamais l'ordinateur.
+  const TR_MODELS={standard:{id:"onnx-community/whisper-small",l:"Standard (conseillé)",d:"Téléchargement plus léger, transcription plus rapide. Adapté à un PC portable courant."},
+    precis:{id:"onnx-community/whisper-large-v3-turbo",l:"Précis",d:"Meilleur sur le bruit d'entrepôt et les termes techniques ; plus lourd à télécharger et plus lent."}};
+  const tr={q:[],busy:null,worker:null,dl:null,ready:{},err:""};
+  const trOk=()=>!isPhone()&&typeof Worker!=="undefined"&&typeof WebAssembly!=="undefined"&&!!(window.AudioContext||window.webkitAudioContext);
+  const trModel=()=>TR_MODELS[ui.trModel]?ui.trModel:"standard";
+  const trState=nid=>tr.busy&&tr.busy.nid===nid?tr.busy:tr.q.find(x=>x.nid===nid)?{phase:"wait"}:null;
+  const trTodo=v=>(v.notes||[]).filter(n=>n.audio&&!n.tr);
+  // décodage de l'audio et passage en 16 kHz mono (format attendu par Whisper)
+  async function trDecode(blob){
+    const AC=window.AudioContext||window.webkitAudioContext, ac=new AC();
+    let buf;try{buf=await ac.decodeAudioData(await blob.arrayBuffer())}finally{try{ac.close()}catch(e){}}
+    const len=Math.max(1,Math.ceil(buf.duration*16000)), off=new OfflineAudioContext(1,len,16000), src=off.createBufferSource();
+    src.buffer=buf;src.connect(off.destination);src.start();
+    return (await off.startRendering()).getChannelData(0);
+  }
+  function trWorker(){
+    if(tr.worker)return tr.worker;
+    const w=tr.worker=new Worker("js/transcribe-worker.js?v="+(window.__APPV||""),{type:"module"});
+    w.onmessage=e=>{
+      const m=e.data, b=tr.busy;
+      if(m.t==="dl"){tr.dl=m;trPaintDl();return}
+      if(!b||m.job!==b.job)return;
+      if(m.t==="loaded"){tr.ready[b.model]=1;ui.trReady=ui.trReady||{};ui.trReady[b.model]=1;saveUi();tr.dl=null;trPaintDl(true);b.phase="run";trPaint(b)}
+      else if(m.t==="prog"){b.phase="run";b.pct=m.pct;trPaint(b)}
+      else if(m.t==="done"){b.res(m.text)}
+      else if(m.t==="err"){b.rej(new Error(m.msg||"erreur"))}
+    };
+    w.onerror=e=>{const b=tr.busy;if(b)b.rej(new Error(e.message||"Le module de transcription n'a pas pu démarrer."))};
+    return w;
+  }
+  async function trRun(audio,model,job){
+    if(typeof window.__testTranscribe==="function")return window.__testTranscribe(audio,model); // tests automatiques
+    const w=trWorker();
+    return new Promise((res,rej)=>{tr.busy.res=res;tr.busy.rej=rej;w.postMessage({t:"run",job,model:TR_MODELS[model].id,audio},[audio.buffer])});
+  }
+  // file d'attente : un enregistrement à la fois
+  function trQueue(v,nids){
+    nids.forEach(nid=>{if(!(tr.busy&&tr.busy.nid===nid)&&!tr.q.some(x=>x.nid===nid))tr.q.push({vid:v.id,nid})});
+    renderVisit();trNext();
+  }
+  async function trStart(v,nids){
+    if(!nids.length)return;
+    const model=trModel();
+    if(!(ui.trReady&&ui.trReady[model])&&typeof window.__testTranscribe!=="function"){const ok=await trModelDialog();if(!ok)return}
+    trQueue(v,nids);
+  }
+  async function trNext(){
+    if(tr.busy||!tr.q.length)return;
+    const it=tr.q.shift(), rec=vis.map[it.vid], v=rec&&rec.v, n=v&&(v.notes||[]).find(x=>x.id===it.nid);
+    if(!n||!n.audio||n.tr){trNext();return}
+    const model=trModel(), job=uid();
+    tr.busy={...it,job,model,phase:tr.ready[model]?"run":"load",pct:0};trPaint(tr.busy);renderVisit();
+    try{
+      const blob=await visAudioBlob(v,n.audio);
+      if(!blob)throw new Error("Enregistrement introuvable : il n'est peut-être pas encore envoyé depuis le téléphone.");
+      tr.busy.phase=tr.ready[model]?"run":"load";trPaint(tr.busy);
+      const audio=await trDecode(blob);
+      const text=String(await trRun(audio,model,job)||"").replace(/\s+/g," ").trim();
+      trSet(it.vid,it.nid,x=>{x.tr={text:text||"(aucune parole reconnue)",at:Date.now(),model}});
+    }catch(e){
+      tr.err=e&&e.message||String(e);
+      toast("Transcription impossible : "+tr.err);
+      tr.q=tr.q.filter(x=>x.vid!==it.vid);
+    }finally{tr.busy=null;renderVisit();trNext()}
+  }
+  function trSet(vid,nid,fn){
+    if(visCur&&visCur.id===vid){visSet(x=>{const n=x.notes.find(y=>y.id===nid);if(n)fn(n)});return}
+    const rec=vis.map[vid];if(!rec)return;const x=JSON.parse(JSON.stringify(rec.v)), n=x.notes.find(y=>y.id===nid);if(n){fn(n);visPut(x)}
+  }
+  function trPaint(b){
+    const el=document.querySelector(`.visnote[data-n="${b.nid}"] .trprog`);if(!el)return;
+    const pct=b.phase==="load"?(tr.dl&&tr.dl.pct!=null?tr.dl.pct:0):(b.pct||0);
+    el.querySelector("[data-trl]").textContent=b.phase==="load"?"Préparation du modèle…":"Transcription en cours…";
+    el.querySelector("[data-trp]").textContent=Math.round(pct)+" %";
+    el.querySelector("i").style.width=Math.round(pct)+"%";
+  }
+  function trPaintDl(done){
+    const d=document.querySelector("dialog.trdlg");
+    if(d){const pr=d.querySelector(".trdl");pr.hidden=false;const pct=tr.dl&&tr.dl.pct!=null?Math.round(tr.dl.pct):0;pr.querySelector("[data-trp]").textContent=pct+" %";pr.querySelector("i").style.width=pct+"%";if(done&&d.__done)d.__done()}
+    if(tr.busy)trPaint(tr.busy);
+  }
+  // première utilisation : choix de la qualité et téléchargement du modèle
+  function trModelDialog(){
+    return new Promise(res=>{
+      const d=document.createElement("dialog");d.className="uidlg trdlg";d.setAttribute("aria-label","Transcription sur cet ordinateur");
+      const cur=trModel();
+      d.innerHTML=`<form method="dialog"><h3>Transcription sur cet ordinateur</h3>
+        <p class="uimsg">Pour transcrire, l'appli télécharge une seule fois un modèle de reconnaissance vocale (quelques centaines de Mo). Il reste ensuite sur cet ordinateur : les enregistrements ne sont jamais envoyés sur Internet.</p>
+        <fieldset class="trq"><legend>Qualité de transcription</legend>${Object.entries(TR_MODELS).map(([k,m])=>`<label><input type="radio" name="trq" value="${k}" ${k===cur?"checked":""}><span><b>${m.l}</b><small>${m.d}</small></span></label>`).join("")}</fieldset>
+        <div class="trdl" hidden><div class="trdlh"><span>Téléchargement du modèle…</span><span data-trp>0 %</span></div><div class="trbar"><i></i></div><small>Vous pouvez continuer à travailler dans l'appli pendant le téléchargement.</small></div>
+        <p class="trnote">Fonctionne sur ordinateur, dans Chrome ou Edge. Sur le téléphone, les enregistrements attendent d'être transcrits depuis le PC.</p>
+        <div class="uibtns"><button type="button" class="btn ghost" data-x>Plus tard</button><button type="button" class="btn primary" data-ok>Télécharger et transcrire</button></div></form>`;
+      document.body.appendChild(d);
+      const close=v2=>{try{d.close()}catch(e){}d.remove();res(v2)};
+      d.addEventListener("cancel",e=>{e.preventDefault();close(false)});
+      d.querySelector("[data-x]").onclick=()=>close(false);
+      d.querySelector("[data-ok]").onclick=()=>{ui.trModel=d.querySelector("input[name=trq]:checked").value;saveUi();close(true)};
+      if(d.showModal)d.showModal();else d.setAttribute("open","");
+    });
+  }
+  // bandeau « enregistrements à transcrire » (ordinateur)
+  function trBanner(v){
+    if(!trOk())return "";
+    const todo=trTodo(v);if(!todo.length)return "";
+    const mins=Math.max(1,Math.round(todo.reduce((k,n)=>k+(n.audio.dur||0),0)/60));
+    const running=todo.some(n=>trState(n.id));
+    return `<section class="trban"><span class="trbic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"></path><path d="M17 15l2 2 3-4"></path></svg></span>
+      <div class="trbt"><b>${plural(todo.length,"enregistrement")} à transcrire dans cette visite · ${mins} min au total</b><span>La transcription se fait sur cet ordinateur : aucun son n'est envoyé sur Internet. Le texte obtenu est à relire.</span></div>
+      ${running?`<span class="trbrun">Transcription en cours…</span>`:`<button type="button" class="btn primary" data-trall>Tout transcrire</button>`}</section>`;
+  }
+  function trBind(o,v){
+    const all=o.querySelector("[data-trall]");if(all)all.onclick=()=>trStart(v,trTodo(v).map(n=>n.id));
+    o.querySelectorAll("[data-tr]").forEach(b=>b.onclick=()=>trStart(v,[b.dataset.tr]));
+    o.querySelectorAll("[data-trcancel]").forEach(b=>b.onclick=()=>{const id=b.dataset.trcancel;tr.q=tr.q.filter(x=>x.nid!==id);if(tr.busy&&tr.busy.nid===id){try{tr.worker&&tr.worker.terminate()}catch(e){}tr.worker=null;tr.ready={};const bz=tr.busy;bz.rej&&bz.rej(new Error("annulée"))}renderVisit()});
+    o.querySelectorAll("[data-tredit]").forEach(b=>b.onclick=async()=>{const n=v.notes.find(x=>x.id===b.dataset.tredit);if(!n||!n.tr)return;const t=await uiPrompt("Corriger la transcription",n.tr.text,{ok:"Enregistrer",multiline:true});if(t!=null)trSet(v.id,n.id,x=>{x.tr={...x.tr,text:t.trim().slice(0,20000),edited:Date.now()}})});
+    o.querySelectorAll("[data-trq]").forEach(b=>b.onclick=async()=>{
+      const n=v.notes.find(x=>x.id===b.dataset.trq);if(!n||!n.tr)return;
+      const sel=String(window.getSelection&&window.getSelection().toString()||"").trim();
+      const t=await uiPrompt("Question client (vous pouvez raccourcir le passage)",sel||n.tr.text,{ok:"Créer la question",multiline:true});
+      if(!t||!t.trim())return;
+      visSet(x=>x.notes.push({id:uid(),flow:n.flow,type:"question",text:t.trim().slice(0,4000),photos:[],at:Date.now(),conv:null}));
+      toast("Question client ajoutée au flux : elle deviendra un point ouvert en fin de visite.");
+    });
+    o.querySelectorAll("[data-pick]").forEach(b=>b.onmousedown=e=>e.preventDefault()); // garder la sélection de texte
+  }
+  function visAudioHtml(n){
+    const a=n.audio, st=trState(n.id), canTr=trOk();
+    let trh="";
+    if(n.tr)trh=`<div class="vistr"><span class="vistrl">Transcription automatique · à relire</span><p>${esc(n.tr.text).replace(/\n/g,"<br>")}</p><div class="vistrb"><button type="button" class="btn" data-tredit="${esc(n.id)}">Corriger le texte</button><button type="button" class="btn" data-trq="${esc(n.id)}" data-pick>Créer une question client à partir d'un passage</button></div></div>`;
+    else if(st&&st.phase!=="wait")trh=`<div class="trprog"><div class="trdlh"><span data-trl>${st.phase==="load"?"Préparation du modèle…":"Transcription en cours…"}</span><span data-trp>${Math.round(st.pct||0)} %</span></div><div class="trbar"><i style="width:${Math.round(st.pct||0)}%"></i></div><button type="button" class="btn" data-trcancel="${esc(n.id)}">Annuler</button></div>`;
+    else if(st)trh=`<div class="trwait"><span>En attente : sera transcrit après l'enregistrement en cours.</span><button type="button" class="btn" data-trcancel="${esc(n.id)}">Retirer</button></div>`;
+    else if(canTr)trh=`<div class="trwait"><span>Pas encore transcrit.</span><button type="button" class="btn trgo" data-tr="${esc(n.id)}">Transcrire</button></div>`;
+    else trh=`<div class="trpc">${svgI("M3 4h18v12H3zM8 20h8M12 16v4")} À transcrire sur l'ordinateur</div>`;
+    return `<div class="visau"><audio controls preload="none" data-au="${esc(a.id)}"></audio><span class="visaud">${mmss(a.dur||0)}</span></div>${trh}`;
+  }
   function renderVisits(L,p){
     visEnsure();if(vis.loaded)visLoad();
     const top=document.createElement("div");top.className="mtgtop";

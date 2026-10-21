@@ -616,3 +616,11 @@ alter table public.visits add column if not exists sync jsonb not null default '
 alter table public.projects add column if not exists logo text;
 alter table public.projects drop constraint if exists projects_logo_chk;
 alter table public.projects add constraint projects_logo_chk check (logo is null or (length(logo) <= 150000 and logo ~ '^data:image/(png|webp|jpeg);base64,[A-Za-z0-9+/=]+$'));
+
+-- Enregistrements audio des visites (stockage privé « visit-audio », chemin <projet>/<visite>/<id>.<ext>, 50 Mo au plus)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('visit-audio', 'visit-audio', false, 52428800, array['audio/webm','audio/ogg','audio/mp4','audio/aac','audio/mpeg','audio/x-m4a','audio/wav'])
+on conflict (id) do nothing;
+create policy "visit audio acces projet" on storage.objects for all to authenticated
+  using (bucket_id = 'visit-audio' and public.can_access((storage.foldername(name))[1]))
+  with check (bucket_id = 'visit-audio' and public.can_access((storage.foldername(name))[1]));
