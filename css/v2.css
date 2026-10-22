@@ -543,3 +543,47 @@ dialog.cmdk::backdrop{background:rgba(15,30,40,.42)}
 :root[data-theme="dark"]{--oksoft:#1D3329;--okink:#6CC59A}
 .viscard p.muted{margin:0}
 .visf2 .btn{white-space:nowrap;font-size:14.5px;padding:0 8px}
+
+/* =====================================================================
+   Téléphone : menu épuré (☰) et page « Compte et sauvegarde »
+   ===================================================================== */
+.mmenu{position:fixed;left:0;right:0;top:0;bottom:0;z-index:34;background:var(--bg);color:var(--ink);overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+body.mmopen{overflow:hidden}
+.mmtop{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:8px;min-height:60px;padding:env(safe-area-inset-top,0px) 12px 0 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+.mmtop h2{margin:0;flex:1;font:700 26px "Barlow Condensed","Arial Narrow",sans-serif}
+.mmclose{width:42px;height:42px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--chipink);display:grid;place-items:center;cursor:pointer}
+.mmback{width:42px;height:42px;margin-left:-8px;border:0;background:transparent;color:var(--steel);display:grid;place-items:center;cursor:pointer;border-radius:10px}
+.mmbody{display:flex;flex-direction:column;gap:18px;padding:16px}
+.mmcard{display:flex;align-items:center;gap:12px;padding:14px;background:var(--panel);border:1px solid var(--line);border-radius:16px}
+.mmav{width:48px;height:48px;border-radius:50%;background:var(--signal);color:#16232B;display:grid;place-items:center;font-weight:700;font-size:17px;flex:none}
+.mmav.loc{background:var(--chip);color:var(--chipink)}
+.mmav.lg{width:64px;height:64px;font-size:22px}
+.mmct{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.mmct b{font-size:17px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mmst{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--okink,#1F6B47)}
+.mmst i{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none}
+.mmst.off{color:var(--late)}.mmst.off i{background:var(--late)}
+.mmst.pill{height:26px;padding:0 10px;border-radius:13px;background:var(--oksoft,#E7F5EE)}
+.mmst.pill.off{background:var(--latesoft)}
+.mmhero{display:flex;flex-direction:column;align-items:center;gap:6px;padding:6px 0 2px;text-align:center}
+.mmhero b{font-size:18px;font-weight:600}
+.mmmail{font-size:14px;color:var(--muted);overflow-wrap:anywhere}
+.mmg{display:flex;flex-direction:column;gap:8px}
+.mmg h3{margin:0;padding:0 4px;font-size:12.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.mmlist{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.mmrow{display:flex;align-items:center;gap:12px;min-height:56px;padding:6px 14px;border:0;border-bottom:1px solid var(--line2);background:transparent;color:var(--ink);font:inherit;text-align:left;cursor:pointer;width:100%}
+.mmrow:last-child{border-bottom:0}
+.mmrow:active{background:var(--soft)}
+.mmic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none;background:var(--sel);color:var(--steel)}
+.mmc-wait{background:var(--waitsoft);color:var(--wait)}
+.mmc-cli{background:var(--clisoft);color:var(--cli)}
+.mmc-ok{background:var(--oksoft,#E7F5EE);color:var(--okink,#1F6B47)}
+.mmc-mut{background:var(--chip);color:var(--muted)}
+.mmc-late{background:var(--latesoft);color:var(--late)}
+.mmt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.mmt > span{font-size:16px;font-weight:500}
+.mmt small{font-size:13px;color:var(--muted)}
+.mmn{font-size:14px;font-weight:600;color:var(--muted)}
+.mmch{color:var(--faint);display:grid;flex:none}
+.mmrow.danger .mmt > span{color:var(--late);font-weight:600}
+@media (min-width:761px){.mmenu{display:none}}

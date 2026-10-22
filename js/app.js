@@ -1349,7 +1349,7 @@
       bn.querySelector('[data-b="mine"] .bl').textContent=mine?"Mes tâches":"Toutes";
       const act={today:view==="all"&&mode==="list"&&ui.scope==="today",mine:view==="all"&&mode==="list"&&ui.scope==="all"&&(mine?ui.who==="__me":true),agenda:mode==="agenda",menu:mode==="projects"||view!=="all"};
       bn.querySelectorAll("[data-b]").forEach(x=>{const k=x.dataset.b;x.setAttribute("aria-current",!!act[k]);
-        if(k==="add"){x.onclick=()=>$("#fab").click();x.setAttribute("aria-expanded",document.body.classList.contains("addopen"));return}
+        if(k==="add"){x.onclick=()=>{mmClose();$("#fab").click()};x.setAttribute("aria-expanded",document.body.classList.contains("addopen"));return}
         x.onclick=k==="menu"?()=>{closeMenu();query="";$("#search").value="";ui.mode="projects";view="all";editing=null;saveUi();render();window.scrollTo({top:0})}
           :k==="today"?()=>{if(ui.who==="__me")ui.who="";go("list","today")()}
           :k==="agenda"?()=>{go("agenda","all")()}
@@ -4927,7 +4927,7 @@
     const ad=L.querySelector(".pjarch");if(ad)ad.ontoggle=()=>{ui.showArch=ad.open;saveUi()};
     const V=L.querySelector(".pjviews"), nReq=liveReq().filter(r=>reqOpen(r)&&!isArch(r.projectId)).length, nTrash=state.tasks.filter(t=>t.deletedAt).length+(state.requests||[]).filter(r=>r.deletedAt).length+(state.points||[]).filter(o=>o.deletedAt).length;
     const go=(m,s)=>()=>{ui.mode=m;ui.scope=s||"all";if(m==="list"&&ui.who==="__me")ui.who="";view="all";saveUi();render();window.scrollTo({top:0})};
-    [["Toutes les tâches",alive.filter(t=>t.status!=="done"&&!isArch(t.projectId)).length,go("list","all")],["Demandes client",nReq||"",go("requests")],["Tableau de bord","",go("dash")],["Corbeille",nTrash||"",go("trash")],["Compte, sauvegarde et confidentialité","",()=>{const s=$("#side");s.classList.add("open");$("#menubtn").setAttribute("aria-expanded","true");const tb=$("#toolsbox");if(tb)tb.open=true;window.scrollTo({top:0})}]]
+    [["Toutes les tâches",alive.filter(t=>t.status!=="done"&&!isArch(t.projectId)).length,go("list","all")],["Demandes client",nReq||"",go("requests")],["Tableau de bord","",go("dash")],["Corbeille",nTrash||"",go("trash")],["Compte, sauvegarde et confidentialité","",()=>mmOpen("acct")]]
       .forEach(([l,n,fn],i)=>{const b=document.createElement("button");b.type="button";b.className="pjv"+(i===4?" sub":"");b.innerHTML=`<span>${esc(l)}</span>${n!==""?`<span class="n">${n}</span>`:""}`;b.onclick=fn;V.appendChild(b)});
   }
   function renderProjHome(L,p){
@@ -5280,7 +5280,85 @@
     $("#recapdl").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([$("#recaptext").value],{type:"text/plain;charset=utf-8"}));a.download=dlg.dataset.title.replace(/\s+/g,"-").toLowerCase()+".txt";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
     if(dlg.showModal)dlg.showModal();else dlg.setAttribute("open","");
   }
-  function closeMenu(){const s=$("#side");if(s){s.classList.remove("open");$("#menubtn").setAttribute("aria-expanded","false")}}
+  // ---------- Téléphone : menu épuré (☰) et page « Compte et sauvegarde » ----------
+  // Les lignes du menu déclenchent les boutons existants (vues, compte, fichier) : mêmes actions qu'avant.
+  const MMI={
+    agenda:"M3 6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v14H3zM3 10h18M8 3v4M16 3v4",
+    all:"M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01",
+    req:"M4 4h16v12H8l-4 4z",
+    dash:"M4 20V10M10 20V4M16 20v-7M22 20H2",
+    trash:"M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
+    acct:"M12 4v11M7 10l5 5 5-5M5 20h14",
+    shield:"M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
+    user:"M20 21v-1a5 5 0 0 0-5-5H9a5 5 0 0 0-5 5v1M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
+    key:"M15 7a4 4 0 1 1-3.5 6H9v2H7v2H4v-3l6.5-6.5A4 4 0 0 1 15 7zM16 9h.01",
+    save:"M12 4v11M7 10l5 5 5-5M5 20h14",
+    restore:"M12 20V9M7 14l5-5 5 5M5 4h14",
+    merge:"M6 4v6a6 6 0 0 0 6 6h6M15 13l3 3-3 3M6 4h.01",
+    file:"M6 3h8l4 4v14H6zM14 3v4h4",
+    link:"M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
+    device:"M4 5h16v11H4zM8 20h8M12 16v4",
+    cloud:"M7 18a5 5 0 0 1-.5-10A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z",
+    out:"M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10",
+    install:"M12 3v12M7 10l5 5 5-5M4 21h16",
+    x:"M6 6l12 12M18 6L6 18",
+    chev:"M9 5l7 7-7 7",
+    back:"M15 5l-7 7 7 7"
+  };
+  const mmSvg=(d,s)=>`<svg width="${s||18}" height="${s||18}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"></path></svg>`;
+  var mmPage=null;
+  function mmRow(k,ic,label,o){o=o||{};
+    return `<button type="button" class="mmrow${o.danger?" danger":""}" data-mm="${k}"><span class="mmic mmc-${o.c||"n"}">${mmSvg(MMI[ic])}</span><span class="mmt"><span>${esc(label)}</span>${o.sub?`<small>${esc(o.sub)}</small>`:""}</span>${o.n!=null&&o.n!==""?`<span class="mmn">${esc(String(o.n))}</span>`:""}${o.chev===false?"":`<span class="mmch">${mmSvg(MMI.chev,16)}</span>`}</button>`;
+  }
+  const mmGroup=(t,rows)=>rows.length?`<section class="mmg">${t?`<h3>${esc(t)}</h3>`:""}<div class="mmlist">${rows.join("")}</div></section>`:"";
+  function mmWho(){
+    const cl=MODE==="cloud"&&cloud.email, nm=cl?nameOf(cloud.email):"Mode local (sans compte)";
+    const st=$("#sync")?$("#sync").textContent.trim():"";
+    const off=$("#sync")&&$("#sync").classList.contains("off");
+    return {cl,nm,ini:cl?initialsOf(nm):"",st:st||(cl?"Compte en ligne":"Enregistré sur cet appareil"),off};
+  }
+  function mmRender(){
+    const o=$("#mmenu");if(!o)return;
+    const w=mmWho(), vbtn=l=>[...document.querySelectorAll("#views .vbtn")].find(b=>b.querySelector("span")&&b.querySelector("span").textContent===l);
+    const cnt=l=>{const b=vbtn(l);return b?b.querySelector(".n").textContent:""};
+    const card=`<div class="mmcard"><span class="mmav${w.cl?"":" loc"}">${w.cl?esc(w.ini):mmSvg(MMI.device,22)}</span><span class="mmct"><b>${esc(w.nm)}</b><span class="mmst${w.off?" off":""}"><i></i>${esc(w.st)}</span></span></div>`;
+    if(mmPage==="acct"){
+      const vis=id=>{const e=$(id);return e&&!e.hidden};
+      let groups;
+      if(w.cl)groups=mmGroup("Profil",[mmRow("a:name","user","Modifier mon nom"),mmRow("a:pwd","key","Changer le mot de passe")])
+        +mmGroup("Copie de secours",[mmRow("a:exp","save","Sauvegarder une copie",{sub:"Fichier .json de toutes vos données",chev:false}),mmRow("a:imp","restore","Restaurer ou importer",{sub:"Depuis un fichier .json",chev:false})])
+        +mmGroup("",[mmRow("a:loc","device","Passer en mode local",{sub:"Sans compte, sur ce téléphone"}),mmRow("a:out","out","Se déconnecter",{danger:true,c:"late",chev:false})]);
+      else groups=mmGroup("Fichier de données",[...(vis("#fnew")?[mmRow("#fnew","file","Créer un fichier",{chev:false})]:[]),...(vis("#fopen")?[mmRow("#fopen","file","Ouvrir un fichier",{chev:false})]:[]),...(vis("#frelink")?[mmRow("#frelink","link",$("#frelink").textContent.trim()||"Relier le fichier",{chev:false})]:[]),...(vis("#funlink")?[mmRow("#funlink","x","Délier le fichier",{chev:false})]:[])])
+        +mmGroup("Copie de secours",[mmRow("#exp","save","Sauvegarder une copie",{sub:"Fichier .json de toutes vos données",chev:false}),mmRow("#imp","restore","Importer",{sub:"Depuis un fichier .json",chev:false}),mmRow("#mrg","merge","Fusionner un fichier",{sub:"Ajoute sans rien effacer",chev:false})])
+        +mmGroup("",[mmRow("#tocloud","cloud","Passer en mode en ligne",{sub:"Compte partagé avec vos collègues"})]);
+      const fi=!w.cl&&$("#fileinfo")?$("#fileinfo").textContent.trim():"";
+      o.innerHTML=`<header class="mmtop"><button type="button" class="mmback" data-mmback aria-label="Retour au menu">${mmSvg(MMI.back,22)}</button><h2>Compte et sauvegarde</h2></header>
+        <div class="mmbody"><div class="mmhero"><span class="mmav lg${w.cl?"":" loc"}">${w.cl?esc(w.ini):mmSvg(MMI.device,28)}</span><b>${esc(w.nm)}</b>${w.cl?`<span class="mmmail">${esc(cloud.email)}</span>`:fi?`<span class="mmmail">${esc(fi)}</span>`:""}<span class="mmst pill${w.off?" off":""}"><i></i>${esc(w.st)}</span></div>${groups}</div>`;
+    }else{
+      const inst=$("#installbtn")&&!$("#installbtn").hidden;
+      o.innerHTML=`<header class="mmtop"><h2>Menu</h2><button type="button" class="mmclose" data-mmclose aria-label="Fermer le menu">${mmSvg(MMI.x,20)}</button></header>
+        <div class="mmbody">${card}
+        ${mmGroup("Vues",[mmRow("v:Agenda de la semaine","agenda","Agenda de la semaine",{n:cnt("Agenda de la semaine"),c:"wait"}),mmRow("v:Toutes les tâches","all","Toutes les tâches",{n:cnt("Toutes les tâches")}),mmRow("v:Demandes client","req","Demandes client",{n:cnt("Demandes client"),c:"cli"}),mmRow("v:Tableau de bord","dash","Tableau de bord",{c:"ok"}),mmRow("v:Corbeille","trash","Corbeille",{n:cnt("Corbeille"),c:"mut"})])}
+        ${mmGroup("Réglages",[mmRow("p:acct","acct","Compte et sauvegarde",{sub:w.cl?"Copie de secours, mot de passe":"Fichier, copie de secours, mode en ligne"}),mmRow("#privacybtn","shield","Données et confidentialité"),...(inst?[mmRow("#installbtn","install","Installer l'application",{chev:false})]:[])])}</div>`;
+    }
+    const cl=o.querySelector("[data-mmclose]");if(cl)cl.onclick=mmClose;
+    const bk=o.querySelector("[data-mmback]");if(bk)bk.onclick=()=>{mmPage="main";mmRender()};
+    o.querySelectorAll("[data-mm]").forEach(b=>b.onclick=()=>{
+      const k=b.dataset.mm;
+      if(k==="p:acct"){mmPage="acct";mmRender();o.scrollTop=0;return}
+      if(k.startsWith("v:")){const v=vbtn(k.slice(2));mmClose();if(v)v.click();return}
+      if(k.startsWith("a:")){const t=$(`#acc [data-a="${k.slice(2)}"]`);if(k==="a:out"||k==="a:loc")mmClose();if(t)t.click();return}
+      const t=$(k);if(t){if(k==="#tocloud"||k==="#privacybtn")mmClose();t.click()}
+    });
+  }
+  function mmOpen(page){
+    let o=$("#mmenu");
+    if(!o){o=document.createElement("div");o.id="mmenu";o.className="mmenu";o.setAttribute("role","dialog");o.setAttribute("aria-modal","true");o.setAttribute("aria-label","Menu");document.body.appendChild(o)}
+    mmPage=page||"main";mmRender();document.body.classList.add("mmopen");$("#menubtn").setAttribute("aria-expanded","true");navArm();
+    const f=o.querySelector("button");if(f)try{f.focus({preventScroll:true})}catch(e){}
+  }
+  function mmClose(){const o=$("#mmenu");if(o)o.remove();mmPage=null;document.body.classList.remove("mmopen");const b=$("#menubtn");if(b)b.setAttribute("aria-expanded","false")}
+  function closeMenu(){mmClose();const s=$("#side");if(s){s.classList.remove("open");$("#menubtn").setAttribute("aria-expanded","false")}}
 
   // ---------- Init ----------
   $("#privacybtn").onclick=openPrivacy;
@@ -5313,7 +5391,7 @@
   $("#pclose").onclick=()=>$("#profdlg").close&&$("#profdlg").close();
   $("#calremove").onclick=removeCal;
   $("#calurl").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();saveCalCfg()}});
-  $("#menubtn").onclick=()=>{const o=$("#side").classList.toggle("open");$("#menubtn").setAttribute("aria-expanded",o)};
+  $("#menubtn").onclick=()=>{if(isPhone()){if($("#mmenu"))mmClose();else mmOpen();return}const o=$("#side").classList.toggle("open");$("#menubtn").setAttribute("aria-expanded",o)};
   // Mobile : la barre d'ajout est repliée ; le bouton + l'ouvre (et la referme)
   $("#fab").onclick=()=>{
     if(ui.mode==="home"&&view!=="all"&&proj(view)){phoneAdd(proj(view));return}
@@ -5586,6 +5664,7 @@
     const ed=document.querySelector(".visedit [data-x]");if(ed){ed.click();return true}
     const sc=document.querySelector(".visscan [data-x]");if(sc){sc.click();return true}
     const pop=$("#notifpop");if(pop&&!pop.hidden){notifClose();return true}
+    if($("#mmenu")){if(mmPage==="acct"){mmPage="main";mmRender()}else mmClose();return true}
     const side=$("#side");
     if(side&&side.classList.contains("open")){side.classList.remove("open");$("#menubtn").setAttribute("aria-expanded","false");return true}
     if(side&&side.classList.contains("srch")){$("#srchbtn").click();return true}
@@ -5615,6 +5694,7 @@
   // toute action dans l'appli repose la garde (après le message « appuyez encore… »)
   ["click","keydown"].forEach(t=>document.addEventListener(t,()=>{if(!nav.armed&&Date.now()-nav.exitAt>400)navArm()},true));
   {const r1=render;render=function(){r1();try{navRecord()}catch(e){}}}
+  {const r2=render;render=function(){r2();try{if(mmPage)mmRender()}catch(e){}}}
   window.__navState=()=>({stack:nav.stack.length,armed:nav.armed}); // utilisé par les tests
 
   // ---------- Application installable ----------
