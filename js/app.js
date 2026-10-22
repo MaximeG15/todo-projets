@@ -509,7 +509,7 @@
     MODE="cloud";$("#localbox").hidden=true;$("#acc").hidden=false;
     cloud.user=user;cloud.email=(user.email||"").toLowerCase();
     cloud.profiles={};cloud._lastPr="";cloud._askedProfile=false;
-    $("#whoami").textContent=cloud.email;$("#toolstitle").textContent="Compte et sauvegarde";
+    $("#whoami").textContent=cloud.email;$("#toolstitle .tsl").textContent="Compte et sauvegarde";
     $("#gate").hidden=true;
     try{localStorage.setItem("todo-mode","cloud")}catch(e){}
     // affichage immédiat de la dernière version connue, puis synchronisation
@@ -1339,7 +1339,8 @@
 
     // vues
     const V=$("#views"); V.innerHTML="";
-    const vb=(id,label,n,act,fn)=>{const x=document.createElement("button");x.type="button";x.className="vbtn";x.setAttribute("aria-current",act);x.innerHTML=`<span>${label}</span><span class="n">${n}</span>`;x.onclick=fn;V.appendChild(x)};
+    const VIC={today:"M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",agenda:"M3 6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v14H3zM3 10h18M8 3v4M16 3v4",all:"M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01",mine:"M20 21v-1a5 5 0 0 0-5-5H9a5 5 0 0 0-5 5v1M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",req:"M4 4h16v12H8l-4 4z",dash:"M4 20V10M10 20V4M16 20v-7M22 20H2",trash:"M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"};
+    const vb=(id,label,n,act,fn)=>{const x=document.createElement("button");x.type="button";x.className="vbtn";x.dataset.v=id;x.setAttribute("aria-current",act);x.innerHTML=`<svg class="vic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${VIC[id]||""}"></path></svg><span>${label}</span><span class="n">${n||""}</span>`;x.onclick=fn;V.appendChild(x)};
     const go=(mode,scope)=>()=>{query="";$("#search").value="";ui.mode=mode;ui.scope=scope;saveUi();view="all";editing=null;shareOpen=false;weekStart=null;closeMenu();render()};
     vb("today","Ma journée",nToday,view==="all"&&mode==="list"&&ui.scope==="today",go("list","today"));
     vb("agenda","Agenda de la semaine",nWeek,view==="all"&&mode==="agenda",go("agenda","all"));
@@ -1375,7 +1376,8 @@
       const all=alive.filter(t=>t.projectId===p.id), nOpen=all.filter(t=>t.status!=="done").length;
       const pct=all.length?Math.round(100*(all.length-nOpen)/all.length):0;
       const m=MODE==="cloud"&&cloud.meta[p.id];
-      const badge=m?(m.owner!==cloud.user.id?`<span class="pshared" title="Partagé par ${esc(nameOf(m.ownerEmail))}">invité</span>`:(m.members.length?`<span class="pshared" title="Partagé avec ${esc(m.members.map(nameOf).join(", "))}">partagé</span>`:"")):"";
+      const PSH=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 4a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM22 19v-1a4 4 0 0 0-3-3.9M16 4.1a3.5 3.5 0 0 1 0 6.8"></path></svg>`;
+      const badge=m?(m.owner!==cloud.user.id?`<span class="pshared" title="Partagé par ${esc(nameOf(m.ownerEmail))}"><span class="vsr">invité</span>${PSH}</span>`:(m.members.length?`<span class="pshared" title="Partagé avec ${esc(m.members.map(nameOf).join(", "))}"><span class="vsr">partagé</span>${PSH}</span>`:"")):"";
       const li=document.createElement("li");
       li.innerHTML=`<button class="pbtn${p.archived?" arch":""}" type="button" aria-current="${view===p.id}">${pMark(p)}<span class="pname">${esc(p.name)}</span>${badge}${ansOf(p.id).length?`<span class="pansn" title="${ansTxt(ansOf(p.id).length)} (Excel)">${ansOf(p.id).length}</span>`:""}<span class="count">${nOpen}</span><span class="pbar" title="${pct} % terminé"><i style="width:${pct}%;background:${p.color}"></i></span></button>`;
       li.firstChild.onclick=()=>openProject(p.id);
@@ -2097,6 +2099,9 @@
   // un lien dans un texte affiché ne déclenche pas l'ouverture de la ligne qui le contient
   document.addEventListener("click",e=>{const a=e.target.closest&&e.target.closest(".rt a");if(a&&!a.closest(".rte"))e.stopPropagation()},true);
   window.__rt={rtClean,rtStore,rtHtml,rtText,rtIs};
+  // ordinateur : la fenêtre « Compte et sauvegarde » se ferme en cliquant ailleurs ou avec Échap
+  document.addEventListener("pointerdown",e=>{const tb=document.getElementById("toolsbox");if(tb&&tb.open&&!isPhone()&&!tb.contains(e.target)&&!e.target.closest("dialog"))tb.open=false},true);
+  document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;const tb=document.getElementById("toolsbox");if(tb&&tb.open&&!isPhone()&&!document.querySelector("dialog[open]")){tb.open=false;const s=document.getElementById("toolstitle");if(s)s.focus()}});
   // ---------- Recherche ----------
   let query="";
   const norm=x=>String(x||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
@@ -5701,7 +5706,7 @@
 
   function startLocal(){
     MODE="local";$("#localbox").hidden=false;$("#acc").hidden=true;$("#share").hidden=true;
-    $("#whoami").textContent="Mode local (sans compte)";$("#toolstitle").textContent="Fichier et sauvegarde";
+    $("#whoami").textContent="Mode local (sans compte)";$("#toolstitle .tsl").textContent="Fichier et sauvegarde";
     const cached=lsLoad();
     if(cached){state=normalize(cached);resetSnap()}
     else{state={projects:[],tasks:[],requests:[],points:[],deleted:[]};resetSnap()}
