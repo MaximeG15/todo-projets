@@ -615,7 +615,7 @@ span.rt{display:inline}
 .rtcol i{display:block;width:14px;height:3px;margin-top:2px;border-radius:2px;background:var(--late)}
 .rtsep{width:1px;height:20px;background:var(--line);margin:0 3px}
 .rte{min-height:72px;max-height:50vh;overflow-y:auto;padding:9px 11px;font:inherit;font-size:15px;line-height:1.45;color:var(--ink);outline:none;overflow-wrap:anywhere;cursor:text}
-.rtw.empty .rte::before{content:attr(data-ph);color:var(--faint);pointer-events:none;position:absolute}
+.rte{position:relative}.rtw.rtempty .rte::before{content:attr(data-ph);color:var(--faint);pointer-events:none;position:absolute;left:11px;top:9px;right:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rte[contenteditable="false"]{cursor:default;background:var(--soft)}
 .rtpop{position:absolute;top:100%;z-index:20;display:flex;flex-direction:column;min-width:130px;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--pop)}
 .rtpop button{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border:0;border-radius:7px;background:transparent;color:var(--ink);font:inherit;font-size:14px;cursor:pointer;text-align:left}
@@ -638,3 +638,4 @@ span.rt{display:inline}
 .rtw,.rte{text-transform:none;letter-spacing:normal;font-weight:400}
 .rtbtn{min-width:30px;padding:0 4px}
 .rt{white-space:normal}
+.visin .rtb{border-radius:13px 13px 0 0}

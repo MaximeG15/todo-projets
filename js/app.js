@@ -2011,13 +2011,13 @@
     // dans un <label>, un clic ne doit pas être renvoyé au premier bouton de la barre (Gras)
     if(w.closest("label"))w.addEventListener("click",e=>{if(!e.target.closest(".rtbtn,.rtpop button"))e.preventDefault()});
     w.addEventListener("click",e=>{const b=e.target.closest(".rtbtn,.rtpop button");if(b&&w.closest("label"))e.preventDefault()},true);
-    const fill=()=>{const v=ta.value;ed.innerHTML=v?(rtIs(v)?rtHtml(v):v.split("\n").map(l=>`<p>${l?esc(l):"<br>"}</p>`).join("")):"";w.classList.toggle("empty",!ed.textContent.trim()&&!ed.querySelector("li"))};
+    const fill=()=>{const v=ta.value;ed.innerHTML=v?(rtIs(v)?rtHtml(v):v.split("\n").map(l=>`<p>${l?esc(l):"<br>"}</p>`).join("")):"";w.classList.toggle("rtempty",!ed.textContent.trim()&&!ed.querySelector("li"))};
     fill();ta._rtFill=fill;
     // le code existant continue de lire et d'écrire textarea.value
     const desc=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,"value");
     Object.defineProperty(ta,"value",{configurable:true,get(){return desc.get.call(this)},set(v){const old=desc.get.call(this);desc.set.call(this,v);if(!ta._rtSync&&String(v??"")!==old)fill()}});
     ta.focus=()=>ed.focus();
-    const sync=()=>{ta._rtSync=true;desc.set.call(ta,rtStore(ed.innerHTML));ta._rtSync=false;w.classList.toggle("empty",!ed.textContent.trim()&&!ed.querySelector("li"));ta.dispatchEvent(new Event("input",{bubbles:true}))};
+    const sync=()=>{ta._rtSync=true;desc.set.call(ta,rtStore(ed.innerHTML));ta._rtSync=false;w.classList.toggle("rtempty",!ed.textContent.trim()&&!ed.querySelector("li"));ta.dispatchEvent(new Event("input",{bubbles:true}))};
     ed.addEventListener("input",sync);
     ed.addEventListener("focus",()=>{try{document.execCommand("defaultParagraphSeparator",false,"p")}catch(e){}w.classList.add("on");rtPhoneBar(w)});
     ed.addEventListener("blur",()=>{setTimeout(()=>{if(!w.contains(document.activeElement)){w.classList.remove("on");rtPhoneBar(null);ta.dispatchEvent(new Event("change",{bubbles:true}));ta.dispatchEvent(new Event("blur"))}},150)});
