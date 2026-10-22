@@ -3930,6 +3930,7 @@
     visStatus();
   }
   const visBack=(label)=>`<button type="button" class="visback" data-back aria-label="${label}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button>`;
+  const WH_SVG=`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9.5 12 4l9 5.5V20H3zM7 20v-8h10v8M7 14.5h10M7 17.5h10"></path></svg>`;
   const CAM_SVG=`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>`;
   const GAL_SVG=`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"></rect><circle cx="9" cy="10" r="2"></circle><path d="M21 16.5l-5.2-5.2L7 20"></path></svg>`;
   // Clôture : depuis l'accueil de la visite, le bilan ou la liste des visites
@@ -4343,7 +4344,7 @@
     const freePts=livePts().filter(x=>x.projectId===v.projectId&&x.status!=="closed"&&!usedPts.has(x.id));
     const fl=v.flows||[], nOn=fl.filter(f=>!f.off).length, nIt=visItemsOn(v).length;
     const isOpen=f=>!f.off&&(f.id in visPrepOpen?visPrepOpen[f.id]:visItems(v,f.id).length>0);
-    const acts=wide?(live?`<button type="button" class="btn primary" data-go>Revenir à la visite</button>`:`<button type="button" class="btn" data-x>Fermer</button><button type="button" class="btn primary" data-start>${CAM_SVG}Démarrer la visite</button>`):"";
+    const acts=wide?(live?`<button type="button" class="btn primary" data-go>Revenir à la visite</button>`:`<button type="button" class="btn" data-x>Fermer</button><button type="button" class="btn primary" data-start>${WH_SVG}Démarrer la visite</button>`):"";
     o.innerHTML=visHead(live?"Retour à la visite":"Fermer la préparation",live?"Visite":"Projet",live?"Préparation":"Préparer la visite",`${esc(v.title)} · ${esc(p.name)}`,acts+visMoreBtn("data-pm","Actions sur la visite"))+`
       <main class="vism prep"><div class="visprepg">
         <div class="vpc1">
@@ -4867,7 +4868,7 @@
   function renderVisits(L,p){
     visEnsure();if(vis.loaded)visLoad();
     const top=document.createElement("div");top.className="vistopbar";
-    top.innerHTML=`<button type="button" class="btn primary" data-new>${CAM_SVG}Démarrer une visite</button><button type="button" class="btn" data-prep>Préparer une visite</button><span class="muted">Préparez au bureau, puis démarrez sur site. Fonctionne sans réseau : l'envoi se fait au retour de la connexion.</span>`;
+    top.innerHTML=`<button type="button" class="btn primary" data-new>${WH_SVG}Démarrer une visite</button><button type="button" class="btn" data-prep>Préparer une visite</button><span class="muted">Préparez au bureau, puis démarrez sur site. Fonctionne sans réseau : l'envoi se fait au retour de la connexion.</span>`;
     top.querySelector("[data-prep]").onclick=()=>visNew(p,true);
     top.querySelector("[data-new]").onclick=()=>visNew(p);
     L.appendChild(top);
@@ -4912,7 +4913,7 @@
   // (alerte, quatre rubriques, prochaines échéances) et chaque rubrique s'affiche en plein écran avec un retour.
   const isPhone=()=>window.matchMedia("(max-width:760px)").matches;
   const projIni=n=>{const w=String(n||"").replace(/[^\p{L}\p{N}\s/'-]/gu," ").split(/[\s/'-]+/).filter(Boolean);return ((w.length>1?w[0][0]+w[1][0]:(w[0]||"?").slice(0,2))||"?").toUpperCase()};
-  const ICO={tasks:"M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2",points:"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5M12 16v.5",meetings:"M3 5h18v16H3zM3 10h18M8 3v4M16 3v4",visits:"M4 8h3l2-3h6l2 3h3v11H4zM12 10a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"};
+  const ICO={tasks:"M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2",points:"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5M12 16v.5",meetings:"M3 5h18v16H3zM3 10h18M8 3v4M16 3v4",visits:"M3 9.5 12 4l9 5.5V20H3zM7 20v-8h10v8M7 14.5h10M7 17.5h10"};
   const svgI=d=>`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"></path></svg>`;
   function openProject(id){if(view!==id)shareOpen=false;view=id;if(ui.scope==="today")ui.scope="all";ui.mode=isPhone()?"home":(["dash","trash","requests","projects","home"].includes(ui.mode)?"list":ui.mode);saveUi();editing=null;query="";$("#search").value="";closeMenu();render();window.scrollTo({top:0})}
   function renderProjects(L){
@@ -4946,7 +4947,7 @@
     const alert=late.length||relance.length?`<button type="button" class="phalert" data-go="list">${svgI("M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2")}<span>${[late.length?`<b>${late.length} tâche${late.length>1?"s":""} en retard</b>`:"",relance.length?`${relance.length} relance${relance.length>1?"s":""} à faire`:""].filter(Boolean).join(" · ")}</span>${svgI("M9 6l6 6-6 6")}</button>`:"";
     L.innerHTML=`${alert}<section class="phtiles" aria-label="Rubriques du projet">${tiles.map(([m,t,ic,c,n,u,s,w])=>`<button type="button" class="phtile ${c}" data-go="${m}"><span class="phic">${svgI(ICO[ic])}</span><b>${t}</b><span class="phn"><strong>${n}</strong> ${u}</span><span class="phs${w?" warn":""}">${esc(s)}</span></button>`).join("")}</section>
       ${nxt.length?`<section class="phnext" aria-label="Prochaines échéances"><h3>Prochaines échéances</h3>${nxt.map(t=>`<button type="button" class="phrow" data-t="${esc(t.id)}"><span class="phck" aria-hidden="true"></span><span class="pht">${esc(t.title)}</span><span class="phd${isLate(t)?" late":""}">${isLate(t)?"En retard":esc(shortDay(t.due))}</span></button>`).join("")}</section>`:""}`;
-    L.querySelector(".phtiles").insertAdjacentHTML("afterend",`<div class="phacts"><button type="button" class="btn primary" data-act="visit">${svgI("M4 8h3l2-3h6l2 3h3v11H4zM12 9.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z")}Démarrer une visite</button><button type="button" class="btn" data-act="mtg">${svgI("M3 6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v14H3zM3 10h18M8 3v4M16 3v4")}Nouvelle réunion</button></div>`);
+    L.querySelector(".phtiles").insertAdjacentHTML("afterend",`<div class="phacts"><button type="button" class="btn primary" data-act="visit">${svgI("M3 9.5 12 4l9 5.5V20H3zM7 20v-8h10v8M7 14.5h10M7 17.5h10")}Démarrer une visite</button><button type="button" class="btn" data-act="mtg">${svgI("M3 6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v14H3zM3 10h18M8 3v4M16 3v4")}Nouvelle réunion</button></div>`);
     L.querySelector('[data-act="visit"]').onclick=()=>{ui.mode="visits";saveUi();render();visNew(p)};
     L.querySelector('[data-act="mtg"]').onclick=async()=>{const r=await mtgNewDialog({projectId:p.id});if(r){ui.mode="meetings";saveUi();render();mtgOpen(r,"prep")}};
     L.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{ui.mode=b.dataset.go;if(ui.mode==="list")ui.scope="all";saveUi();editing=null;render();window.scrollTo({top:0})});
