@@ -4922,14 +4922,10 @@
       return `<button type="button" class="pjt" data-p="${esc(p.id)}"><span class="pjic${pLogo(p)?" haslogo":""}" style="${pLogo(p)?`--pc:${esc(p.color||"#999")}`:`background:${esc(p.color||"#999")}`}">${pLogo(p)?`<img src="${p.logo}" alt="">`:esc(projIni(p.name))}${late?`<em aria-label="${late} en retard">${late}</em>`:""}</span><b>${esc(p.name)}</b>${ansOf(p.id).length?`<span class="pjans">${ansTxt(ansOf(p.id).length).replace(" du client"," client")}</span>`:`<span>${open.length} tâche${open.length>1?"s":""}</span>`}</button>`};
     L.innerHTML=`<section class="pjgrid" aria-label="Projets en cours">${act.map(tile).join("")}<button type="button" class="pjt" data-newp><span class="pjic add">${svgI("M12 5v14M5 12h14")}</span><b>Nouveau</b></button></section>
       ${arch.length?`<details class="pjarch"${ui.showArch?" open":""}><summary>Projets archivés <span>${arch.length}</span></summary><section class="pjgrid">${arch.map(tile).join("")}</section></details>`:""}
-      <section class="pjviews" aria-label="Autres vues"></section>`;
+`;
     L.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>openProject(b.dataset.p));
     L.querySelector("[data-newp]").onclick=async()=>{const n=await uiPrompt("Nom du nouveau projet","",{ok:"Créer"});if(n&&n.trim())addProject(n)};
     const ad=L.querySelector(".pjarch");if(ad)ad.ontoggle=()=>{ui.showArch=ad.open;saveUi()};
-    const V=L.querySelector(".pjviews"), nReq=liveReq().filter(r=>reqOpen(r)&&!isArch(r.projectId)).length, nTrash=state.tasks.filter(t=>t.deletedAt).length+(state.requests||[]).filter(r=>r.deletedAt).length+(state.points||[]).filter(o=>o.deletedAt).length;
-    const go=(m,s)=>()=>{ui.mode=m;ui.scope=s||"all";if(m==="list"&&ui.who==="__me")ui.who="";view="all";saveUi();render();window.scrollTo({top:0})};
-    [["Toutes les tâches",alive.filter(t=>t.status!=="done"&&!isArch(t.projectId)).length,go("list","all")],["Demandes client",nReq||"",go("requests")],["Tableau de bord","",go("dash")],["Corbeille",nTrash||"",go("trash")],["Compte, sauvegarde et confidentialité","",()=>mmOpen("acct")]]
-      .forEach(([l,n,fn],i)=>{const b=document.createElement("button");b.type="button";b.className="pjv"+(i===4?" sub":"");b.innerHTML=`<span>${esc(l)}</span>${n!==""?`<span class="n">${n}</span>`:""}`;b.onclick=fn;V.appendChild(b)});
   }
   function renderProjHome(L,p){
     const alive=live(), open=alive.filter(t=>t.projectId===p.id&&t.status!=="done");

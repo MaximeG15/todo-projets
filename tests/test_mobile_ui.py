@@ -45,7 +45,7 @@ with sync_playwright() as pw:
     # écran Projets : icônes, autres vues
     pg.locator(".bnav [data-b=menu]").click();pg.wait_for_timeout(200)
     ok(pg.locator(".pjt[data-p]").count()==2 and pg.locator(".pjic",has_text="PA").count()==1,"écran Projets : projets en icônes")
-    ok(pg.locator(".pjv",has_text="Corbeille").is_visible() and pg.locator(".pjv",has_text="Demandes client").is_visible(),"écran Projets : autres vues")
+    ok(pg.locator(".pjv").count()==0,"écran Projets : plus de liste de vues en double avec le menu ☰")
     ok(pg.locator(".bnav [data-b=menu]").get_attribute("aria-current")=="true","barre du bas : Projets actif")
     pg.locator(".pjt",has_text="Projet Alpha").click();pg.wait_for_timeout(300)
     ok(pg.locator(".phtile").count()==4 and not pg.locator("#ptabs").is_visible(),"accueil du projet : 4 rubriques, sans onglets")

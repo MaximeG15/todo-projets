@@ -41,7 +41,7 @@ with sync_playwright() as pw:
     pg.locator('#bnav [data-b="today"]').click();pg.wait_for_timeout(200)
     ok(pg.locator("#ptitle").inner_text()=="Ma journée" and pg.locator('#bnav [data-b="today"][aria-current="true"]').count()==1,"téléphone : Ma journée")
     pg.locator('#bnav [data-b="menu"]').click()
-    ok(pg.locator(".pjgrid .pjt").count()>=1 and pg.locator(".pjviews").is_visible(),"téléphone : Projets ouvre l'écran des projets et des vues")
+    ok(pg.locator(".pjgrid .pjt").count()>=1 and pg.locator(".pjviews").count()==0,"téléphone : Projets ouvre l'écran des projets (les vues sont dans le menu ☰)")
     ok(pg.evaluate("document.documentElement.scrollWidth<=390"),"téléphone : pas de débordement")
     pg.screenshot(path=OUT+"cockpit_mobile.png")
     b.close()
