@@ -1133,7 +1133,7 @@
     let cur=pLogo(p)||"";
     const d=document.createElement("dialog");d.className="uidlg logodlg";d.setAttribute("aria-label","Logo du client");
     d.innerHTML=`<form method="dialog"><h3>Logo du client</h3>
-      <p class="uimsg">Affiché dans la liste des projets, en tête du projet, sur les comptes rendus, les exports de points ouverts et les rapports de visite.</p>
+      <p class="uimsg">Affiché dans la liste des projets, en tête du projet, sur les comptes rendus, les exports de points ouverts et les rapports de déplacement.</p>
       <div class="logodrop" tabindex="0" role="button" aria-label="Choisir une image"><img alt="" hidden><span>Glissez l'image ici, collez-la (Ctrl+V) ou cliquez pour choisir un fichier.<small>PNG, JPEG, WebP ou SVG. Les marges blanches sont retirées automatiquement.</small></span></div>
       <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" hidden>
       <p class="uierr" hidden></p>
@@ -1405,7 +1405,7 @@
       const nT=alive.filter(t=>t.projectId===p.id&&t.status!=="done").length, nR=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)).length;
       tabs.hidden=false;
       const nO=livePts().filter(o=>o.projectId===p.id&&o.status!=="closed").length;
-      tabs.innerHTML=`${isPhone()?"":`<button type="button" role="tab" aria-selected="${mode==="overview"}" data-tab="overview">Vue d'ensemble</button>`}<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"&&mode!=="meetings"&&mode!=="visits"&&mode!=="overview"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points<span class="tlx"> ouverts</span> <span>${nO}</span>${ansOf(p.id).length?`<i class="ansdot" title="${ansTxt(ansOf(p.id).length)}" aria-label="${ansTxt(ansOf(p.id).length)}"></i>`:""}</button><button type="button" role="tab" aria-selected="${mode==="meetings"}" data-tab="meetings">Réunions <span>${mtgList(p.id).length}</span></button><button type="button" role="tab" aria-selected="${mode==="visits"}" data-tab="visits">Visites <span>${(visEnsure(),visList(p.id).length)}</span></button>`;
+      tabs.innerHTML=`${isPhone()?"":`<button type="button" role="tab" aria-selected="${mode==="overview"}" data-tab="overview">Vue d'ensemble</button>`}<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"&&mode!=="meetings"&&mode!=="visits"&&mode!=="overview"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points<span class="tlx"> ouverts</span> <span>${nO}</span>${ansOf(p.id).length?`<i class="ansdot" title="${ansTxt(ansOf(p.id).length)}" aria-label="${ansTxt(ansOf(p.id).length)}"></i>`:""}</button><button type="button" role="tab" aria-selected="${mode==="meetings"}" data-tab="meetings">Réunions <span>${mtgList(p.id).length}</span></button><button type="button" role="tab" aria-selected="${mode==="visits"}" data-tab="visits">Déplacements <span>${(visEnsure(),visList(p.id).length)}</span></button>`;
       tabs.querySelectorAll("[data-tab]").forEach(x=>x.onclick=()=>{const k=x.dataset.tab;ui.mode=k==="tasks"?(ui.taskMode||"list"):k;if(ui.mode!=="list")ui.scope="all";saveUi();editing=null;editingReq=null;editingPt=null;render()});
     } else {tabs.hidden=true;tabs.innerHTML=""}
     if(!weekStart)weekStart=mondayOf(new Date());
@@ -1440,7 +1440,7 @@
     } else if(mode==="visits"){
       title=`${pMark(p)}${esc(p.name)}${archTag}`;
       const vs=visList(p.id), nOpen=vs.filter(x=>x.status==="open").length, nPrep=vs.filter(x=>x.status==="prep").length;
-      sub=`${vs.length} visite${vs.length>1?"s":""} sur site`+(nOpen?`, ${nOpen} en cours`:"")+(nPrep?`, ${nPrep} préparée${nPrep>1?"s":""}`:"");
+      sub=`${vs.length} déplacement${vs.length>1?"s":""}`+(nOpen?`, ${nOpen} en cours`:"")+(nPrep?`, ${nPrep} préparé${nPrep>1?"s":""}`:"");
     } else if(mode==="meetings"){
       title=`${pMark(p)}${esc(p.name)}${archTag}`;
       const ms=mtgList(p.id), nd=ms.filter(x=>x.status==="draft").length;
@@ -1456,7 +1456,7 @@
     }
     {const fa=$("#fav");if(fa){const nm=MODE==="cloud"&&cloud.email?nameOf(cloud.email):"";fa.hidden=!nm;fa.textContent=initialsOf(nm)}}
     // Téléphone : dans une rubrique, le titre est celui de la rubrique (le projet figure dans le lien de retour)
-    if(p&&mode!=="home"&&!query.trim()&&isPhone()){const lb={list:"Tâches",agenda:"Agenda du projet",points:"Points ouverts",meetings:"Réunions",visits:"Visites"}[mode];if(lb)title=lb}
+    if(p&&mode!=="home"&&!query.trim()&&isPhone()){const lb={list:"Tâches",agenda:"Agenda du projet",points:"Points ouverts",meetings:"Réunions",visits:"Déplacements"}[mode];if(lb)title=lb}
     $("#ptitle").innerHTML=title; $("#psub").textContent=sub;
     if(document.body.dataset.mode&&document.body.dataset.mode!==mode&&document.body.classList.contains("addopen")){document.body.classList.remove("addopen");const fb=$("#fab");if(fb){fb.setAttribute("aria-expanded","false");fb.setAttribute("aria-label","Ajouter")}}
     document.body.dataset.mode=mode;
@@ -1778,10 +1778,10 @@
     visEnsure();
     const hid=p?null:hiddenSet();
     const visDay={};state.projects.filter(x=>(p?x.id===p.id:!x.archived&&!(hid&&hid.has(x.id)))).forEach(x=>visList(x.id).forEach(v=>{if(v.status==="prep"&&!(v.prep&&v.prep.plannedAt))return;const k=iso(new Date(visDate(v)));(visDay[k]=visDay[k]||[]).push(v)}));
-    const visEl=v=>{const el=document.createElement("div");const pj=proj(v.projectId)||{name:"",color:"#999"};const st={prep:"Préparée",open:"En cours",done:"Terminée"}[v.status]||"";
+    const visEl=v=>{const el=document.createElement("div");const pj=proj(v.projectId)||{name:"",color:"#999"};const st={prep:"Préparé",open:"En cours",done:"Terminé"}[v.status]||"";
       el.className="meet visag clk "+v.status;el.setAttribute("role","button");el.tabIndex=0;
-      el.innerHTML=`<span class="mt">${v.status==="prep"||v.startedAt?hm(visDate(v)):""} <span class="vstb">Visite · ${st}</span></span><span class="mn">${esc(v.title)}</span>${showProj?`<span class="ml"><i class="dot" style="background:${esc(pj.color)}"></i>${esc(pj.name)}</span>`:v.prep&&v.prep.location?`<span class="ml">${esc(v.prep.location)}</span>`:""}`;
-      el.title=`${v.title} (${st.toLowerCase()}) — cliquez pour ouvrir la visite`;
+      el.innerHTML=`<span class="mt">${v.status==="prep"||v.startedAt?hm(visDate(v)):""} <span class="vstb">Déplacement · ${st}</span></span><span class="mn">${esc(v.title)}</span>${showProj?`<span class="ml"><i class="dot" style="background:${esc(pj.color)}"></i>${esc(pj.name)}</span>`:v.prep&&v.prep.location?`<span class="ml">${esc(v.prep.location)}</span>`:""}`;
+      el.title=`${v.title} (${st.toLowerCase()}) — cliquez pour ouvrir le déplacement`;
       el.onclick=()=>visOpen(v);el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();visOpen(v)}};return el};
     const wk=document.createElement("div");wk.className="week";
     for(let i=0;i<7;i++){
@@ -4180,21 +4180,21 @@
   async function visAudioUrl(v,a){if(vis.urls[a.id])return vis.urls[a.id];const b=await visAudioBlob(v,a);return b?(vis.urls[a.id]=URL.createObjectURL(b)):""}
   // ---------- Création, suppression ----------
   async function visNew(p,prep){
-    const t=await uiPrompt("Intitulé de la visite","Visite d'analyse fonctionnelle",{ok:prep?"Préparer la visite":"Démarrer la visite"});
+    const t=await uiPrompt("Intitulé du déplacement","Visite d'analyse fonctionnelle",{ok:prep?"Préparer le déplacement":"Démarrer le déplacement"});
     if(t==null)return;
     const now=Date.now();
-    const v={id:newId(),projectId:p.id,title:(t.trim()||"Visite sur site").slice(0,300),startedAt:prep?null:now,endedAt:null,status:prep?"prep":"open",flows:VIS_FLOWS.map(n=>({id:uid(),name:n})),notes:[],items:[],prep:{participants:defaultParticipants(p.id)},createdAt:now};
+    const v={id:newId(),projectId:p.id,title:(t.trim()||"Déplacement sur site").slice(0,300),startedAt:prep?null:now,endedAt:null,status:prep?"prep":"open",flows:VIS_FLOWS.map(n=>({id:uid(),name:n})),notes:[],items:[],prep:{participants:defaultParticipants(p.id)},createdAt:now};
     visPersist();
     if(prep){const n=visSeed(v);if(n)toast(`${plural(n,"point ouvert repris","points ouverts repris")} dans « À voir », par flux.`)}
     visPut(v);visOpen(v);render();
   }
   async function visDelete(v){
     const nP=(v.notes||[]).reduce((n,x)=>n+(x.photos||[]).length,0);
-    if(!await uiConfirm(`Supprimer la visite « ${v.title} » du ${new Date(visDate(v)).toLocaleDateString("fr-FR")} ?\n\n${(v.notes||[]).length} note(s) et ${nP} photo(s) seront supprimées. Les points ouverts et tâches déjà créés restent dans le projet.`,{ok:"Supprimer",danger:true}))return;
+    if(!await uiConfirm(`Supprimer le déplacement « ${v.title} » du ${new Date(visDate(v)).toLocaleDateString("fr-FR")} ?\n\n${(v.notes||[]).length} note(s) et ${nP} photo(s) seront supprimées. Les points ouverts et tâches déjà créés restent dans le projet.`,{ok:"Supprimer",danger:true}))return;
     const x=JSON.parse(JSON.stringify(v));x.deletedAt=Date.now();
     visDropPhotos(x,(x.notes||[]).flatMap(n=>(n.photos||[]).map(p=>p.id)));(x.notes||[]).forEach(n=>visDropAudio(x,n.audio));
     visPut(x);if(visCur&&visCur.id===v.id){visCur=null;renderVisit()}render();
-    toast("Visite supprimée.");
+    toast("Déplacement supprimé.");
   }
   // ---------- Écran de visite ----------
   let visCur=null, visScreen="home", visFlowId=null, visType="note", visStage=[], visText="", visReply=null;
@@ -4203,7 +4203,7 @@
     if(visCur.status!=="done"){const g=(visCur.flows||[]).filter(f=>f.name==="Généralités"&&!visNotes(visCur,f.id).length&&!visCur.items.some(i=>i.flow===f.id)).map(f=>f.id);if(g.length&&visCur.flows.length>g.length)visQuiet(x=>{x.flows=x.flows.filter(f=>!g.includes(f.id))})}
     visScreen=v.status==="prep"?"prep":flowId?"flow":"home";visFlowId=flowId||null;visStage=[];visText="";visReply=null;renderVisit()}
   async function visClose(){
-    if(visRec&&visCur&&visRec.vid===visCur.id){if(!await uiConfirm("Un enregistrement est en cours. L'arrêter et le garder avant de quitter la visite ?",{ok:"Arrêter et quitter"}))return;recStop();await new Promise(r=>setTimeout(r,400))}
+    if(visRec&&visCur&&visRec.vid===visCur.id){if(!await uiConfirm("Un enregistrement est en cours. L'arrêter et le garder avant de quitter le déplacement ?",{ok:"Arrêter et quitter"}))return;recStop();await new Promise(r=>setTimeout(r,400))}
     auStopAll();
     if(visStage.length)visDropPhotos(visCur,visStage.map(s=>s.id));visCur=null;visStage=[];renderVisit();render()}
   function visSet(fn){fn(visCur);visPut(visCur);renderVisit()}
@@ -4238,11 +4238,11 @@
   function visPendingN(v){const its=v.items||[];return (v.notes||[]).filter(n=>!n.conv&&(n.type==="question"||n.type==="action")&&!(n.item&&(its.find(i=>i.id===n.item)||{}).kind==="point")).length}
   async function visFinish(v){
     const n=visPendingN(v);
-    if(n&&!await uiConfirm(`${n>1?`${n} questions ou actions n'ont`:"Une question ou action n'a"} pas encore été transformée${n>1?"s":""} en point ouvert ou en tâche.\n\nClôturer quand même ? Vous pourrez le faire plus tard depuis le bilan de la visite.`,{ok:"Clôturer la visite"}))return false;
+    if(n&&!await uiConfirm(`${n>1?`${n} questions ou actions n'ont`:"Une question ou action n'a"} pas encore été transformée${n>1?"s":""} en point ouvert ou en tâche.\n\nClôturer quand même ? Vous pourrez le faire plus tard depuis le bilan du déplacement.`,{ok:"Clôturer le déplacement"}))return false;
     const now=Date.now();
     if(visCur&&visCur.id===v.id){visQuiet(x=>{x.status="done";x.endedAt=x.endedAt||now});visClose()}
     else{const x=JSON.parse(JSON.stringify(v));x.status="done";x.endedAt=x.endedAt||now;visPut(x);render()}
-    toast("Visite clôturée. Elle reste consultable dans l'onglet Visites du projet.");
+    toast("Déplacement clôturé. Il reste consultable dans l'onglet Déplacements du projet.");
     return true;
   }
   function visQuick(src){
@@ -4272,7 +4272,7 @@
   // En-tête : retour, titre, pastille d'enregistrement, actions ; la pastille (.visst) est remplie par visStatus()
   const visHead=(backAria,backTxt,title,sub,acts,below)=>`<header class="vish"><div class="visrow"><button type="button" class="visback" data-back aria-label="${backAria}">${VI.back}<span>${esc(backTxt)}</span></button><div class="vist"><b>${esc(title)}</b><span>${sub}</span></div><span class="vsp"></span><div class="visst" role="status"></div>${acts||""}</div>${below||""}</header>`;
   const visDay=v=>new Date(visDate(v)).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
-  const visSub=(v,p)=>`${esc(p.name)} · ${esc(visDay(v))}${v.startedAt&&v.status!=="prep"?` · démarrée à ${hm(v.startedAt)}`:""}${v.status==="done"?" · terminée":""}`;
+  const visSub=(v,p)=>`${esc(p.name)} · ${esc(visDay(v))}${v.startedAt&&v.status!=="prep"?` · démarré à ${hm(v.startedAt)}`:""}${v.status==="done"?" · terminé":""}`;
   const visItemsOn=v=>{const on=new Set(visFlows(v).map(f=>f.id));return (v.items||[]).filter(i=>on.has(i.flow))};
   function visCounts(ns){
     const ph=ns.reduce((k,x)=>k+(x.photos||[]).length,0), q=ns.filter(x=>x.type==="question").length, a=ns.filter(x=>x.type==="action").length, au=ns.filter(x=>x.audio).length;
@@ -4282,7 +4282,7 @@
     const pr=v.prep||{}, parts=pr.participants||[];
     if(!pr.goal&&!pr.location&&!parts.length)return "";
     const sub=[pr.location||"",parts.length?plural(parts.length,"participant"):""].filter(Boolean).map(esc).join(" · ");
-    return `<button type="button" class="visgoal" data-prepv aria-label="Voir la préparation de la visite"><span class="visgi">${VI.target}</span><span class="visgt"><b>${esc(pr.goal||"Objectif à préciser")}</b>${sub?`<small>${sub}</small>`:""}</span>${VI.chev}</button>`;
+    return `<button type="button" class="visgoal" data-prepv aria-label="Voir la préparation du déplacement"><span class="visgi">${VI.target}</span><span class="visgt"><b>${esc(pr.goal||"Objectif à préciser")}</b>${sub?`<small>${sub}</small>`:""}</span>${VI.chev}</button>`;
   }
   function visProgCard(v){
     const ns=v.notes||[], c=visCounts(ns), its=visItemsOn(v), seen=its.filter(i=>i.seen).length;
@@ -4302,7 +4302,7 @@
   }
   function visInfoBox(v){
     const pr=v.prep||{}, parts=pr.participants||[];
-    return `<section class="visinfo"><div class="vissh"><h3>La visite</h3><button type="button" class="vislink" data-prepv>Préparation</button></div>
+    return `<section class="visinfo"><div class="vissh"><h3>Le déplacement</h3><button type="button" class="vislink" data-prepv>Préparation</button></div>
       ${pr.goal?`<p>${VI.target}<span>${esc(pr.goal)}</span></p>`:""}${pr.location?`<p>${VI.pin}<span>${esc(pr.location)}</span></p>`:""}
       ${parts.length?`<p>${VI.users}<span class="vispp">${parts.map(x=>`<span class="tag${x.side==="client"?" vt-cli":""}">${esc(x.name)}</span>`).join("")}</span></p>`:""}
       ${!pr.goal&&!pr.location&&!parts.length?`<p class="muted">Objectif, lieu et participants se renseignent dans la préparation.</p>`:""}</section>`;
@@ -4315,7 +4315,7 @@
       return `<div class="visit${i.seen?" seen":""}${first?" next":""}" data-i="${esc(i.id)}"><button type="button" class="visseen" data-seen aria-pressed="${!!i.seen}" aria-label="${i.seen?"Marquer comme non vu":"Marquer comme vu"}"></button><span class="vitx">${first?`<small class="visnext">Prochain</small>`:""}${i.kind==="point"?`<small>${esc(i.label||"Point ouvert")}</small>`:""}${esc(i.text)}${nr?`<em>${plural(nr,"réponse")}</em>`:""}</span><button type="button" class="btn visrep" data-rep>Répondre</button></div>`};
     return `<section class="visitems"><div class="vissh"><h3>À voir</h3><b>${sn.length} / ${its.length} vus</b></div>${un.map((i,k)=>row(i,k===0)).join("")}${sn.length?`<details class="visseenl"${ui.visSeenOpen?" open":""}><summary>${VI.check}${plural(sn.length,"élément vu","éléments vus")}</summary>${sn.map(i=>row(i,false)).join("")}</details>`:""}</section>`;
   }
-  const VIS_HINT={note:"",question:"À la fin de la visite, deviendra un point ouvert pour le client.",action:"À la fin de la visite, deviendra une tâche à votre nom."};
+  const VIS_HINT={note:"",question:"À la fin du déplacement, deviendra un point ouvert pour le client.",action:"À la fin du déplacement, deviendra une tâche à votre nom."};
   function visComposer(rep){
     return `<footer class="viscap" data-vt="${visType}">
         <div class="visseg" role="radiogroup" aria-label="Type de note">${Object.entries(NTYPE).map(([k,[l]])=>`<button type="button" role="radio" aria-checked="${visType===k}" data-t="${k}">${l}</button>`).join("")}</div>
@@ -4327,17 +4327,17 @@
       </footer>`;
   }
   const visQuickBar=()=>`<footer class="visf vqf"><button type="button" class="visqb" data-qgal aria-label="Importer des photos de la galerie (le flux est choisi ensuite)">${GAL_SVG}<span>Galerie</span></button><button type="button" class="visfab" data-quick aria-label="Photo rapide (le flux est choisi ensuite)">${CAM_SVG}</button>${recOk()?`<button type="button" class="visqb rec" data-qrec aria-label="Enregistrer la conversation (le flux est choisi ensuite)">${MIC_SVG}<span>Enregistrer</span></button>`:`<span class="visqb" aria-hidden="true"></span>`}</footer>`;
-  const visHomeActs=v=>`<button type="button" class="btn visendh" data-end>${v.status==="done"?"Bilan":"Terminer"}</button>${visMoreBtn("data-vm","Actions sur la visite")}`;
+  const visHomeActs=v=>`<button type="button" class="btn visendh" data-end>${v.status==="done"?"Bilan":"Terminer"}</button>${visMoreBtn("data-vm","Actions sur le déplacement")}`;
   // liaisons communes à l'accueil, au flux et à la vue ordinateur
   function visBindCommon(o,v){
     o.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{visScreen="flow";visFlowId=b.dataset.f;renderVisit()});
     const vm=o.querySelector("[data-vm]");if(vm)vm.onclick=async()=>{
-      const ch=await visSheet(v.title,[...(v.status==="done"?[{k:"reopen",l:"Reprendre la visite"}]:[{k:"finish",l:"Clôturer la visite"}]),{k:"gal",l:"Importer des photos de la galerie"},{k:"prep",l:"Revoir la préparation"},{k:"ren",l:"Renommer la visite"},{k:"pdf",l:"Exporter le compte rendu (PDF)"},{k:"del",l:"Supprimer la visite",danger:true}]);
+      const ch=await visSheet(v.title,[...(v.status==="done"?[{k:"reopen",l:"Reprendre le déplacement"}]:[{k:"finish",l:"Clôturer le déplacement"}]),{k:"gal",l:"Importer des photos de la galerie"},{k:"prep",l:"Revoir la préparation"},{k:"ren",l:"Renommer le déplacement"},{k:"pdf",l:"Exporter le compte rendu (PDF)"},{k:"del",l:"Supprimer le déplacement",danger:true}]);
       if(ch==="finish")visFinish(visCur);
       else if(ch==="reopen")visSet(x=>{x.status="open";x.endedAt=null});
       else if(ch==="gal")visQuick("gallery");
       else if(ch==="prep"){visScreen="prep";renderVisit()}
-      else if(ch==="ren"){const t=await uiPrompt("Intitulé de la visite",v.title,{ok:"Renommer"});if(t&&t.trim())visSet(x=>{x.title=t.trim().slice(0,300)})}
+      else if(ch==="ren"){const t=await uiPrompt("Intitulé du déplacement",v.title,{ok:"Renommer"});if(t&&t.trim())visSet(x=>{x.title=t.trim().slice(0,300)})}
       else if(ch==="pdf")visPdf(visCur);
       else if(ch==="del")visDelete(visCur);
     };
@@ -4375,9 +4375,9 @@
   }
   function visHomeScreen(o,v,p){
     if(visWide())return visDesk(o,v,p,null);
-    o.innerHTML=visHead("Quitter la visite","Projet",v.title,visSub(v,p),visHomeActs(v))+`<main class="vism vhome">${trBanner(v)}${visGoalCard(v)}${visProgCard(v)}
+    o.innerHTML=visHead("Quitter le déplacement","Projet",v.title,visSub(v,p),visHomeActs(v))+`<main class="vism vhome">${trBanner(v)}${visGoalCard(v)}${visProgCard(v)}
       <div class="vishd"><h2>Flux</h2><button type="button" class="vislink" data-addf>${VI.plus}Ajouter un flux</button></div>
-      <nav class="vislist" aria-label="Flux de la visite">${visFlowRows(v,null)}</nav></main>${visQuickBar()}`;
+      <nav class="vislist" aria-label="Flux du déplacement">${visFlowRows(v,null)}</nav></main>${visQuickBar()}`;
     o.querySelector("[data-back]").onclick=visClose;
     visBindCommon(o,v);
   }
@@ -4408,7 +4408,7 @@
     if(visWide())return visDesk(o,v,p,visFlowId);
     const f=v.flows.find(x=>x.id===visFlowId), ns=visNotes(v,f.id), its=visItems(v,f.id), rep=visReply&&its.find(i=>i.id===visReply);
     if(visReply&&!rep)visReply=null;
-    o.innerHTML=visHead("Retour aux flux","Visite",f.name,esc(visCountTxt(ns)),visMoreBtn("data-fm","Actions sur le flux"),
+    o.innerHTML=visHead("Retour aux flux","Déplacement",f.name,esc(visCountTxt(ns)),visMoreBtn("data-fm","Actions sur le flux"),
         `<div class="vischips" role="tablist" aria-label="Changer de flux">${visFlows(v).map(x=>`<button type="button" role="tab" aria-selected="${x.id===f.id}" data-f="${esc(x.id)}">${esc(x.name)}</button>`).join("")}</div>`)+
       `<main class="vism notes">${trBanner(v)}${visSeeBox(v,f)}
         ${ns.length?ns.map(n=>visNoteHtml(n)).join(""):`<p class="visempty">Aucune note pour ce flux. Écrivez ou prenez une photo ci-dessous.</p>`}</main>${visComposer(rep)}`;
@@ -4428,8 +4428,8 @@
       const recent=(v.notes||[]).filter(n=>visFlows(v).some(x=>x.id===n.flow)).slice().sort((a,b)=>b.at-a.at).slice(0,6);
       center=`<main class="vism vhome">${visGoalCard(v)}<div class="vishd"><h2>Dernières notes</h2></div>${recent.length?recent.map(n=>visNoteHtml(n,true)).join(""):`<p class="visempty">Choisissez un flux à gauche pour prendre des notes et des photos.</p>`}</main>${visQuickBar()}`;
     }
-    o.innerHTML=visHead(f?"Retour à l'accueil de la visite":"Quitter la visite",f?"Accueil":p.name,v.title,visSub(v,p),visHomeActs(v))+
-      `<div class="visdesk"><aside class="visdl">${visProgCard(v)}<div class="vishd"><h2>Flux</h2><button type="button" class="vislink" data-addf aria-label="Ajouter un flux">${VI.plus}<span>Ajouter</span></button></div><nav class="vislist" aria-label="Flux de la visite">${visFlowRows(v,fid)}</nav></aside>
+    o.innerHTML=visHead(f?"Retour à l'accueil du déplacement":"Quitter le déplacement",f?"Accueil":p.name,v.title,visSub(v,p),visHomeActs(v))+
+      `<div class="visdesk"><aside class="visdl">${visProgCard(v)}<div class="vishd"><h2>Flux</h2><button type="button" class="vislink" data-addf aria-label="Ajouter un flux">${VI.plus}<span>Ajouter</span></button></div><nav class="vislist" aria-label="Flux du déplacement">${visFlowRows(v,fid)}</nav></aside>
       <section class="visdc">${center}</section>
       <aside class="visdr">${f?visSeeBox(v,f):""}${visInfoBox(v)}${trBanner(v)}</aside></div>`;
     o.querySelector("[data-back]").onclick=f?()=>{visScreen="home";renderVisit()}:visClose;
@@ -4634,7 +4634,7 @@
   // ---------- Préparation de la visite (au bureau, sur ordinateur ou téléphone) ----------
   const dtLocal=ms=>{if(!ms)return "";const d=new Date(ms);const z=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`};
   const visPrepOpen={}; // flux dépliés dans la préparation (par défaut : ceux qui ont des éléments)
-  function visStartNow(){visSet(y=>{y.status="open";y.startedAt=Date.now()});visScreen="home";renderVisit();render();toast("Visite démarrée : bonne visite !")}
+  function visStartNow(){visSet(y=>{y.status="open";y.startedAt=Date.now()});visScreen="home";renderVisit();render();toast("Déplacement démarré : bon déplacement !")}
   function visPrepScreen(o,v,p){
     const pr=v.prep||(v.prep={}), live=v.status!=="prep", wide=visWide();
     const parts=pr.participants||[], cand=[], seen=new Set();
@@ -4645,14 +4645,14 @@
     const freePts=livePts().filter(x=>x.projectId===v.projectId&&x.status!=="closed"&&!usedPts.has(x.id));
     const fl=v.flows||[], nOn=fl.filter(f=>!f.off).length, nIt=visItemsOn(v).length;
     const isOpen=f=>!f.off&&(f.id in visPrepOpen?visPrepOpen[f.id]:visItems(v,f.id).length>0);
-    const acts=wide?(live?`<button type="button" class="btn primary" data-go>Revenir à la visite</button>`:`<button type="button" class="btn" data-x>Fermer</button><button type="button" class="btn primary" data-start>${WH_SVG}Démarrer la visite</button>`):"";
-    o.innerHTML=visHead(live?"Retour à la visite":"Fermer la préparation",live?"Visite":"Projet",live?"Préparation":"Préparer la visite",`${esc(v.title)} · ${esc(p.name)}`,acts+visMoreBtn("data-pm","Actions sur la visite"))+`
+    const acts=wide?(live?`<button type="button" class="btn primary" data-go>Revenir au déplacement</button>`:`<button type="button" class="btn" data-x>Fermer</button><button type="button" class="btn primary" data-start>${WH_SVG}Démarrer le déplacement</button>`):"";
+    o.innerHTML=visHead(live?"Retour au déplacement":"Fermer la préparation",live?"Déplacement":"Projet",live?"Préparation":"Préparer le déplacement",`${esc(v.title)} · ${esc(p.name)}`,acts+visMoreBtn("data-pm","Actions sur le déplacement"))+`
       <main class="vism prep"><div class="visprepg">
         <div class="vpc1">
         <section class="viscard"><h3>Informations</h3>
           <div class="visgrid"><label class="uifld"><span>Date et heure</span><input type="datetime-local" data-k="plannedAt" value="${dtLocal(pr.plannedAt)}"></label>
           <label class="uifld"><span>Lieu</span><input type="text" data-k="location" maxlength="300" placeholder="Site, adresse" value="${esc(pr.location||"")}"></label></div>
-          <label class="uifld"><span>Objectif de la visite</span><textarea rows="2" data-k="goal" maxlength="2000" placeholder="Ex. : analyser les flux de réception et d'expédition">${esc(pr.goal||"")}</textarea></label>
+          <label class="uifld"><span>Objectif du déplacement</span><textarea rows="2" data-k="goal" maxlength="2000" placeholder="Ex. : analyser les flux de réception et d'expédition">${esc(pr.goal||"")}</textarea></label>
           <label class="uifld"><span>Infos utiles</span><textarea rows="2" data-k="info" maxlength="2000" placeholder="Contact sur place, horaires, équipements de sécurité…">${esc(pr.info||"")}</textarea></label>
         </section>
         <section class="viscard"><div class="vissh"><h3>Participants</h3>${parts.length?`<span class="muted">${plural(parts.length,"coché","cochés")}</span>`:""}</div>
@@ -4661,9 +4661,9 @@
         </section>
         </div>
         <div class="vpc2">
-          <div class="vishd"><h2>À voir pendant la visite</h2><span>${plural(nIt,"élément")} · ${plural(nOn,"flux","flux")}</span></div>
+          <div class="vishd"><h2>À voir pendant le déplacement</h2><span>${plural(nIt,"élément")} · ${plural(nOn,"flux","flux")}</span></div>
           <div class="visflows">${fl.map((f,k)=>{const it=visItems(v,f.id), op=isOpen(f);return `<div class="visfl${f.off?" off":""}${op?" open":""}" data-f="${esc(f.id)}">
-            <div class="visflh"><input type="checkbox" data-on ${f.off?"":"checked"} aria-label="Flux ${esc(f.name)} couvert pendant la visite"><button type="button" class="visflt" data-tog aria-expanded="${op}"${f.off?" disabled":""}><b>${esc(f.name)}</b><span class="muted">${f.off?"non couvert":it.length?plural(it.length,"élément"):"aucun élément"}</span>${f.off?"":VI.chev}</button>
+            <div class="visflh"><input type="checkbox" data-on ${f.off?"":"checked"} aria-label="Flux ${esc(f.name)} couvert pendant le déplacement"><button type="button" class="visflt" data-tog aria-expanded="${op}"${f.off?" disabled":""}><b>${esc(f.name)}</b><span class="muted">${f.off?"non couvert":it.length?plural(it.length,"élément"):"aucun élément"}</span>${f.off?"":VI.chev}</button>
               <button type="button" class="visround sm" data-up ${k?"":"disabled"} aria-label="Monter ${esc(f.name)}">↑</button><button type="button" class="visround sm" data-down ${k<fl.length-1?"":"disabled"} aria-label="Descendre ${esc(f.name)}">↓</button></div>
             ${op?`${it.map(i=>`<div class="visprepi" data-i="${esc(i.id)}"><span>${i.kind==="point"?`<small>${esc(i.label||"Point ouvert")}</small>`:""}${esc(i.text)}</span><button type="button" class="vismore" data-del aria-label="Retirer « ${esc(i.text)} »">✕</button></div>`).join("")}
               <form class="visprepadd" autocomplete="off"><input type="text" maxlength="300" placeholder="Ajouter un élément à voir…" aria-label="Élément à voir pour ${esc(f.name)}"><button class="btn" type="submit">Ajouter</button></form>`:""}
@@ -4676,14 +4676,14 @@
           ${freePts.map(x=>`<div class="vispt"><span><small>${esc([ptNumOf(x),x.theme,x.owner==="client"?"client":x.owner==="mecalux"?"Mecalux":""].filter(Boolean).join(" · "))}</small>${esc(short(x.text))}</span><button type="button" class="btn" data-addpt="${esc(x.id)}">Ajouter</button></div>`).join("")}
         </section></aside>
       </div></main>
-      ${wide?"":`<footer class="visf">${live?`<button type="button" class="btn primary visend" data-go>Revenir à la visite</button>`:`<button type="button" class="btn visend" data-x>Fermer</button><button type="button" class="btn primary visend" data-start>Démarrer la visite</button>`}</footer>`}`;
+      ${wide?"":`<footer class="visf">${live?`<button type="button" class="btn primary visend" data-go>Revenir au déplacement</button>`:`<button type="button" class="btn visend" data-x>Fermer</button><button type="button" class="btn primary visend" data-start>Démarrer le déplacement</button>`}</footer>`}`;
     const back=()=>{if(live){visScreen="home";renderVisit()}else visClose()};
     o.querySelector("[data-back]").onclick=back;
     const x=o.querySelector("[data-x]");if(x)x.onclick=back;
     const g=o.querySelector("[data-go]");if(g)g.onclick=back;
     const st=o.querySelector("[data-start]");if(st)st.onclick=visStartNow;
-    o.querySelector("[data-pm]").onclick=async()=>{const ch=await visSheet(v.title,[{k:"ren",l:"Renommer la visite"},{k:"del",l:"Supprimer la visite",danger:true}]);
-      if(ch==="ren"){const t=await uiPrompt("Intitulé de la visite",v.title,{ok:"Renommer"});if(t&&t.trim())visSet(y=>{y.title=t.trim().slice(0,300)})}else if(ch==="del")visDelete(visCur)};
+    o.querySelector("[data-pm]").onclick=async()=>{const ch=await visSheet(v.title,[{k:"ren",l:"Renommer le déplacement"},{k:"del",l:"Supprimer le déplacement",danger:true}]);
+      if(ch==="ren"){const t=await uiPrompt("Intitulé du déplacement",v.title,{ok:"Renommer"});if(t&&t.trim())visSet(y=>{y.title=t.trim().slice(0,300)})}else if(ch==="del")visDelete(visCur)};
     o.querySelectorAll("[data-k]").forEach(el=>el.onchange=()=>visQuiet(y=>{const k=el.dataset.k;y.prep=y.prep||{};y.prep[k]=k==="plannedAt"?(el.value?new Date(el.value).getTime():null):el.value.trim()}));
     o.querySelectorAll("[data-pp]").forEach(cb=>cb.onchange=()=>visQuiet(y=>{const c=cand[+cb.dataset.pp];y.prep.participants=(y.prep.participants||[]).filter(z=>norm(z.name)!==norm(c.name));if(cb.checked)y.prep.participants.push({name:c.name,side:c.side,...(c.email?{email:c.email}:{})})}));
     const pa=o.querySelector("[data-padd]");pa.onsubmit=async e=>{e.preventDefault();const name=pa.querySelector("input").value.trim(),side=pa.querySelector("select").value;if(!name)return;
@@ -4809,7 +4809,7 @@
     const dur=v.startedAt&&v.endedAt&&v.endedAt>v.startedAt?(m=>` (${m>=60?Math.floor(m/60)+" h "+String(m%60).padStart(2,"0"):m+" min"})`)(Math.round((v.endedAt-v.startedAt)/60000)):"";
     const kpi=(n,s,pl,k)=>`<div class="viskpi vt-${k}"><b>${n}</b><span>${n>1?pl:s}</span></div>`;
     const what=[nq.length?`${plural(nq.length,"question")} ${nq.length>1?"deviennent des points ouverts":"devient un point ouvert"} pour le client, rangé${nq.length>1?"s":""} par flux`:"",na.length?`${plural(na.length,"action")} ${na.length>1?"deviennent des tâches":"devient une tâche"} à votre nom`:""].filter(Boolean).join(" · ");
-    o.innerHTML=visHead("Retour à la visite","Visite",v.status==="done"?"Bilan de la visite":"Fin de visite",`${esc(p.name)} · ${hm(visDate(v))}${v.endedAt?" – "+hm(v.endedAt):""}${dur}`,"")+
+    o.innerHTML=visHead("Retour au déplacement","Déplacement",v.status==="done"?"Bilan du déplacement":"Fin de déplacement",`${esc(p.name)} · ${hm(visDate(v))}${v.endedAt?" – "+hm(v.endedAt):""}${dur}`,"")+
       `<main class="vism end">
         <section class="viscard">
           <div class="viskpis">${kpi(c.n,"note","notes","n")}${kpi(c.ph,"photo","photos","n")}${kpi(c.q,"question","questions","cli")}${kpi(c.a,"action","actions","act")}</div>
@@ -4818,12 +4818,12 @@
         </section>
         <section class="viscard"><div class="vissh"><h3>À créer dans le projet</h3>${todo.length?`<b data-cnt>${plural(todo.length,"élément coché","éléments cochés")}</b>`:""}</div>
           ${todo.length?`<p class="muted">${what}.</p>${todo.map(n=>`<label class="vischk sm"><input type="checkbox" data-one="${esc(n.id)}" data-kind="${n.type}" checked><span><span class="vckh"><span class="tag vt-${n.type==="question"?"cli":"act"}">${n.type==="question"?"Point ouvert":"Tâche"}</span><em>${esc(fname(n.flow))}</em></span>${esc(n.text||"(photo sans texte)")}</span></label>`).join("")}`
-          :`<p class="muted">${ns.some(n=>n.conv)?"Tous les points et tâches de cette visite ont déjà été créés.":"Aucune note de type « Question client » ou « Action »."}</p>`}
+          :`<p class="muted">${ns.some(n=>n.conv)?"Tous les points et tâches de ce déplacement ont déjà été créés.":"Aucune note de type « Question client » ou « Action »."}</p>`}
         </section>
         ${answered.length?`<section class="viscard"><h3>Points ouverts répondus sur site</h3><p class="muted">La réponse est ajoutée au point. Cochez ceux qui peuvent être levés.</p>${answered.map(i=>`<label class="vischk sm"><input type="checkbox" data-close="${esc(i.id)}"><span><em>Lever le point ${esc(i.label||"")} (${esc(fname(i.flow))})</em>${esc(i.text)}<small class="visans">Réponse : ${esc(ansTxt(i))}</small></span></label>`).join("")}</section>`:""}
         ${left.length?`<section class="viscard"><h3>Restant à voir</h3>${leftFree.map(i=>`<div class="visleft"><span><em>${esc(fname(i.flow))}</em>${esc(i.text)}</span><div class="visseg3" role="radiogroup" aria-label="Que faire de « ${esc(i.text)} » ?">${[["","Ignorer"],["point","Point ouvert"],["task","Tâche"]].map(([val,l],k)=>`<label><input type="radio" name="vl-${esc(i.id)}" value="${val}" data-left="${esc(i.id)}"${k?"":" checked"}><span>${l}</span></label>`).join("")}</div></div>`).join("")}${leftPts.map(i=>`<div class="visleft"><span><em>${esc(i.label||"Point ouvert")} · ${esc(fname(i.flow))}</em>${esc(i.text)}</span><span class="muted">reste ouvert</span></div>`).join("")}</section>`:""}
       </main>
-      <footer class="visf col vendf">${anything?`<button type="button" class="btn primary" data-apply>Appliquer au projet</button>`:""}<div class="visf2"><button type="button" class="btn" data-pdf>${VI.doc}Compte rendu PDF</button>${v.status==="done"?`<button type="button" class="btn" data-reopen>Reprendre la visite</button>`:`<button type="button" class="btn ${anything?"":"primary "}visdone" data-done>Clôturer la visite</button>`}</div></footer>`;
+      <footer class="visf col vendf">${anything?`<button type="button" class="btn primary" data-apply>Appliquer au projet</button>`:""}<div class="visf2"><button type="button" class="btn" data-pdf>${VI.doc}Compte rendu PDF</button>${v.status==="done"?`<button type="button" class="btn" data-reopen>Reprendre le déplacement</button>`:`<button type="button" class="btn ${anything?"":"primary "}visdone" data-done>Clôturer le déplacement</button>`}</div></footer>`;
     o.querySelector("[data-back]").onclick=()=>{visScreen="home";renderVisit()};
     const ap=o.querySelector("[data-apply]");
     const label=()=>{if(!ap)return;
@@ -4842,7 +4842,7 @@
     const ro=o.querySelector("[data-reopen]");if(ro)ro.onclick=()=>{visSet(x=>{x.status="open";x.endedAt=null});visScreen="home";renderVisit()};
   }
   function visApply(ids,closeIds,leftChoice){
-    const v=visCur, now=Date.now(), dstr=new Date(visDate(v)).toLocaleDateString("fr-FR"), src=`Issu de la visite du ${dstr}`;
+    const v=visCur, now=Date.now(), dstr=new Date(visDate(v)).toLocaleDateString("fr-FR"), src=`Issu du déplacement du ${dstr}`;
     const fname=id=>(v.flows.find(f=>f.id===id)||{name:""}).name;
     let nP=0,nT=0,nA=0,nC=0,k=0;
     const me=MODE==="cloud"&&cloud.email?resolveWho(nameOf(cloud.email),v.projectId):"";
@@ -4857,8 +4857,8 @@
     // 2. réponses apportées sur site aux points ouverts existants
     (v.items||[]).filter(i=>i.kind==="point"&&!i.applied&&v.notes.some(n=>n.item===i.id)).forEach(i=>{
       const o=(state.points||[]).find(x=>x.id===i.ref&&!x.deletedAt);i.applied=true;if(!o)return;
-      const t=v.notes.filter(n=>n.item===i.id).map(n=>rtText(n.text||"").trim()||"voir les photos du compte rendu de visite").join(" / ");
-      o.answer=rtJoin(o.answer,`Visite du ${dstr} : ${t}`);nA++;
+      const t=v.notes.filter(n=>n.item===i.id).map(n=>rtText(n.text||"").trim()||"voir les photos du compte rendu de déplacement").join(" / ");
+      o.answer=rtJoin(o.answer,`Déplacement du ${dstr} : ${t}`);nA++;
       if(closeIds.has(i.id)&&o.status!=="closed"){o.status="closed";o.closedAt=now;nC++}
     });
     // 3. éléments prévus non vus
@@ -4877,7 +4877,7 @@
     const css=`body{font-family:Arial,sans-serif;color:#16232B;margin:0;font-size:11pt}h1{font-size:18pt;margin:0}.sub{color:#51646F;margin:4px 0 16px}h2{font-size:13pt;color:#1D4E78;border-bottom:1px solid #C7D1D8;padding-bottom:3px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.03em}.n{margin:0 0 10px;break-inside:avoid}.au{font-size:9.5pt;color:#4B3A8C;font-weight:bold;margin:2px 0}.tr{font-style:italic;color:#3A4B55;margin:2px 0 4px}.h{font-size:9pt;color:#51646F}.t{font-weight:bold;padding:1px 6px;border-radius:8px;background:#EEF1F3}.t.question{background:#DCEAF7;color:#1D4E78}.t.action{background:#FFF4CC;color:#6B5200}p{margin:3px 0}.ph{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}figure{margin:0;width:48%;break-inside:avoid}figure img{width:100%;border-radius:4px}figcaption{font-size:9pt;color:#51646F}.it{margin:0 0 10px;padding-left:18px;font-size:10pt}.it li.ok{color:#1F5C43}.it li.ko{color:#9A3412}.meta{display:grid;grid-template-columns:110px 1fr;gap:3px 10px;margin:0 0 14px;font-size:10pt}.meta b{color:#51646F;font-weight:normal}@page{margin:15mm}`;
     const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(v.title)}</title><style>${css}.vh{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.vh img{max-height:52px;max-width:160px;object-fit:contain}</style></head><body><div class="vh"><h1>${esc(v.title)}</h1>${pLogo(p)?`<img src="${p.logo}" alt="">`:""}</div><p class="sub">${esc(p.name)} · ${esc(new Date(visDate(v)).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))}${v.endedAt&&v.startedAt?` · ${hm(v.startedAt)} – ${hm(v.endedAt)}`:""}</p>${pr.location||pr.goal||(pr.participants||[]).length?`<div class="meta">${pr.location?`<b>Lieu</b><span>${esc(pr.location)}</span>`:""}${pr.goal?`<b>Objectif</b><span>${esc(pr.goal)}</span>`:""}${(pr.participants||[]).length?`<b>Participants</b><span>${esc(pr.participants.map(x=>x.name+(SIDE[x.side]?` (${SIDE[x.side]})`:"")).join(", "))}</span>`:""}</div>`:""}${sec||"<p>Aucune note.</p>"}</body></html>`;
     if(missing)toast(`${plural(missing,"photo")} non disponible${missing>1?"s":""} hors connexion : absente${missing>1?"s":""} du PDF.`);
-    printHtml(html,`visite-${(p.name||"projet").replace(/[^\wÀ-ÿ-]+/g,"-")}-${iso(new Date(visDate(v)))}`);
+    printHtml(html,`deplacement-${(p.name||"projet").replace(/[^\wÀ-ÿ-]+/g,"-")}-${iso(new Date(visDate(v)))}`);
   }
   // ---------- Onglet Visites d'un projet ----------
   function visEnsure(){if(vis.loaded&&vis.acct!==visAcct()){vis.loaded=false;vis.map={};vis.urls={}}if(!vis.loaded)visLoad()}
@@ -4904,7 +4904,7 @@
       d.innerHTML=`<form method="dialog"><div class="recdh"><span class="recic">${MIC_SVG}</span><h3>Enregistrer la conversation</h3></div>
         <p class="uimsg">Prévenez les personnes présentes que la conversation est enregistrée.</p>
         <ul class="recul"><li>L'enregistrement est rangé dans le flux en cours et reste sur l'appareil tant qu'il n'y a pas de réseau.</li><li>La transcription se fait ensuite sur votre ordinateur : le son n'est envoyé à aucun service extérieur.</li><li>Vous pouvez prendre des photos pendant l'enregistrement.</li></ul>
-        <label class="recchk"><input type="checkbox" data-once checked><span>Ne plus demander pour cette visite</span></label>
+        <label class="recchk"><input type="checkbox" data-once checked><span>Ne plus demander pour ce déplacement</span></label>
         <div class="uibtns"><button type="button" class="btn ghost" data-x>Annuler</button><button type="button" class="btn recgo" data-ok><span class="recdot" aria-hidden="true"></span>C'est fait, enregistrer</button></div></form>`;
       document.body.appendChild(d);
       const close=v2=>{try{d.close()}catch(e){}d.remove();res(v2)};
@@ -5138,7 +5138,7 @@
     const mins=Math.max(1,Math.round(todo.reduce((k,n)=>k+(n.audio.dur||0),0)/60));
     const running=todo.some(n=>trState(n.id));
     return `<section class="trban"><span class="trbic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"></path><path d="M17 15l2 2 3-4"></path></svg></span>
-      <div class="trbt"><b>${plural(todo.length,"enregistrement")} à transcrire dans cette visite · ${mins} min au total</b><span>La transcription se fait sur cet ordinateur : aucun son n'est envoyé sur Internet. Le texte obtenu est à relire.</span></div>
+      <div class="trbt"><b>${plural(todo.length,"enregistrement")} à transcrire dans ce déplacement · ${mins} min au total</b><span>La transcription se fait sur cet ordinateur : aucun son n'est envoyé sur Internet. Le texte obtenu est à relire.</span></div>
       ${running?`<span class="trbrun">Transcription en cours…</span>`:`<button type="button" class="btn primary" data-trall>Tout transcrire</button>`}</section>`;
   }
   function trBind(o,v){
@@ -5152,7 +5152,7 @@
       const t=await uiPrompt("Question client (vous pouvez raccourcir le passage)",sel||n.tr.text,{ok:"Créer la question",multiline:true});
       if(!t||!t.trim())return;
       visSet(x=>x.notes.push({id:uid(),flow:n.flow,type:"question",text:t.trim().slice(0,4000),photos:[],at:Date.now(),conv:null}));
-      toast("Question client ajoutée au flux : elle deviendra un point ouvert en fin de visite.");
+      toast("Question client ajoutée au flux : elle deviendra un point ouvert en fin de déplacement.");
     });
     o.querySelectorAll("[data-pick]").forEach(b=>b.onmousedown=e=>e.preventDefault()); // garder la sélection de texte
   }
@@ -5169,18 +5169,18 @@
   function renderVisits(L,p){
     visEnsure();if(vis.loaded)visLoad();
     const top=document.createElement("div");top.className="vistopbar";
-    top.innerHTML=`<button type="button" class="btn primary" data-new>${WH_SVG}Démarrer une visite</button><button type="button" class="btn" data-prep>Préparer une visite</button><span class="muted">Préparez au bureau, puis démarrez sur site. Fonctionne sans réseau : l'envoi se fait au retour de la connexion.</span>`;
+    top.innerHTML=`<button type="button" class="btn primary" data-new>${WH_SVG}Démarrer un déplacement</button><button type="button" class="btn" data-prep>Préparer un déplacement</button><span class="muted">Préparez au bureau, puis démarrez sur site. Fonctionne sans réseau : l'envoi se fait au retour de la connexion.</span>`;
     top.querySelector("[data-prep]").onclick=()=>visNew(p,true);
     top.querySelector("[data-new]").onclick=()=>visNew(p);
     L.appendChild(top);
     const vs=visList(p.id);
-    if(!vs.length){const g=document.createElement("section");g.className="group";g.innerHTML=`<h2>Visites <span>0</span></h2><div class="empty">${vis.loaded?"Aucune visite pour ce projet.":"Chargement…"}</div>`;L.appendChild(g);return}
+    if(!vs.length){const g=document.createElement("section");g.className="group";g.innerHTML=`<h2>Déplacements <span>0</span></h2><div class="empty">${vis.loaded?"Aucun déplacement pour ce projet.":"Chargement…"}</div>`;L.appendChild(g);return}
     const dl=t=>new Date(t).toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"});
     const menu=async v=>{
-      const ch=await visSheet(v.title,[{k:"open",l:"Ouvrir la visite"},...(v.status==="open"?[{k:"fin",l:"Clôturer la visite"}]:[]),...(v.status!=="prep"?[{k:"pdf",l:"Exporter le compte rendu (PDF)"}]:[]),{k:"del",l:"Supprimer la visite",danger:true}]);
+      const ch=await visSheet(v.title,[{k:"open",l:"Ouvrir le déplacement"},...(v.status==="open"?[{k:"fin",l:"Clôturer le déplacement"}]:[]),...(v.status!=="prep"?[{k:"pdf",l:"Exporter le compte rendu (PDF)"}]:[]),{k:"del",l:"Supprimer le déplacement",danger:true}]);
       if(ch==="open")visOpen(v);else if(ch==="fin")visFinish(v);else if(ch==="pdf")visPdf(v);else if(ch==="del")visDelete(v);
     };
-    [["open","En cours"],["prep","Préparées"],["done","Terminées"]].forEach(([st,lab])=>{
+    [["open","En cours"],["prep","Préparés"],["done","Terminés"]].forEach(([st,lab])=>{
       const list=vs.filter(v=>(v.status||"open")===st);if(!list.length)return;
       const g=document.createElement("section");g.className="group visgrp";
       g.innerHTML=`<h2>${lab} <span>${list.length}</span></h2>`;
@@ -5193,10 +5193,10 @@
         const meta=st==="prep"?[pl?`${dl(pl)} · ${hm(pl)}`:"Pas encore datée",pr.location||"",plural(its.length,"élément")+" à voir",nPart?plural(nPart,"participant"):""].filter(Boolean)
           :st==="open"?[`Démarrée ${dl(visDate(v))} à ${hm(visDate(v))}`,pr.location||"",stats]:[dl(visDate(v)),stats];
         const trn=ns.filter(n=>n.audio&&!n.tr).length, pend=visPendingN(v);
-        const tags=`<span class="tag ${st==="done"?"done-t":st==="prep"?"wait":"vt-act"}">${st==="done"?"Terminée":st==="prep"?"Préparée":"En cours"}</span>${vis.map[v.id]&&vis.map[v.id].dirty?`<span class="tag vt-act">En attente d'envoi</span>`:""}${st!=="prep"&&trn?`<span class="tag vt-au">${plural(trn,"enregistrement")} à transcrire</span>`:""}${st==="done"&&pend?`<span class="tag vt-cli">${plural(pend,"élément")} à créer dans le projet</span>`:""}${st==="done"&&!pend&&ns.some(n=>n.conv)?`<span class="tag done-t">Points et tâches créés</span>`:""}`;
+        const tags=`<span class="tag ${st==="done"?"done-t":st==="prep"?"wait":"vt-act"}">${st==="done"?"Terminé":st==="prep"?"Préparé":"En cours"}</span>${vis.map[v.id]&&vis.map[v.id].dirty?`<span class="tag vt-act">En attente d'envoi</span>`:""}${st!=="prep"&&trn?`<span class="tag vt-au">${plural(trn,"enregistrement")} à transcrire</span>`:""}${st==="done"&&pend?`<span class="tag vt-cli">${plural(pend,"élément")} à créer dans le projet</span>`:""}${st==="done"&&!pend&&ns.some(n=>n.conv)?`<span class="tag done-t">Points et tâches créés</span>`:""}`;
         li.innerHTML=`<span class="mtgdate vdd">${d?`<b>${new Date(d).getDate()}</b><small>${esc(new Date(d).toLocaleDateString("fr-FR",{month:"short"}))}</small>`:`<small>À dater</small>`}</span>
           <div class="vbody"><div class="ttl">${esc(v.title)}</div><div class="meta"><span class="vmeta">${meta.map(esc).join(" · ")}</span>${tags}</div>${st==="open"&&its.length?`<div class="vprog"><span class="vbar sm"><i style="width:${Math.round(100*seen/its.length)}%"></i></span><span>${seen} / ${its.length} vus</span></div>`:""}</div>
-          <div class="vacts">${st==="open"?`<button type="button" class="btn sm" data-fin>Clôturer</button><button type="button" class="btn primary sm" data-open>Reprendre</button>`:st==="prep"?`<button type="button" class="btn sm" data-open>Modifier</button><button type="button" class="btn primary sm" data-startl>Démarrer</button>`:`<button type="button" class="btn sm" data-open>Bilan</button><button type="button" class="btn sm" data-pdfl>${VI.doc}<span>Compte rendu PDF</span></button>`}<button type="button" class="btn sm vmore" data-vmore aria-label="Plus d'actions sur la visite ${esc(v.title)}">${VI.more}</button></div>`;
+          <div class="vacts">${st==="open"?`<button type="button" class="btn sm" data-fin>Clôturer</button><button type="button" class="btn primary sm" data-open>Reprendre</button>`:st==="prep"?`<button type="button" class="btn sm" data-open>Modifier</button><button type="button" class="btn primary sm" data-startl>Démarrer</button>`:`<button type="button" class="btn sm" data-open>Bilan</button><button type="button" class="btn sm" data-pdfl>${VI.doc}<span>Compte rendu PDF</span></button>`}<button type="button" class="btn sm vmore" data-vmore aria-label="Plus d'actions sur le déplacement ${esc(v.title)}">${VI.more}</button></div>`;
         const stop=fn=>e=>{e.stopPropagation();fn()};
         li.querySelector("[data-vmore]").onclick=stop(()=>menu(v));
         const fin=li.querySelector("[data-fin]");if(fin)fin.onclick=stop(()=>visFinish(v));
@@ -5239,12 +5239,12 @@
       ["list","Tâches","tasks","t-tasks",open.length,open.length>1?"ouvertes":"ouverte",late.length?`${late.length} en retard`:"Rien en retard",!!late.length],
       ["points","Points ouverts","points","t-points",po.length,po.length>1?"ouverts":"ouvert",ansOf(p.id).length?ansTxt(ansOf(p.id).length):po.length?`${pcli} à répondre par le client`:"Aucun point ouvert",!!ansOf(p.id).length],
       ["meetings","Réunions","meetings","t-mtg",ms.length,ms.length>1?"comptes rendus":"compte rendu",drafts?`${drafts} brouillon${drafts>1?"s":""} à finaliser`:ms.length?`Dernier : ${dshort(ms[0].startsAt||ms[0].createdAt)}`:"Aucun compte rendu",false],
-      ["visits","Visites","visits","t-vis",vs.length,vs.length>1?"visites":"visite",vOpen?`${vOpen} en cours`:vPrep.length?`Préparée${vPrep[0].prep&&vPrep[0].prep.plannedAt?" : "+dshort(vPrep[0].prep.plannedAt):""}`:vs.length?`Dernière : ${dshort(visDate(vs[0]))}`:"Aucune visite",false]];
+      ["visits","Déplacements","visits","t-vis",vs.length,vs.length>1?"déplacements":"déplacement",vOpen?`${vOpen} en cours`:vPrep.length?`Préparée${vPrep[0].prep&&vPrep[0].prep.plannedAt?" : "+dshort(vPrep[0].prep.plannedAt):""}`:vs.length?`Dernier : ${dshort(visDate(vs[0]))}`:"Aucun déplacement",false]];
     const nxt=open.filter(t=>t.due).sort((a,b)=>(isLate(b)-isLate(a))||(a.due<b.due?-1:1)).slice(0,3);
     const alert=late.length||relance.length?`<button type="button" class="phalert" data-go="list">${svgI("M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2")}<span>${[late.length?`<b>${late.length} tâche${late.length>1?"s":""} en retard</b>`:"",relance.length?`${relance.length} relance${relance.length>1?"s":""} à faire`:""].filter(Boolean).join(" · ")}</span>${svgI("M9 6l6 6-6 6")}</button>`:"";
     L.innerHTML=`${alert}<section class="phtiles" aria-label="Rubriques du projet">${tiles.map(([m,t,ic,c,n,u,s,w])=>`<button type="button" class="phtile ${c}" data-go="${m}"><span class="phic">${svgI(ICO[ic])}</span><b>${t}</b><span class="phn"><strong>${n}</strong> ${u}</span><span class="phs${w?" warn":""}">${esc(s)}</span></button>`).join("")}</section>
       ${nxt.length?`<section class="phnext" aria-label="Prochaines échéances"><h3>Prochaines échéances</h3>${nxt.map(t=>`<button type="button" class="phrow" data-t="${esc(t.id)}"><span class="phck" aria-hidden="true"></span><span class="pht">${esc(t.title)}</span><span class="phd${isLate(t)?" late":""}">${isLate(t)?"En retard":esc(shortDay(t.due))}</span></button>`).join("")}</section>`:""}`;
-    L.querySelector(".phtiles").insertAdjacentHTML("afterend",`<div class="phacts"><button type="button" class="btn primary" data-act="visit">${svgI("M3 9.5 12 4l9 5.5V20H3zM7 20v-8h10v8M7 14.5h10M7 17.5h10")}Démarrer une visite</button><button type="button" class="btn" data-act="mtg">${svgI("M3 6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v14H3zM3 10h18M8 3v4M16 3v4")}Nouvelle réunion</button></div>`);
+    L.querySelector(".phtiles").insertAdjacentHTML("afterend",`<div class="phacts"><button type="button" class="btn primary" data-act="visit">${svgI("M3 9.5 12 4l9 5.5V20H3zM7 20v-8h10v8M7 14.5h10M7 17.5h10")}Démarrer un déplacement</button><button type="button" class="btn" data-act="mtg">${svgI("M3 6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v14H3zM3 10h18M8 3v4M16 3v4")}Nouvelle réunion</button></div>`);
     L.querySelector('[data-act="visit"]').onclick=()=>{ui.mode="visits";saveUi();render();visNew(p)};
     L.querySelector('[data-act="mtg"]').onclick=async()=>{const r=await mtgNewDialog({projectId:p.id});if(r){ui.mode="meetings";saveUi();render();mtgOpen(r,"prep")}};
     L.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{ui.mode=b.dataset.go;if(ui.mode==="list")ui.scope="all";saveUi();editing=null;render();window.scrollTo({top:0})});
@@ -5266,7 +5266,7 @@
       card("list","Tâches",open.length,open.length>1?"ouvertes":"ouverte",[late.length&&`${late.length} en retard`,relance.length&&`${plural(relance.length,"relance")}`].filter(Boolean).join(" · ")||"Rien en retard",late.length?"late":"",`<span class="ovbar"><i style="width:${pct(doneN,all.length)}%;background:var(--ok)"></i></span>`),
       card("points","Points ouverts",po.length,po.length>1?"ouverts":"ouvert",ans.length?ansTxt(ans.length):`${cli.length} à répondre par le client`,ans.length?"new":"",po.length?`<span class="ovbar"><i style="width:${pct(cli.length,po.length)}%;background:var(--cli)"></i><i style="width:${pct(po.length-cli.length,po.length)}%;background:#8A99A3"></i></span>`:""),
       card("meetings","Réunions",nextM?esc(dlong(nextM.startsAt)):ms.length,nextM?`· ${new Date(nextM.startsAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}`:(ms.length>1?"comptes rendus":"compte rendu"),nextM?esc(nextM.title):drafts.length?`${plural(drafts.length,"brouillon")} à finaliser`:"Aucune réunion prévue",""),
-      card("visits","Visites",lastV?esc(new Date(visDate(lastV)).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})):"0",lastV?"dernière visite":"visite",lastV?(toTr?`${plural(toTr,"enregistrement")} à transcrire`:`${plural((lastV.notes||[]).length,"note")} · ${lastV.status==="done"?"terminée":lastV.status==="prep"?"préparée":"en cours"}`):"Aucune visite","")
+      card("visits","Déplacements",lastV?esc(new Date(visDate(lastV)).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})):"0",lastV?"dernier déplacement":"déplacement",lastV?(toTr?`${plural(toTr,"enregistrement")} à transcrire`:`${plural((lastV.notes||[]).length,"note")} · ${lastV.status==="done"?"terminé":lastV.status==="prep"?"préparé":"en cours"}`):"Aucun déplacement","")
     ].join("");
     // à traiter
     const rows=[];
@@ -5286,7 +5286,7 @@
     pts.filter(o=>o.status==="closed"&&o.closedAt).forEach(o=>ev.push([o.closedAt,"✓",`Point levé${ptNumOf(o)?" "+ptNumOf(o):""} : ${o.text.split("\n")[0]}`]));
     pts.filter(o=>o.ansNew).forEach(o=>ev.push([o.ansNew,"R",`Réponse du client${ptNumOf(o)?" sur le "+ptNumOf(o):""} (Excel)`]));
     ms.forEach(m=>ev.push([m.startsAt||m.createdAt||0,"C",`Réunion : ${m.title}${m.status==="draft"?" (brouillon)":""}`]));
-    vs.forEach(v=>ev.push([v.endedAt||v.startedAt||v.createdAt||0,"V",`Visite${v.status==="done"?" clôturée":v.status==="prep"?" préparée":" en cours"} : ${v.title}`]));
+    vs.forEach(v=>ev.push([v.endedAt||v.startedAt||v.createdAt||0,"V",`Déplacement${v.status==="done"?" clôturé":v.status==="prep"?" préparé":" en cours"} : ${v.title}`]));
     const evs=ev.filter(e=>e[0]&&e[0]<=now+864e5).sort((a,b)=>b[0]-a[0]).slice(0,6).map(e=>`<li><span class="ovic sm">${e[1]}</span><span><b>${esc(e[2])}</b><span>${esc(fmtWhen(e[0]))}</span></span></li>`).join("");
     L.innerHTML=`<section class="ovcards" aria-label="État du projet">${cards}</section>
       <div class="ovgrid">
@@ -5306,7 +5306,7 @@
   }
   // Bouton + de l'accueil du projet : choix de ce qu'on ajoute
   async function phoneAdd(p){
-    const ch=await visSheet("Ajouter au projet",[{k:"t",l:"Une tâche"},{k:"o",l:"Un point ouvert"},{k:"m",l:"Une réunion (compte rendu)"},{k:"v",l:"Une visite sur site"}]);
+    const ch=await visSheet("Ajouter au projet",[{k:"t",l:"Une tâche"},{k:"o",l:"Un point ouvert"},{k:"m",l:"Une réunion (compte rendu)"},{k:"v",l:"Un déplacement sur site"}]);
     if(ch==="t"){ui.mode="list";ui.scope="all";saveUi();render();setTimeout(()=>$("#fab").click(),50)}
     else if(ch==="o"){ui.mode="points";saveUi();render();setTimeout(()=>{const el=document.querySelector("#addslot input[type=text],#ptadd input[type=text],#ptadd textarea");document.body.classList.add("addopen");if(el){window.scrollTo({top:0});el.focus()}},80)}
     else if(ch==="m"){const r=await mtgNewDialog({projectId:p.id});if(r){ui.mode="meetings";saveUi();render();mtgOpen(r,"prep")}}
@@ -5918,7 +5918,7 @@
           add("Ce projet","◎",`${cur.name} · Vue d'ensemble`,"",()=>{ui.mode=isPhone()?"home":"overview";saveUi();render()});
           add("Ce projet","!",`${cur.name} · Points ouverts`,"",()=>{ui.mode="points";saveUi();render()});
           add("Ce projet","R","Nouvelle réunion",cur.name,async()=>{const r=await mtgNewDialog({projectId:cur.id});if(r){ui.mode="meetings";saveUi();render();mtgOpen(r,"prep")}});
-          add("Ce projet","V","Démarrer une visite",cur.name,()=>{ui.mode="visits";saveUi();render();visNew(cur)});
+          add("Ce projet","V","Démarrer un déplacement",cur.name,()=>{ui.mode="visits";saveUi();render();visNew(cur)});
         }
         state.projects.filter(x=>!x.archived).forEach(x=>add("Projets",x.name.slice(0,2).toUpperCase(),x.name,"",()=>openProject(x.id)));
         [["Ma journée","list","today"],["Agenda de la semaine","agenda"],["Toutes les tâches","list"],...(MODE==="cloud"?[["Mes tâches","list","mine"]]:[]),["Demandes client","requests"],["Tableau de bord","dash"],["Corbeille","trash"]].forEach(([l,m,sc])=>add("Vues","→",l,"",goView(m,sc)));

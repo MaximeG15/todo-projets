@@ -83,7 +83,7 @@ with sync_playwright() as pw:
     ok(pg.locator("[data-tab=overview]").count()==0,"téléphone : pas d'onglet Vue d'ensemble")
     pg.locator(".bnav [data-b=menu]").click();pg.wait_for_timeout(200)
     pg.locator(".pjt",has_text="Projet Alpha").click();pg.wait_for_timeout(300)
-    ok(pg.locator(".phacts .btn",has_text="Démarrer une visite").is_visible() and pg.locator(".phacts .btn",has_text="Nouvelle réunion").is_visible(),"téléphone : actions rapides sur l'accueil du projet")
+    ok(pg.locator(".phacts .btn",has_text="Démarrer un déplacement").is_visible() and pg.locator(".phacts .btn",has_text="Nouvelle réunion").is_visible(),"téléphone : actions rapides sur l'accueil du projet")
     pg.screenshot(path=S+"v2_phone_home.png")
     # Glisser : terminer / reporter
     pg.locator(".phtile").first.click();pg.wait_for_timeout(300)

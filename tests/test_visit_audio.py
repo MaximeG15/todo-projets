@@ -21,7 +21,7 @@ with sync_playwright() as pw:
     pg.add_init_script(path=FAKE);pg.add_init_script(PHOTO)
     pg.add_init_script("localStorage.setItem('todo-mode','cloud')")
     pg.goto(APP);pg.wait_for_timeout(1200)
-    pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.locator(".phtile",has_text="Visites").click();pg.wait_for_timeout(300)
+    pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.locator(".phtile",has_text="Déplacements").click();pg.wait_for_timeout(300)
     pg.locator("#lists [data-new]").click();pg.wait_for_timeout(500)
     v=pg.locator("#visview")
     v.locator(".vistile",has_text="Réception").click();pg.wait_for_timeout(300)

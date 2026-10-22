@@ -52,7 +52,7 @@ with sync_playwright() as pw:
     v.locator("[data-back]").click();pg.wait_for_timeout(200);v.locator("[data-back]").click();pg.wait_for_timeout(300)
     # ---------- Téléphone ----------
     pg.set_viewport_size({"width":390,"height":844});pg.wait_for_timeout(300)
-    pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.locator(".phtile",has_text="Visites").click();pg.wait_for_timeout(400)
+    pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.locator(".phtile",has_text="Déplacements").click();pg.wait_for_timeout(400)
     ok(pg.locator("#lists .visgrp h2",has_text="En cours").count()==1,"liste : rubrique « En cours »")
     ok(pg.locator("#lists .mtgrow [data-del]").count()==0 and pg.locator("#lists .mtgrow [data-vmore]").count()==1,"liste : suppression rangée dans le menu ⋯")
     pg.locator("#lists .mtgrow [data-open]").click();pg.wait_for_timeout(400)
@@ -80,11 +80,11 @@ with sync_playwright() as pw:
     pg.screenshot(path=OUT+"visit2_end.png")
     ap.click();pg.wait_for_timeout(500)
     st=pg.evaluate("JSON.parse(localStorage.getItem('todo-projets'))")
-    tk=[t for t in st["tasks"] if "Issu de la visite" in (t.get("note") or "")]
+    tk=[t for t in st["tasks"] if "Issu du déplacement" in (t.get("note") or "")]
     ok(len(tk)==2 and not any(o["text"].startswith("Faut-il") for o in st["points"]),"bilan appliqué : 2 tâches, la question décochée n'est pas créée")
     v.locator("[data-done]").click();pg.wait_for_timeout(500)
-    ok(pg.locator("#lists .visgrp h2",has_text="Terminées").count()==1,"liste : visite rangée dans « Terminées »")
-    SHEET["sheet"]="Supprimer la visite"
+    ok(pg.locator("#lists .visgrp h2",has_text="Terminés").count()==1,"liste : visite rangée dans « Terminées »")
+    SHEET["sheet"]="Supprimer le déplacement"
     pg.locator("#lists .mtgrow [data-vmore]").click();pg.wait_for_timeout(800)
     ok(pg.locator("#lists .mtgrow").count()==0,"menu ⋯ de la liste : visite supprimée")
     b.close()

@@ -38,14 +38,14 @@ with sync_playwright() as pw:
     v.locator("[data-x]").click();pg.wait_for_timeout(1800)
     row=pg.locator("#lists .mtgrow").first
     print("   ",row.inner_text().replace("\n"," | "))
-    ok("Préparée" in row.inner_text() and "4 éléments à voir" in row.inner_text() and "28 oct" in row.inner_text().lower(),"liste : visite préparée, datée")
+    ok("Préparé" in row.inner_text() and "4 éléments à voir" in row.inner_text() and "28 oct" in row.inner_text().lower(),"liste : visite préparée, datée")
     r=pg.evaluate("window.__db.visits")[0]
     ok(r["status"]=="prep" and len(r["items"])==4 and r["prep"]["location"].startswith("Site de Lyon"),"préparation enregistrée en ligne")
     # --- sur site, téléphone
     pg.set_viewport_size({"width":390,"height":844});pg.wait_for_timeout(200)
     pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.wait_for_timeout(200)
-    ok("Préparée" in pg.locator(".phtile",has_text="Visites").inner_text(),"accueil du projet : visite préparée")
-    pg.locator(".phtile",has_text="Visites").click();pg.locator("#lists .mtgrow .ttl").first.click();pg.wait_for_timeout(300)
+    ok("Préparé" in pg.locator(".phtile",has_text="Déplacements").inner_text(),"accueil du projet : visite préparée")
+    pg.locator(".phtile",has_text="Déplacements").click();pg.locator("#lists .mtgrow .ttl").first.click();pg.wait_for_timeout(300)
     v.locator("[data-start]").click();pg.wait_for_timeout(300)
     ok(v.locator(".vistile:not(.add)").count()==6 and v.locator(".vistile",has_text="Inventaire").count()==0,"visite démarrée : flux non couverts masqués")
     ok("0/2 vus" in v.locator(".vistile",has_text="Réception").inner_text(),"avancement sur la tuile")
@@ -64,7 +64,7 @@ with sync_playwright() as pw:
     pg.screenshot(path=OUT+"visit_end2.png")
     v.locator('[data-close]').check();v.locator("[data-apply]").click();pg.wait_for_timeout(1500)
     o1=[o for o in pg.evaluate("window.__db.open_points") if o["id"]=="o1"][0]
-    ok("Visite du 28/10/2026" not in o1["answer"] and "Format 100x150" in o1["answer"] and o1["status"]=="closed","réponse ajoutée au point et point levé")
+    ok("Déplacement du 28/10/2026" not in o1["answer"] and "Format 100x150" in o1["answer"] and o1["status"]=="closed","réponse ajoutée au point et point levé")
     o2=[o for o in pg.evaluate("window.__db.open_points") if o["id"]=="o2"][0]
     ok(o2["status"]=="open" and o2["answer"]=="","point non vu : reste ouvert, inchangé")
     pg.evaluate("()=>{const d=Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype,'srcdoc');Object.defineProperty(HTMLIFrameElement.prototype,'srcdoc',{set(x){window.__lastPrint=x;d.set.call(this,x)},get(){return d.get.call(this)}})}")

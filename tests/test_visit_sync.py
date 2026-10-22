@@ -24,7 +24,7 @@ with sync_playwright() as pw:
     pg.add_init_script("if(!sessionStorage.getItem('db'))localStorage.setItem('todo-mode','cloud');else{const d=JSON.parse(sessionStorage.getItem('db'));Object.keys(d).forEach(k=>window.__db[k]=d[k]);window.__storage={}}")
     pg.goto(APP);pg.wait_for_timeout(1200)
     def open_visits():
-        pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.locator(".phtile",has_text="Visites").click();pg.wait_for_timeout(300)
+        pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.locator(".phtile",has_text="Déplacements").click();pg.wait_for_timeout(300)
     open_visits()
     pg.locator("#lists [data-new]").click();pg.wait_for_timeout(400)
     ok(pg.evaluate("window.__persist")>=1,"C : stockage persistant demandé au navigateur")
@@ -86,7 +86,7 @@ with sync_playwright() as pw:
     v.locator('[data-k="plannedAt"]').fill(when);v.locator('[data-k="plannedAt"]').dispatch_event("change");v.locator("[data-x]").click();pg.wait_for_timeout(300)
     pg.locator(".vbtn",has_text="Agenda de la semaine").click();pg.wait_for_timeout(500)
     ag=pg.locator(".day.today .visag")
-    ok(ag.count()==1 and "Préparée" in ag.inner_text() and "14:00" in ag.inner_text(),"F : visite préparée affichée dans l'agenda à sa date")
+    ok(ag.count()==1 and "Préparé" in ag.inner_text() and "14:00" in ag.inner_text(),"F : visite préparée affichée dans l'agenda à sa date")
     ag.click();pg.wait_for_timeout(300)
     ok(pg.locator("#visview [data-start]").is_visible(),"F : clic dans l'agenda — ouverture de la visite")
     pg.locator("#visview [data-start]").click();pg.locator("#visview .vistile",has_text="Stockage").click()

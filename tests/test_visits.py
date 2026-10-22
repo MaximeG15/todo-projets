@@ -27,8 +27,8 @@ with sync_playwright() as pw:
     # ouvrir le projet depuis le menu (téléphone)
     pg.locator(".bnav [data-b=menu]").click();pg.wait_for_timeout(200)
     pg.locator(".pjt",has_text="Projet Alpha").click();pg.wait_for_timeout(300)
-    pg.locator(".phtile",has_text="Visites").click();pg.wait_for_timeout(300)
-    ok("Préparer une visite" in pg.locator("#lists").inner_text(),"onglet Visites")
+    pg.locator(".phtile",has_text="Déplacements").click();pg.wait_for_timeout(300)
+    ok("Préparer un déplacement" in pg.locator("#lists").inner_text(),"onglet Visites")
     pg.locator("#lists [data-new]").click();pg.wait_for_timeout(500)
     v=pg.locator("#visview")
     ok(v.is_visible() and v.locator(".vistile:not(.add)").count()==7 and v.locator(".vistile",has_text="Généralités").count()==0,"nouvelle visite : 7 flux par défaut, sans « Généralités »")
@@ -126,7 +126,7 @@ with sync_playwright() as pw:
     pg.screenshot(path=OUT+"visit_end.png")
     v.locator("[data-apply]").click();pg.wait_for_timeout(1500)
     pts=[o for o in pg.evaluate("window.__db.open_points||[]") if o["project_id"]=="p1"]
-    tks=[t for t in pg.evaluate("window.__db.tasks") if "Issu de la visite" in (t.get("note") or "")]
+    tks=[t for t in pg.evaluate("window.__db.tasks") if "Issu du déplacement" in (t.get("note") or "")]
     ok(any(o["text"].startswith("Question test") and o["theme"]=="Réception" and o["owner"]=="client" for o in pts),"question devenue point ouvert (thème = flux)")
     ok(len(tks)==1 and tks[0]["title"]=="Récupérer un exemple de bon de livraison","action devenue tâche")
     ok("déjà été créés" in v.inner_text(),"pas de doublon possible")
@@ -135,17 +135,17 @@ with sync_playwright() as pw:
     pr=pg.evaluate("window.__lastPrint||''")
     ok("Réception" in pr and pr.count("<img")==2 and "Quai 3" in pr,"export PDF avec photos et légendes")
     v.locator("[data-done]").click();pg.wait_for_timeout(500)
-    ok(v.is_hidden() and pg.locator("#lists .mtgrow",has_text="Terminée").count()==1,"bilan : « Clôturer la visite » ramène à la liste, visite terminée")
+    ok(v.is_hidden() and pg.locator("#lists .mtgrow",has_text="Terminé").count()==1,"bilan : « Clôturer la visite » ramène à la liste, visite terminée")
     # rechargement : tout est relu, photos comprises
     pg.reload();pg.wait_for_timeout(1500)
-    pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.locator(".phtile",has_text="Visites").click();pg.wait_for_timeout(800)
+    pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.locator(".phtile",has_text="Déplacements").click();pg.wait_for_timeout(800)
     pg.locator("#lists .mtgrow .ttl").first.click();pg.wait_for_timeout(300)
     pg.locator("#visview .vistile",has_text="Réception").click();pg.wait_for_timeout(800)
     ok(pg.locator("#visview .vph img[src^='blob:']").count()==2,"après rechargement : notes et photos")
     # suppression : photos retirées du stockage
     pg.locator("#visview [data-back]").click();pg.locator("#visview [data-back]").click();pg.wait_for_timeout(300)
     pg.locator("#lists .mtgrow .ttl").first.click();pg.wait_for_timeout(300)
-    RESP["Visite d'analyse"]="Supprimer la visite"
+    RESP["Visite d'analyse"]="Supprimer le déplacement"
     pg.locator("#visview [data-vm]").click();pg.wait_for_timeout(2500)
     ok(pg.locator("#lists .mtgrow").count()==0 and not pg.evaluate("Object.keys(window.__storage||{})"),"visite supprimée avec ses photos")
     b.close()
@@ -159,7 +159,7 @@ with sync_playwright() as pw:
     pg.add_init_script("""window.__testGallery=()=>Promise.all([1,2,3].map(i=>new Promise(r=>{const c=document.createElement('canvas');c.width=1200;c.height=900;const g=c.getContext('2d');g.fillStyle=['#2F7D5B','#1D4E78','#B42318'][i-1];g.fillRect(0,0,1200,900);c.toBlob(b=>r(new File([b],'g'+i+'.jpg',{type:'image/jpeg'})),'image/jpeg',0.9)})));""")
     pg.add_init_script("if(!localStorage.getItem('__seed')){localStorage.setItem('todo-projets',%s);localStorage.setItem('todo-mode','local');localStorage.setItem('__seed','1')}"%json.dumps(json.dumps(data)))
     pg.goto(APP);pg.wait_for_timeout(500)
-    pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Local").click();pg.locator(".phtile",has_text="Visites").click()
+    pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Local").click();pg.locator(".phtile",has_text="Déplacements").click()
     pg.locator("#lists [data-new]").click();pg.wait_for_timeout(300)
     v=pg.locator("#visview");v.locator(".vistile",has_text="Stockage").click()
     v.locator("[data-cam]").click();pg.wait_for_timeout(1200);pg.locator(".visedit [data-ok]").click();pg.wait_for_timeout(800)
@@ -187,18 +187,18 @@ with sync_playwright() as pw:
     pg.locator("dialog.vissheet [data-f]",has_text="Réception").click();pg.wait_for_timeout(300)
     ok("3 photos" in v.locator(".vistile",has_text="Réception").inner_text(),"accueil : photos de la galerie rangées dans le flux choisi")
     # clôture depuis le menu ⋯ de la visite, puis reprise depuis la liste
-    SHEET["sheet"]="Clôturer la visite"
+    SHEET["sheet"]="Clôturer le déplacement"
     v.locator("[data-vm]").click();pg.wait_for_timeout(600)
-    ok(v.is_hidden() and pg.locator("#lists .mtgrow",has_text="Terminée").count()==1,"menu ⋯ : visite clôturée, retour à la liste")
-    SHEET["sheet"]="Reprendre la visite"
+    ok(v.is_hidden() and pg.locator("#lists .mtgrow",has_text="Terminé").count()==1,"menu ⋯ : visite clôturée, retour à la liste")
+    SHEET["sheet"]="Reprendre le déplacement"
     pg.locator("#lists .mtgrow .ttl").first.click();pg.wait_for_timeout(300);v.locator("[data-vm]").click();pg.wait_for_timeout(400)
     v.locator("[data-back]").click();pg.wait_for_timeout(300)
     ok(pg.locator("#lists .mtgrow",has_text="En cours").locator("[data-fin]").count()==1,"liste : bouton « Clôturer » sur une visite en cours")
     pg.locator("#lists [data-fin]").click();pg.wait_for_timeout(400)
-    ok(pg.locator("#lists .mtgrow",has_text="Terminée").count()==1,"liste : visite clôturée sans l'ouvrir")
+    ok(pg.locator("#lists .mtgrow",has_text="Terminé").count()==1,"liste : visite clôturée sans l'ouvrir")
     pg.locator("#lists .mtgrow .ttl").first.click();pg.wait_for_timeout(300)
     pg.reload();pg.wait_for_timeout(800)
-    pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Local").click();pg.locator(".phtile",has_text="Visites").click();pg.wait_for_timeout(500)
+    pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Local").click();pg.locator(".phtile",has_text="Déplacements").click();pg.wait_for_timeout(500)
     pg.locator("#lists .mtgrow .ttl").first.click();pg.locator("#visview .vistile",has_text="Stockage").click();pg.wait_for_timeout(600)
     ok(pg.locator("#visview .visnote",has_text="Note locale").locator("img[src^='blob:']").count()==1,"mode local : note et photo conservées après rechargement")
     b.close()

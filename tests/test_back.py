@@ -23,7 +23,7 @@ with sync_playwright() as pw:
     back();ok(mode()=="projects","retour : écran Projets")
     back();ok(mode()==start,"retour : écran de départ (%s)"%start)
     # visite : flux puis accueil de la visite puis fermeture
-    pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.locator(".phtile",has_text="Visites").click();pg.wait_for_timeout(200)
+    pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.locator(".phtile",has_text="Déplacements").click();pg.wait_for_timeout(200)
     on=pg.locator("#lists [data-new]")
     pg.evaluate("window.__testDialog=null")
     on.click();pg.wait_for_timeout(300);pg.locator("dialog.uidlg button",has_text="Démarrer").click();pg.wait_for_timeout(400)
