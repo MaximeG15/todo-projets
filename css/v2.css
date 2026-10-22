@@ -742,3 +742,6 @@ span.rt{display:inline}
 @media (prefers-reduced-motion:reduce){.ddm.ddmore .menu,.ddmore[open] .ddbg{animation:none}}
 @media (min-width:761px){.ddm .menu .ddrow.mobonly,.ddm .menu .mh.mobonly{display:none}}
 @media (max-width:760px){.ddmore .menu button.ddrow,.ddmore .menu button.ddrow.mobonly{min-height:50px;padding:4px 8px}}
+/* déplacement sur plusieurs jours */
+.vdd b .vddto{font-style:normal;font-size:.62em;font-weight:700;color:var(--muted);margin-left:1px}
+.visdur{margin:-2px 0 2px;font-size:13.5px}
