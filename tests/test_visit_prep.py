@@ -38,7 +38,7 @@ with sync_playwright() as pw:
     v.locator("[data-x]").click();pg.wait_for_timeout(1800)
     row=pg.locator("#lists .mtgrow").first
     print("   ",row.inner_text().replace("\n"," | "))
-    ok("Préparé" in row.inner_text() and "4 éléments à voir" in row.inner_text() and "28 oct" in row.inner_text().lower(),"liste : visite préparée, datée")
+    ok("Préparé" in row.inner_text() and "4 éléments à voir" in row.inner_text() and "du 28 au 29 oct. (2 jours)" in row.inner_text().lower(),"liste : visite préparée, datée sur 2 jours par défaut")
     r=pg.evaluate("window.__db.visits")[0]
     ok(r["status"]=="prep" and len(r["items"])==4 and r["prep"]["location"].startswith("Site de Lyon"),"préparation enregistrée en ligne")
     # --- sur site, téléphone

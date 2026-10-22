@@ -3999,9 +3999,17 @@
     if(n<2)return a.toLocaleDateString("fr-FR",long?{weekday:"long",day:"numeric",month:"long"}:{weekday:"short",day:"numeric",month:"short"});
     const same=a.getMonth()===b.getMonth()&&a.getFullYear()===b.getFullYear();
     return `du ${a.toLocaleDateString("fr-FR",long?{weekday:"long",day:"numeric",...(same?{}:{month:"long"})}:{day:"numeric",...(same?{}:{month:"short"})})} au ${b.toLocaleDateString("fr-FR",long?{weekday:"long",day:"numeric",month:"long"}:{day:"numeric",month:"short"})} (${n} jours)`};
+  // Types de déplacement : visite d'analyse fonctionnelle (par flux), dry run (à venir), mise en service (compte rendu par jour)
+  const VIS_TYPES={af:{l:"Visite d'analyse fonctionnelle",days:2,d:"Notes par flux (réception, stockage, préparation…), éléments à voir, bilan en points ouverts et tâches."},
+    dry:{l:"Dry run",days:1,soon:true,d:"Répétition générale avant la mise en service."},
+    mes:{l:"Mise en service",days:5,d:"Un compte rendu par jour : actions réalisées, problèmes, actions à venir, statut et ressentis. Notes, photos et vocaux du jour."}};
+  const visKind=v=>(v&&v.prep&&VIS_TYPES[v.prep.type]&&v.prep.type)||"af";
+  const isMes=v=>visKind(v)==="mes";
+  const visDays=v=>{const d0=new Date(visStartDay(v)+"T12:00");return Array.from({length:visNDays(v)},(_,j)=>iso(addDays(d0,j)))};
+  const dayLbl=(d,long)=>new Date(d+"T12:00").toLocaleDateString("fr-FR",long?{weekday:"long",day:"numeric",month:"long"}:{weekday:"short",day:"numeric",month:"short"});
   const visList=pid=>Object.values(vis.map).map(x=>x.v).filter(v=>v.projectId===pid&&!v.deletedAt).sort((a,b)=>((b.status==="prep")-(a.status==="prep"))||(a.status==="prep"?visDate(a)-visDate(b):visDate(b)-visDate(a)));
   const visFlows=v=>(v.flows||[]).filter(f=>!f.off);
-  const visItems=(v,fid)=>(v.items||[]).filter(i=>i.flow===fid);
+  const visItems=(v,fid)=>(v.items||[]).filter(i=>i.flow===fid&&!i.mk);
   const themeKey=x=>norm(x||"").replace(/s$/,"");
   // Reprend dans « À voir » les points ouverts du projet attendant le client, dont le thème correspond au flux
   function visSeed(v){
@@ -4187,13 +4195,48 @@
   }
   async function visAudioUrl(v,a){if(vis.urls[a.id])return vis.urls[a.id];const b=await visAudioBlob(v,a);return b?(vis.urls[a.id]=URL.createObjectURL(b)):""}
   // ---------- Création, suppression ----------
+  // Nouveau déplacement : type, intitulé, premier et dernier jour
+  function visNewDialog(p,prep){
+    const today=iso(new Date());
+    if(typeof window.__testDialog==="function")return Promise.resolve(window.__testDialog({type:"visnew",message:"Nouveau déplacement",options:Object.keys(VIS_TYPES)})).then(r=>{
+      if(r&&r.ok===false)return null;let v=r&&r.v;if(typeof v==="string")v={title:v};v=v||{};const type=VIS_TYPES[v.type]&&!VIS_TYPES[v.type].soon?v.type:"af";
+      const start=v.start||(prep?"":today);return {type,title:v.title||VIS_TYPES[type].l,start,end:v.end||(start?iso(addDays(new Date(start+"T12:00"),VIS_TYPES[type].days-1)):"")}});
+    return new Promise(res=>{
+      let type="af", touched=false, endTouched=false;
+      const d=document.createElement("dialog");d.className="uidlg vissheet visnewdlg";d.setAttribute("aria-label","Nouveau déplacement");
+      d.innerHTML=`<form method="dialog"><h3>Nouveau déplacement</h3>
+        <div class="vtypes" role="radiogroup" aria-label="Type de déplacement">${Object.entries(VIS_TYPES).map(([k,t])=>`<button type="button" role="radio" class="vtype${t.soon?" soon":""}" data-ty="${k}" aria-checked="${k===type}"${t.soon?' disabled aria-disabled="true"':""}><span class="vtyi" aria-hidden="true">${k==="mes"?VI.rocket:k==="dry"?VI.flask:WH_SVG}</span><span class="vtyt"><b>${esc(t.l)}${t.soon?` <em>Bientôt disponible</em>`:""}</b><span>${esc(t.d)}</span>${t.soon?"":`<small>${plural(t.days,"jour")} par défaut</small>`}</span></button>`).join("")}</div>
+        <label class="uifld"><span>Intitulé</span><input type="text" data-k="title" maxlength="300"></label>
+        <div class="visgrid"><label class="uifld"><span>Premier jour</span><input type="date" data-k="start"${prep?"":" disabled"}></label><label class="uifld"><span>Dernier jour</span><input type="date" data-k="end"></label></div>
+        <p class="muted vnhint"></p>
+        <div class="uibtns"><button type="button" class="btn ghost" data-x>Annuler</button><button type="button" class="btn primary" data-ok>${prep?"Préparer":"Démarrer"}</button></div></form>`;
+      document.body.appendChild(d);
+      const q=k=>d.querySelector(`[data-k="${k}"]`), ti=q("title"), st=q("start"), en=q("end"), hint=d.querySelector(".vnhint");
+      st.value=prep?"":today;
+      const paint=()=>{d.querySelectorAll("[data-ty]").forEach(b=>b.setAttribute("aria-checked",b.dataset.ty===type));if(!touched)ti.value=VIS_TYPES[type].l;
+        if(!endTouched){en.value=st.value?iso(addDays(new Date(st.value+"T12:00"),VIS_TYPES[type].days-1)):""}en.min=st.value||"";
+        hint.textContent=st.value?"":`Sans date, le dernier jour sera calculé (${plural(VIS_TYPES[type].days,"jour")}) quand vous fixerez le début.`};
+      paint();
+      d.querySelectorAll("[data-ty]").forEach(b=>b.onclick=()=>{if(b.disabled)return;type=b.dataset.ty;endTouched=false;paint()});
+      ti.oninput=()=>{touched=true};st.onchange=()=>{if(en.value&&st.value&&en.value<st.value)endTouched=false;paint()};en.onchange=()=>{endTouched=true;if(en.value&&st.value&&en.value<st.value){en.value="";endTouched=false;paint()}};
+      const close=v=>{try{d.close()}catch(e){}d.remove();res(v)};
+      d.addEventListener("cancel",e=>{e.preventDefault();close(null)});
+      d.querySelector("[data-x]").onclick=()=>close(null);
+      d.querySelector("[data-ok]").onclick=()=>close({type,title:ti.value.trim()||VIS_TYPES[type].l,start:st.value,end:en.value});
+      d.querySelector("form").onsubmit=e=>e.preventDefault();
+      if(d.showModal)d.showModal();else d.setAttribute("open","");
+      setTimeout(()=>{const b=d.querySelector('[data-ty="af"]');if(b)b.focus()},30);
+    });
+  }
   async function visNew(p,prep){
-    const t=await uiPrompt("Intitulé du déplacement","Visite d'analyse fonctionnelle",{ok:prep?"Préparer le déplacement":"Démarrer le déplacement"});
-    if(t==null)return;
-    const now=Date.now();
-    const v={id:newId(),projectId:p.id,title:(t.trim()||"Déplacement sur site").slice(0,300),startedAt:prep?null:now,endedAt:null,status:prep?"prep":"open",flows:VIS_FLOWS.map(n=>({id:uid(),name:n})),notes:[],items:[],prep:{participants:defaultParticipants(p.id)},createdAt:now};
+    const r=await visNewDialog(p,prep);
+    if(!r)return;
+    const now=Date.now(), mes=r.type==="mes";
+    const start=prep?(r.start?new Date(r.start+"T09:00").getTime():null):null, s0=prep?r.start:iso(new Date());
+    const end=s0&&r.end&&r.end>s0?r.end:null;
+    const v={id:newId(),projectId:p.id,title:(r.title||"Déplacement sur site").slice(0,300),startedAt:prep?null:now,endedAt:null,status:prep?"prep":"open",flows:mes?[]:VIS_FLOWS.map(n=>({id:uid(),name:n})),notes:[],items:[],prep:{participants:defaultParticipants(p.id),type:r.type,days:VIS_TYPES[r.type].days,...(start?{plannedAt:start}:{}),...(end?{endDay:end}:{})},createdAt:now};
     visPersist();
-    if(prep){const n=visSeed(v);if(n)toast(`${plural(n,"point ouvert repris","points ouverts repris")} dans « À voir », par flux.`)}
+    if(prep&&!mes){const n=visSeed(v);if(n)toast(`${plural(n,"point ouvert repris","points ouverts repris")} dans « À voir », par flux.`)}
     visPut(v);visOpen(v);render();
   }
   async function visDelete(v){
@@ -4205,11 +4248,11 @@
     toast("Déplacement supprimé.");
   }
   // ---------- Écran de visite ----------
-  let visCur=null, visScreen="home", visFlowId=null, visType="note", visStage=[], visText="", visReply=null;
+  let visCur=null, visScreen="home", visFlowId=null, visType="note", visStage=[], visText="", visReply=null, visDayF="", visMesDay=null;
   function visOpen(v,flowId){if(vis.loaded)setTimeout(()=>visLoad(true),0);visCur=JSON.parse(JSON.stringify(v));visCur.items=visCur.items||[];visCur.prep=visCur.prep||{};
     // flux « Généralités » retiré des flux par défaut : on l'enlève des visites en cours s'il est resté vide
     if(visCur.status!=="done"){const g=(visCur.flows||[]).filter(f=>f.name==="Généralités"&&!visNotes(visCur,f.id).length&&!visCur.items.some(i=>i.flow===f.id)).map(f=>f.id);if(g.length&&visCur.flows.length>g.length)visQuiet(x=>{x.flows=x.flows.filter(f=>!g.includes(f.id))})}
-    visScreen=v.status==="prep"?"prep":flowId?"flow":"home";visFlowId=flowId||null;visStage=[];visText="";visReply=null;renderVisit()}
+    visScreen=v.status==="prep"?"prep":flowId?"flow":"home";visFlowId=flowId||null;visStage=[];visText="";visReply=null;visDayF="";visMesDay=null;if(isMes(visCur))visType="note";renderVisit()}
   async function visClose(){
     if(visRec&&visCur&&visRec.vid===visCur.id){if(!await uiConfirm("Un enregistrement est en cours. L'arrêter et le garder avant de quitter le déplacement ?",{ok:"Arrêter et quitter"}))return;recStop();await new Promise(r=>setTimeout(r,400))}
     auStopAll();
@@ -4232,7 +4275,7 @@
     if(!o){o=document.createElement("div");o.id="visview";o.setAttribute("role","dialog");o.setAttribute("aria-modal","true");document.body.appendChild(o)}
     document.body.classList.add("visopen");
     const v=visCur, p=proj(v.projectId)||{name:""};
-    o.className="visv";o.setAttribute("aria-label",v.title);
+    o.className="visv"+(isMes(v)?" mes":"");o.setAttribute("aria-label",v.title);
     if(visScreen==="flow"&&!visFlows(v).some(f=>f.id===visFlowId))visScreen="home";
     if(visScreen==="prep")visPrepScreen(o,v,p);else if(visScreen==="flow")visFlowScreen(o,v,p);else if(visScreen==="end")visEndScreen(o,v,p);else visHomeScreen(o,v,p);
     o.classList.remove("recording");if(visRec&&visScreen!=="prep"&&visScreen!=="end")recPanel(o);
@@ -4256,10 +4299,10 @@
   function visQuick(src){
     visCapture(async photos=>{
       if(!photos.length)return;
-      const fid=await visPickFlow("Dans quel flux ranger "+(photos.length>1?"ces photos ?":"cette photo ?"));
+      const fid=isMes(visCur)?mesTodayFlow():await visPickFlow("Dans quel flux ranger "+(photos.length>1?"ces photos ?":"cette photo ?"));
       if(!fid){visDropPhotos(visCur,photos.map(x=>x.id));return}
       visSet(x=>x.notes.push({id:uid(),flow:fid,type:"note",text:"",photos,at:Date.now(),conv:null}));
-      toast(`${plural(photos.length,"photo")} ajoutée${photos.length>1?"s":""} au flux « ${(visCur.flows.find(f=>f.id===fid)||{}).name} ».`);
+      toast(isMes(visCur)?`${plural(photos.length,"photo")} ajoutée${photos.length>1?"s":""} à la journée.`:`${plural(photos.length,"photo")} ajoutée${photos.length>1?"s":""} au flux « ${(visCur.flows.find(f=>f.id===fid)||{}).name} ».`);
     },src);
   }
   // ---------- Visite 2.0 : en-tête clair, accueil, flux, vue ordinateur en trois colonnes ----------
@@ -4274,6 +4317,9 @@
     target:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="4"></circle></svg>`,
     pin:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"></path><circle cx="12" cy="9.5" r="2.5"></circle></svg>`,
     users:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 4a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM22 19v-1a4 4 0 0 0-3-3.9M16 4.1a3.5 3.5 0 0 1 0 6.8"></path></svg>`,
+    rocket:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19l3-1 8.5-8.5a3.5 3.5 0 0 0-5-5L3 13l-1 3zM14 6l4 4M6 14l4 4"></path></svg>`,
+    flask:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6L4.5 18.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3M7 15h10"></path></svg>`,
+    copy:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9h11v11H9zM5 15H4V4h11v1"></path></svg>`,
     doc:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 13h6M9 17h6"></path></svg>`
   };
   const visMoreBtn=(attr,label)=>`<button type="button" class="visback vismb" ${attr} aria-label="${label}">${VI.more}</button>`;
@@ -4281,7 +4327,7 @@
   const visHead=(backAria,backTxt,title,sub,acts,below)=>`<header class="vish"><div class="visrow"><button type="button" class="visback" data-back aria-label="${backAria}">${VI.back}<span>${esc(backTxt)}</span></button><div class="vist"><b>${esc(title)}</b><span>${sub}</span></div><span class="vsp"></span><div class="visst" role="status"></div>${acts||""}</div>${below||""}</header>`;
   const visDay=v=>visRangeTxt(v,true);
   const visSub=(v,p)=>`${esc(p.name)} · ${esc(visDay(v))}${v.startedAt&&v.status!=="prep"?` · démarré à ${hm(v.startedAt)}`:""}${v.status==="done"?" · terminé":""}`;
-  const visItemsOn=v=>{const on=new Set(visFlows(v).map(f=>f.id));return (v.items||[]).filter(i=>on.has(i.flow))};
+  const visItemsOn=v=>{const on=new Set(visFlows(v).map(f=>f.id));return (v.items||[]).filter(i=>on.has(i.flow)&&!i.mk)};
   function visCounts(ns){
     const ph=ns.reduce((k,x)=>k+(x.photos||[]).length,0), q=ns.filter(x=>x.type==="question").length, a=ns.filter(x=>x.type==="action").length, au=ns.filter(x=>x.audio).length;
     return {n:ns.length,ph,q,a,au};
@@ -4354,7 +4400,8 @@
     o.querySelectorAll("[data-prepv]").forEach(b=>b.onclick=()=>{visScreen="prep";renderVisit()});
     const qk=o.querySelector("[data-quick]");if(qk)qk.onclick=()=>visQuick("camera");
     const qg=o.querySelector("[data-qgal]");if(qg)qg.onclick=()=>visQuick("gallery");
-    const qr=o.querySelector("[data-qrec]");if(qr)qr.onclick=async()=>{const fid=await visPickFlow("Dans quel flux ranger l'enregistrement ?");if(!fid)return;visScreen="flow";visFlowId=fid;renderVisit();recStart(fid)};
+    const qr=o.querySelector("[data-qrec]");if(qr)qr.onclick=async()=>{const fid=isMes(visCur)?mesTodayFlow():await visPickFlow("Dans quel flux ranger l'enregistrement ?");if(!fid)return;if(!isMes(visCur)){visScreen="flow";visFlowId=fid}renderVisit();recStart(fid)};
+    o.querySelectorAll("[data-dayf]").forEach(b=>b.onclick=()=>{visDayF=b.dataset.dayf;renderVisit()});
     o.querySelectorAll(".visnote [data-more]").forEach(b=>b.onclick=()=>visNoteMenu(b.closest("[data-n]").dataset.n));
     o.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>visViewPhoto(b.dataset.view));
     recFillPlayers(o,v);trBind(o,v);visFillPhotos(o,v);
@@ -4382,6 +4429,7 @@
     const m=o.querySelector(".vism.notes");if(m&&!visReply)m.scrollTop=m.scrollHeight;
   }
   function visHomeScreen(o,v,p){
+    if(isMes(v))return visMesScreen(o,v,p);
     if(visWide())return visDesk(o,v,p,null);
     o.innerHTML=visHead("Quitter le déplacement","Projet",v.title,visSub(v,p),visHomeActs(v))+`<main class="vism vhome">${trBanner(v)}${visGoalCard(v)}${visProgCard(v)}
       <div class="vishd"><h2>Flux</h2><button type="button" class="vislink" data-addf>${VI.plus}Ajouter un flux</button></div>
@@ -4416,22 +4464,23 @@
     if(visWide())return visDesk(o,v,p,visFlowId);
     const f=v.flows.find(x=>x.id===visFlowId), ns=visNotes(v,f.id), its=visItems(v,f.id), rep=visReply&&its.find(i=>i.id===visReply);
     if(visReply&&!rep)visReply=null;
-    o.innerHTML=visHead("Retour aux flux","Déplacement",f.name,esc(visCountTxt(ns)),visMoreBtn("data-fm","Actions sur le flux"),
+    o.innerHTML=visHead(f.day?"Retour à la journée":"Retour aux flux",f.day?"Journée":"Déplacement",f.day?mesDayName(v,f.day):f.name,esc(visCountTxt(ns)),f.day?"":visMoreBtn("data-fm","Actions sur le flux"),
         `<div class="vischips" role="tablist" aria-label="Changer de flux">${visFlows(v).map(x=>`<button type="button" role="tab" aria-selected="${x.id===f.id}" data-f="${esc(x.id)}">${esc(x.name)}</button>`).join("")}</div>`)+
       `<main class="vism notes">${trBanner(v)}${visSeeBox(v,f)}
-        ${ns.length?ns.map(n=>visNoteHtml(n)).join(""):`<p class="visempty">Aucune note pour ce flux. Écrivez ou prenez une photo ci-dessous.</p>`}</main>${visComposer(rep)}`;
+        ${isMes(v)?"":visDayBar(v)}${visNotesList(v,ns)}</main>${visComposer(rep)}`;
     o.querySelector("[data-back]").onclick=()=>{visScreen="home";renderVisit()};
     const chip=o.querySelector('.vischips [aria-selected="true"]');if(chip)chip.scrollIntoView({block:"nearest",inline:"center"});
     visBindCommon(o,v);visBindFlow(o,v,f);
   }
   // Ordinateur : flux à gauche, notes et saisie au centre, « À voir » et infos à droite
   function visDesk(o,v,p,fid){
+    if(isMes(v)){const fx=fid&&v.flows.find(x=>x.id===fid);if(fx&&fx.day)visMesDay=fx.day;visScreen="home";return visMesScreen(o,v,p)}
     const f=fid?v.flows.find(x=>x.id===fid):null;
     let center;
     if(f){
       const ns=visNotes(v,f.id), rep=visReply&&visItems(v,f.id).find(i=>i.id===visReply);if(visReply&&!rep)visReply=null;
       center=`<div class="visdch"><div><h2>${esc(f.name)}</h2><span>${esc(visCountTxt(ns))}</span></div>${visMoreBtn("data-fm","Actions sur le flux")}</div>
-        <main class="vism notes">${ns.length?ns.map(n=>visNoteHtml(n)).join(""):`<p class="visempty">Aucune note pour ce flux. Écrivez ou prenez une photo ci-dessous.</p>`}</main>${visComposer(rep)}`;
+        ${visDayBar(v)}<main class="vism notes">${visNotesList(v,ns)}</main>${visComposer(rep)}`;
     }else{
       const recent=(v.notes||[]).filter(n=>visFlows(v).some(x=>x.id===n.flow)).slice().sort((a,b)=>b.at-a.at).slice(0,6);
       center=`<main class="vism vhome">${visGoalCard(v)}<div class="vishd"><h2>Dernières notes</h2></div>${recent.length?recent.map(n=>visNoteHtml(n,true)).join(""):`<p class="visempty">Choisissez un flux à gauche pour prendre des notes et des photos.</p>`}</main>${visQuickBar()}`;
@@ -4655,7 +4704,7 @@
     const isOpen=f=>!f.off&&(f.id in visPrepOpen?visPrepOpen[f.id]:visItems(v,f.id).length>0);
     const acts=wide?(live?`<button type="button" class="btn primary" data-go>Revenir au déplacement</button>`:`<button type="button" class="btn" data-x>Fermer</button><button type="button" class="btn primary" data-start>${WH_SVG}Démarrer le déplacement</button>`):"";
     o.innerHTML=visHead(live?"Retour au déplacement":"Fermer la préparation",live?"Déplacement":"Projet",live?"Préparation":"Préparer le déplacement",`${esc(v.title)} · ${esc(p.name)}`,acts+visMoreBtn("data-pm","Actions sur le déplacement"))+`
-      <main class="vism prep"><div class="visprepg">
+      <main class="vism prep${isMes(v)?" mesprep":""}"><div class="visprepg">
         <div class="vpc1">
         <section class="viscard"><h3>Informations</h3>
           <div class="visgrid"><label class="uifld"><span>Début (date et heure)</span><input type="datetime-local" data-k="plannedAt" value="${dtLocal(pr.plannedAt)}"></label>
@@ -4699,6 +4748,7 @@
         if(k==="endDay"&&el.value&&!st){el.value="";toast("Indiquez d'abord la date de début.");return}
         ed.min=st;if(ed.value&&st&&ed.value<st){ed.value="";if(k==="endDay")toast("Le dernier jour doit être après le début.")}}
       visQuiet(y=>{y.prep=y.prep||{};if(k==="plannedAt")y.prep.plannedAt=el.value?new Date(el.value).getTime():null;else if(k==="endDay")y.prep.endDay=el.value||null;else y.prep[k]=el.value.trim();
+        if(k==="plannedAt"&&y.prep.plannedAt&&!y.prep.endDay&&(y.prep.days||1)>1){y.prep.endDay=iso(addDays(new Date(y.prep.plannedAt),y.prep.days-1));const ed=o.querySelector('[data-k="endDay"]');if(ed)ed.value=y.prep.endDay}
         if(y.prep.endDay&&(!y.prep.plannedAt||y.prep.endDay<=iso(new Date(y.prep.plannedAt))))y.prep.endDay=null;
         const du=o.querySelector("[data-dur]");if(du){const multi=y.prep.plannedAt&&visNDays(y)>1;du.hidden=!multi;du.textContent=multi?cap(visRangeTxt(y,true)):""}})});
     o.querySelectorAll("[data-pp]").forEach(cb=>cb.onchange=()=>visQuiet(y=>{const c=cand[+cb.dataset.pp];y.prep.participants=(y.prep.participants||[]).filter(z=>norm(z.name)!==norm(c.name));if(cb.checked)y.prep.participants.push({name:c.name,side:c.side,...(c.email?{email:c.email}:{})})}));
@@ -4884,16 +4934,188 @@
     toast([nP?plural(nP,"point ouvert créé","points ouverts créés"):"",nT?plural(nT,"tâche créée","tâches créées"):"",nA?`${plural(nA,"réponse ajoutée","réponses ajoutées")} aux points${nC?` (${plural(nC,"levé","levés")})`:""}`:""].filter(Boolean).join(", ")+".");
   }
   async function visPdf(v){
+    if(isMes(v))return mesPdf(v,null);
     const p=proj(v.projectId)||{name:""};
     const urls={};await Promise.all(v.notes.flatMap(n=>(n.photos||[]).map(async ph=>{urls[ph.id]=await visPhotoUrl(v,ph.id)})));
     const missing=Object.values(urls).filter(u=>!u).length;
     const its=v.items||[], pr=v.prep||{};
     const sec=visFlows(v).map(f=>{const ns=visNotes(v,f.id), it=visItems(v,f.id);if(!ns.length&&!it.length)return "";
-      return `<section><h2>${esc(f.name)}</h2>${it.length?`<ul class="it">${it.map(i=>`<li class="${i.seen?"ok":"ko"}">${i.seen?"Vu":"Non vu"} · ${i.kind==="point"?esc(i.label||"Point ouvert")+" – ":""}${esc(i.text)}</li>`).join("")}</ul>`:""}${ns.map(n=>`<div class="n"><div class="h"><span class="t ${n.type}">${(NTYPE[n.type]||NTYPE.note)[0]}</span> ${hm(n.at)}${n.item&&its.find(i=>i.id===n.item)?` · réponse à : ${esc(its.find(i=>i.id===n.item).text)}`:""}</div>${n.text?`<div class="rtx">${rtHtml(n.text)}</div>`:""}${n.audio?`<p class="au">Enregistrement de ${mmss(n.audio.dur||0)}${n.tr?" – transcription automatique :":" (non transcrit)"}</p>${n.tr?`<p class="tr">${esc(n.tr.text).replace(/\n/g,"<br>")}</p>`:""}`:""}${(n.photos||[]).length?`<div class="ph">${n.photos.map(ph=>urls[ph.id]?`<figure><img src="${urls[ph.id]}" alt=""><figcaption>${esc(ph.caption||"")}</figcaption></figure>`:"").join("")}</div>`:""}</div>`).join("")}</section>`}).join("");
-    const css=`body{font-family:Arial,sans-serif;color:#16232B;margin:0;font-size:11pt}h1{font-size:18pt;margin:0}.sub{color:#51646F;margin:4px 0 16px}h2{font-size:13pt;color:#1D4E78;border-bottom:1px solid #C7D1D8;padding-bottom:3px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.03em}.n{margin:0 0 10px;break-inside:avoid}.au{font-size:9.5pt;color:#4B3A8C;font-weight:bold;margin:2px 0}.tr{font-style:italic;color:#3A4B55;margin:2px 0 4px}.h{font-size:9pt;color:#51646F}.t{font-weight:bold;padding:1px 6px;border-radius:8px;background:#EEF1F3}.t.question{background:#DCEAF7;color:#1D4E78}.t.action{background:#FFF4CC;color:#6B5200}p{margin:3px 0}.ph{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}figure{margin:0;width:48%;break-inside:avoid}figure img{width:100%;border-radius:4px}figcaption{font-size:9pt;color:#51646F}.it{margin:0 0 10px;padding-left:18px;font-size:10pt}.it li.ok{color:#1F5C43}.it li.ko{color:#9A3412}.meta{display:grid;grid-template-columns:110px 1fr;gap:3px 10px;margin:0 0 14px;font-size:10pt}.meta b{color:#51646F;font-weight:normal}@page{margin:15mm}`;
+      return `<section><h2>${esc(f.name)}</h2>${it.length?`<ul class="it">${it.map(i=>`<li class="${i.seen?"ok":"ko"}">${i.seen?"Vu":"Non vu"} · ${i.kind==="point"?esc(i.label||"Point ouvert")+" – ":""}${esc(i.text)}</li>`).join("")}</ul>`:""}${ns.map((n,ix)=>`${visNDays(v)>1&&(!ix||iso(new Date(ns[ix-1].at))!==iso(new Date(n.at)))?`<h3 class="dy">${esc(visDayHead(v,iso(new Date(n.at))))}</h3>`:""}<div class="n"><div class="h"><span class="t ${n.type}">${(NTYPE[n.type]||NTYPE.note)[0]}</span> ${hm(n.at)}${n.item&&its.find(i=>i.id===n.item)?` · réponse à : ${esc(its.find(i=>i.id===n.item).text)}`:""}</div>${n.text?`<div class="rtx">${rtHtml(n.text)}</div>`:""}${n.audio?`<p class="au">Enregistrement de ${mmss(n.audio.dur||0)}${n.tr?" – transcription automatique :":" (non transcrit)"}</p>${n.tr?`<p class="tr">${esc(n.tr.text).replace(/\n/g,"<br>")}</p>`:""}`:""}${(n.photos||[]).length?`<div class="ph">${n.photos.map(ph=>urls[ph.id]?`<figure><img src="${urls[ph.id]}" alt=""><figcaption>${esc(ph.caption||"")}</figcaption></figure>`:"").join("")}</div>`:""}</div>`).join("")}</section>`}).join("");
+    const css=`body{font-family:Arial,sans-serif;color:#16232B;margin:0;font-size:11pt}h1{font-size:18pt;margin:0}.sub{color:#51646F;margin:4px 0 16px}h2{font-size:13pt;color:#1D4E78;border-bottom:1px solid #C7D1D8;padding-bottom:3px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.03em}.n{margin:0 0 10px;break-inside:avoid}.au{font-size:9.5pt;color:#4B3A8C;font-weight:bold;margin:2px 0}.tr{font-style:italic;color:#3A4B55;margin:2px 0 4px}.h{font-size:9pt;color:#51646F}.t{font-weight:bold;padding:1px 6px;border-radius:8px;background:#EEF1F3}.t.question{background:#DCEAF7;color:#1D4E78}.t.action{background:#FFF4CC;color:#6B5200}p{margin:3px 0}.ph{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}figure{margin:0;width:48%;break-inside:avoid}figure img{width:100%;border-radius:4px}figcaption{font-size:9pt;color:#51646F}.it{margin:0 0 10px;padding-left:18px;font-size:10pt}.it li.ok{color:#1F5C43}.it li.ko{color:#9A3412}.meta{display:grid;grid-template-columns:110px 1fr;gap:3px 10px;margin:0 0 14px;font-size:10pt}.meta b{color:#51646F;font-weight:normal}.dy{font-size:10pt;color:#51646F;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em}@page{margin:15mm}`;
     const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(v.title)}</title><style>${css}.vh{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.vh img{max-height:52px;max-width:160px;object-fit:contain}</style></head><body><div class="vh"><h1>${esc(v.title)}</h1>${pLogo(p)?`<img src="${p.logo}" alt="">`:""}</div><p class="sub">${esc(p.name)} · ${esc(new Date(visDate(v)).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))}${v.endedAt&&v.startedAt?` · ${hm(v.startedAt)} – ${hm(v.endedAt)}`:""}</p>${pr.location||pr.goal||(pr.participants||[]).length?`<div class="meta">${pr.location?`<b>Lieu</b><span>${esc(pr.location)}</span>`:""}${pr.goal?`<b>Objectif</b><span>${esc(pr.goal)}</span>`:""}${(pr.participants||[]).length?`<b>Participants</b><span>${esc(pr.participants.map(x=>x.name+(SIDE[x.side]?` (${SIDE[x.side]})`:"")).join(", "))}</span>`:""}</div>`:""}${sec||"<p>Aucune note.</p>"}</body></html>`;
     if(missing)toast(`${plural(missing,"photo")} non disponible${missing>1?"s":""} hors connexion : absente${missing>1?"s":""} du PDF.`);
     printHtml(html,`deplacement-${(p.name||"projet").replace(/[^\wÀ-ÿ-]+/g,"-")}-${iso(new Date(visDate(v)))}`);
+  }
+
+  // ---------- Notes séparées par jour (déplacement sur plusieurs jours) ----------
+  const visDayIdx=(v,d)=>{const i=visDays(v).indexOf(d);return i>=0?i+1:0};
+  const visDayHead=(v,d)=>{const k=visDayIdx(v,d);return `${k?"Jour "+k+" · ":""}${dayLbl(d)}`};
+  function visDayBar(v){
+    if(isMes(v)||visNDays(v)<2)return "";
+    const ds=visDays(v);if(visDayF&&!ds.includes(visDayF))visDayF="";
+    return `<div class="visdayf" role="group" aria-label="Afficher les notes de"><button type="button" data-dayf="" aria-pressed="${!visDayF}">Tous les jours</button>${ds.map((d,i)=>`<button type="button" data-dayf="${d}" aria-pressed="${visDayF===d}" title="${esc(dayLbl(d,true))}">Jour ${i+1}</button>`).join("")}</div>`;
+  }
+  function visNotesList(v,ns){
+    const multi=!isMes(v)&&visNDays(v)>1;
+    if(multi&&visDayF)ns=ns.filter(n=>iso(new Date(n.at))===visDayF);
+    if(!ns.length)return `<p class="visempty">${visDayF&&multi?"Aucune note ce jour-là pour ce flux.":"Aucune note pour ce flux. Écrivez ou prenez une photo ci-dessous."}</p>`;
+    if(!multi)return ns.map(n=>visNoteHtml(n)).join("");
+    let last="";return ns.map(n=>{const d=iso(new Date(n.at)), h=d!==last?`<div class="visdsep"><b>${esc(visDayHead(v,d))}</b></div>`:"";last=d;return h+visNoteHtml(n)}).join("");
+  }
+  // ---------- Mise en service : un compte rendu par jour ----------
+  const MES_ROWS=p=>[["ok","Process OK / Actions réalisées","list"],["pb","Problèmes majeurs et points en cours","list"],["todo","Points à traiter / Actions à venir","list"],["statut","Statut de l'installation","text"],["rc","Ressenti "+(p.name||"client"),"text"],["rm","Ressenti Mecalux","text"]];
+  const MES_ST={"Fait":"done-t","En cours":"vt-act","À faire":"mes-todo"};
+  function mesDays(v){const s=new Set(visDays(v));(v.flows||[]).forEach(f=>{if(f.day)s.add(f.day)});return [...s].sort()}
+  const mesFlow=(v,d)=>(v.flows||[]).find(f=>f.day===d);
+  const mesRows=(v,fid)=>(v.items||[]).filter(i=>i.mk==="row"&&i.flow===fid).sort((a,b)=>(a.pos||0)-(b.pos||0));
+  const mesIts=(v,rid)=>(v.items||[]).filter(i=>i.mk==="it"&&i.row===rid).sort((a,b)=>(a.pos||0)-(b.pos||0));
+  const mesDayName=(v,d)=>{const k=mesDays(v).indexOf(d)+1;return `Jour ${k} · ${dayLbl(d)}`};
+  function mesPickDay(v){const ds=mesDays(v), t=iso(new Date());if(visMesDay&&ds.includes(visMesDay))return visMesDay;return ds.includes(t)?t:t<ds[0]?ds[0]:ds[ds.length-1]}
+  // crée la journée : rubriques de la veille (ou rubriques par défaut) et éléments non terminés repris
+  function mesCreateDay(y,d){
+    let f=mesFlow(y,d);if(f)return f;
+    y.flows=y.flows||[];y.items=y.items||[];
+    f={id:uid(),name:"",day:d};y.flows.push(f);y.flows.sort((a,b)=>(a.day||"").localeCompare(b.day||""));
+    y.flows.forEach(x=>{if(x.day)x.name=mesDayName(y,x.day)});
+    const prev=y.flows.filter(x=>x.day&&x.day<d&&mesRows(y,x.id).length).pop();
+    let pos=0;
+    if(prev)mesRows(y,prev.id).forEach(r=>{const nr={id:uid(),flow:f.id,mk:"row",key:r.key||null,title:r.title,kind:r.kind,text:"",pos:pos++};y.items.push(nr);
+      if(r.kind==="list")mesIts(y,r.id).filter(i=>i.st!=="Fait").forEach((i,j)=>y.items.push({id:uid(),flow:f.id,mk:"it",row:nr.id,t:i.t,d:i.d||"",who:i.who||"",st:i.st,pos:j,from:i.from||i.id}))});
+    else MES_ROWS(proj(y.projectId)||{}).forEach(([key,title,kind])=>y.items.push({id:uid(),flow:f.id,mk:"row",key,title,kind,text:"",pos:pos++}));
+    return f;
+  }
+  // flux de la journée affichée (créée au besoin) : photos rapides et enregistrements
+  function mesTodayFlow(){const d=mesPickDay(visCur);let id=(mesFlow(visCur,d)||{}).id;if(!id)visQuiet(y=>{id=mesCreateDay(y,d).id});return id}
+  // « Fait » range l'élément dans « Process OK » ; repassé à faire, il retourne dans la rubrique correspondante
+  function mesRoute(y,it){const rows=mesRows(y,it.flow), cur=rows.find(r=>r.id===it.row), by=k=>rows.find(r=>r.key===k);
+    if(it.st==="Fait"&&by("ok"))it.row=by("ok").id;
+    else if((!cur||cur.key==="ok")&&it.st!=="Fait"){const t=by(it.st==="En cours"?"pb":"todo")||by("pb")||by("todo")||rows.find(r=>r.kind==="list"&&r.key!=="ok");if(t)it.row=t.id}}
+  function mesPeople(v){const s=new Map();const add=n=>{n=String(n||"").trim();if(n&&!s.has(norm(n)))s.set(norm(n),n)};
+    ((v.prep||{}).participants||[]).filter(x=>x.side!=="client").forEach(x=>add(x.name.split(/\s+/)[0]));(v.items||[]).forEach(i=>{if(i.mk==="it")add(i.who)});return [...s.values()].slice(0,12)}
+  function mesItemDialog(rowId,itId){
+    const v=visCur, it=itId?v.items.find(i=>i.id===itId):null, row=v.items.find(i=>i.id===(it?it.row:rowId));if(!row)return;
+    const rows=mesRows(v,row.flow).filter(r=>r.kind==="list");
+    const save=r=>{if(!r||!String(r.t||"").trim())return;
+      visSet(y=>{let x=itId&&y.items.find(i=>i.id===itId);
+        if(!x){x={id:uid(),flow:row.flow,mk:"it",row:row.id,pos:Math.max(-1,...mesIts(y,row.id).map(i=>i.pos||0))+1};y.items.push(x)}
+        x.t=String(r.t).trim().slice(0,300);x.d=rtCut(String(r.d||"").trim(),4000);x.who=String(r.who||"").trim().slice(0,80);x.st=MES_ST[r.st]?r.st:"En cours";
+        if(r.row&&rows.some(z=>z.id===r.row)&&r.row!==x.row){x.row=r.row;x.pos=Math.max(-1,...mesIts(y,r.row).map(i=>i.pos||0))+1}else mesRoute(y,x)})};
+    const del=()=>visSet(y=>{y.items=y.items.filter(i=>i.id!==itId)});
+    const defSt=it?it.st:row.key==="ok"?"Fait":row.key==="todo"?"À faire":"En cours";
+    if(typeof window.__testDialog==="function"){Promise.resolve(window.__testDialog({type:"mesitem",message:row.title,options:rows.map(r=>r.title)})).then(r=>{if(!r||r.ok===false)return;const x=r.v||{};if(x.del){del();return}
+      const tr=x.rowTitle&&rows.find(z=>z.title===x.rowTitle);save({t:x.t,d:x.d,who:x.who,st:x.st||defSt,row:tr?tr.id:(it?it.row:row.id)})});return}
+    const ppl=mesPeople(v);
+    const d=document.createElement("dialog");d.className="uidlg vissheet mesdlg";d.setAttribute("aria-label",it?"Modifier l'élément":"Ajouter un élément");
+    d.innerHTML=`<form method="dialog"><h3>${it?"Modifier l'élément":esc(row.title)}</h3>
+      <label class="uifld"><span>Sujet</span><input type="text" data-k="t" maxlength="300" placeholder="Ex. : Étiquettes supports"></label>
+      <label class="uifld"><span>Description</span><textarea data-rt data-k="d" rows="3" placeholder="Ce qui a été fait, constaté ou reste à faire"></textarea></label>
+      <div class="uifld"><span>Qui</span>${ppl.length?`<div class="meschips">${ppl.map(n=>`<button type="button" data-who="${esc(n)}">${esc(n)}</button>`).join("")}</div>`:""}<input type="text" data-k="who" maxlength="80" placeholder="Nom" aria-label="Qui"></div>
+      <div class="uifld"><span>Statut</span><div class="meschips" role="radiogroup" aria-label="Statut">${Object.keys(MES_ST).map(k=>`<button type="button" role="radio" data-st="${esc(k)}" aria-checked="false">${esc(k)}</button>`).join("")}</div></div>
+      ${rows.length>1?`<label class="uifld"><span>Rubrique</span><select data-k="row">${rows.map(r=>`<option value="${esc(r.id)}">${esc(r.title)}</option>`).join("")}</select></label>`:""}
+      <p class="muted">Un élément passé à « Fait » se range tout seul dans « Process OK / Actions réalisées ».</p>
+      <div class="uibtns">${it?`<button type="button" class="btn danger" data-del>Supprimer</button><span class="sp"></span>`:""}<button type="button" class="btn ghost" data-x>Annuler</button><button type="button" class="btn primary" data-ok>Enregistrer</button></div></form>`;
+    document.body.appendChild(d);
+    const q=k=>d.querySelector(`[data-k="${k}"]`);let st=defSt;
+    q("t").value=it?it.t:"";q("who").value=it?it.who||"":"";if(q("row"))q("row").value=it?it.row:row.id;
+    setTimeout(()=>{q("d").value=it?it.d||"":""},0);
+    const paintSt=()=>d.querySelectorAll("[data-st]").forEach(b=>b.setAttribute("aria-checked",b.dataset.st===st));paintSt();
+    const paintWho=()=>d.querySelectorAll("[data-who]").forEach(b=>b.setAttribute("aria-pressed",norm(b.dataset.who)===norm(q("who").value)));paintWho();
+    d.querySelectorAll("[data-st]").forEach(b=>b.onclick=()=>{st=b.dataset.st;paintSt()});
+    d.querySelectorAll("[data-who]").forEach(b=>b.onclick=()=>{q("who").value=norm(b.dataset.who)===norm(q("who").value)?"":b.dataset.who;paintWho()});q("who").oninput=paintWho;
+    const close=()=>{try{d.close()}catch(e){}d.remove()};
+    d.addEventListener("cancel",e=>{e.preventDefault();close()});
+    d.querySelector("[data-x]").onclick=close;
+    const db=d.querySelector("[data-del]");if(db)db.onclick=async()=>{close();if(await uiConfirm(`Supprimer « ${it.t} » ?`,{ok:"Supprimer",danger:true}))del()};
+    d.querySelector("[data-ok]").onclick=()=>{const t=q("t").value.trim();if(!t){q("t").focus();return}const r={t,d:q("d").value,who:q("who").value,st,row:q("row")?q("row").value:null};close();
+      if(r.row===(it?it.row:row.id))r.row=null;save(r)};
+    d.querySelector("form").onsubmit=e=>e.preventDefault();
+    if(d.showModal)d.showModal();else d.setAttribute("open","");
+    setTimeout(()=>q("t").focus(),30);
+  }
+  function mesItHtml(i){
+    return `<div class="mesit" role="button" tabindex="0" data-it="${esc(i.id)}" aria-label="Modifier « ${esc(i.t)} »"><div class="mesith"><b>${esc(i.t)}</b><span class="tag ${MES_ST[i.st]||""}">${esc(i.st||"")}</span></div>${i.d?`<div class="rt mesitd">${rtHtml(i.d)}</div>`:""}${i.who?`<span class="meswho"><i aria-hidden="true">${esc(i.who.slice(0,1).toUpperCase())}</i>${esc(i.who)}</span>`:""}</div>`;
+  }
+  function visMesScreen(o,v,p){
+    const ds=mesDays(v), d=visMesDay=mesPickDay(v), k=ds.indexOf(d)+1, wide=visWide(), today=iso(new Date());
+    // journée du jour (ou passée) d'une mise en service démarrée : compte rendu ouvert d'office
+    if(!mesFlow(v,d)&&d<=today&&v.status==="open")visQuiet(y=>{mesCreateDay(y,d)});
+    const f=mesFlow(v,d);
+    const dstat=x=>{const fx=mesFlow(v,x);if(!fx)return x>today?"À venir":"Pas encore commencée";const n=(v.items||[]).filter(i=>i.mk==="it"&&i.flow===fx.id).length;return `${fx.closed?"Clôturée":"En cours"} · ${plural(n,"élément")}`};
+    const chips=`<div class="mesdays" role="tablist" aria-label="Journées de la mise en service">${ds.map((x,i)=>{const fx=mesFlow(v,x);return `<button type="button" role="tab" aria-selected="${x===d}" data-day="${x}" class="${fx&&fx.closed?"cl":""}"><b>J${i+1}<span class="mesdl"> · ${esc(dayLbl(x))}</span></b><span class="mesds">${esc(new Date(x+"T12:00").toLocaleDateString("fr-FR",{weekday:"short",day:"numeric"}))}</span><small>${esc(dstat(x))}</small></button>`}).join("")}<button type="button" class="mesadd" data-addday aria-label="Ajouter un jour">${VI.plus}<span>Ajouter un jour</span></button></div>`;
+    let body, notes="";
+    if(!f){
+      body=`<section class="viscard mesnone"><h3>${esc(mesDayName(v,d))}</h3><p>${d>today?"Journée à venir.":"Pas encore de compte rendu pour cette journée."} Les rubriques et les points non terminés de la veille seront repris.</p><button type="button" class="btn primary" data-mkday>Commencer le compte rendu</button></section>`;
+    }else{
+      const ns=visNotes(v,f.id), rows=mesRows(v,f.id);
+      body=`<div class="mesbar"><div><b>Jour ${k} · ${esc(dayLbl(d,true))}</b><span>${f.closed?"Journée clôturée":"Journée en cours"}</span></div><button type="button" class="btn" data-cr>${VI.doc}<span>Compte rendu</span></button><button type="button" class="btn${f.closed?"":" primary"}" data-close>${f.closed?"Rouvrir":"Clôturer la journée"}</button></div>
+        ${rows.map(r=>{const its=r.kind==="list"?mesIts(v,r.id):[];return `<section class="mesrow mr-${esc(r.key||"x")}" data-r="${esc(r.id)}"><div class="mesrh"><h3>${esc(r.title)}</h3>${r.kind==="list"?`<span class="muted">${its.length}</span>`:""}<button type="button" class="vismore" data-rm aria-label="Actions sur la rubrique ${esc(r.title)}">${VI.more}</button></div>
+          ${r.kind==="list"?`${its.map(mesItHtml).join("")}<button type="button" class="vislink mesaddit" data-addit>${VI.plus}Ajouter</button>`:`<textarea data-rt data-rtext rows="3" aria-label="${esc(r.title)}" placeholder="${r.key==="statut"?"Où en est l'installation ce jour-là…":r.key==="rc"||r.key==="rm"?"Comment la journée a été vécue…":"Saisir le texte…"}">${escRaw(r.text||"")}</textarea>`}</section>`}).join("")}
+        <button type="button" class="vislink mesaddrow" data-addrow>${VI.plus}Ajouter une rubrique</button>`;
+      notes=`<section class="viscard mesnotes"><div class="vissh"><h3>Notes, photos et vocaux du jour</h3><span class="muted">${ns.length}</span></div>${wide?"":ns.slice(-4).map(n=>visNoteHtml(n)).join("")}${wide?"":`<button type="button" class="btn" data-f="${esc(f.id)}">${ns.length>4?`Voir les ${ns.length} notes et ajouter`:"Ajouter une note, une photo ou un vocal"}</button>`}</section>`;
+    }
+    const acts=`<button type="button" class="btn visendh" data-mesend>${v.status==="done"?"Reprendre":"Terminer"}</button>${visMoreBtn("data-vm","Actions sur le déplacement")}`;
+    if(wide){
+      const ns=f?visNotes(v,f.id):[];
+      o.innerHTML=visHead("Quitter le déplacement",p.name,v.title,visSub(v,p),acts)+`<div class="visdesk mesdesk"><aside class="visdl"><div class="vishd"><h2>Journées</h2></div>${chips}</aside>
+        <section class="visdc"><main class="vism mes">${body}</main></section>
+        <aside class="visdr mesr">${f?`<div class="vissh"><h3>Notes, photos et vocaux du jour</h3><span class="muted">${ns.length}</span></div><div class="vism notes">${ns.length?ns.map(n=>visNoteHtml(n)).join(""):`<p class="visempty">Aucune note ce jour. Écrivez, prenez une photo ou enregistrez ci-dessous.</p>`}</div>${visComposer(null)}`:""}</aside></div>`;
+    }else{
+      o.innerHTML=visHead("Quitter le déplacement","Projet",`${VIS_TYPES.mes.l} · Jour ${k}`,visSub(v,p),acts,chips)+`<main class="vism mes">${body}${notes}</main>${f?visQuickBar():""}`;
+    }
+    o.querySelector("[data-back]").onclick=visClose;
+    const sel=o.querySelector('.mesdays [aria-selected="true"]');if(sel&&!wide)sel.scrollIntoView({block:"nearest",inline:"center"});
+    o.querySelectorAll("[data-day]").forEach(b=>b.onclick=()=>{visMesDay=b.dataset.day;renderVisit()});
+    o.querySelector("[data-addday]").onclick=()=>{const nd=iso(addDays(new Date(visEndDay(v)+"T12:00"),1));visMesDay=nd;visSet(y=>{y.prep=y.prep||{};if(!y.prep.plannedAt&&!y.startedAt)y.prep.plannedAt=new Date(visStartDay(y)+"T09:00").getTime();y.prep.endDay=nd})};
+    const me=o.querySelector("[data-mesend]");if(me)me.onclick=()=>{if(v.status==="done")visSet(x=>{x.status="open";x.endedAt=null});else visFinish(visCur)};
+    const mk=o.querySelector("[data-mkday]");if(mk)mk.onclick=()=>visSet(y=>{mesCreateDay(y,d)});
+    visBindCommon(o,v);
+    if(!f)return;
+    if(wide)visBindFlow(o,v,f);
+    o.querySelector("[data-close]").onclick=()=>{const was=f.closed;visSet(y=>{const x=mesFlow(y,d);if(x)x.closed=!x.closed});toast(was?"Journée rouverte.":"Journée clôturée.")};
+    o.querySelector("[data-cr]").onclick=async()=>{const ch=await visSheet("Compte rendu du jour "+k,[{k:"copy",l:"Copier pour Confluence"},{k:"pdf",l:"PDF de la journée"},{k:"all",l:"PDF de toute la mise en service"}]);
+      if(ch==="copy"){const h=mesDayHtml(visCur,d,false);const ok=await copyRich(h.html,h.text);toast(ok?"Compte rendu copié : collez-le dans la page Confluence (Ctrl+V).":"Copie impossible sur cet appareil.")}
+      else if(ch==="pdf")mesPdf(visCur,[d]);else if(ch==="all")mesPdf(visCur,null)};
+    o.querySelectorAll("[data-addit]").forEach(b=>b.onclick=()=>mesItemDialog(b.closest("[data-r]").dataset.r,null));
+    o.querySelectorAll("[data-it]").forEach(b=>{const go=()=>mesItemDialog(null,b.dataset.it);b.onclick=e=>{if(e.target.closest("a"))return;go()};b.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go()}}});
+    o.querySelectorAll("[data-rtext]").forEach(ta=>{const id=ta.closest("[data-r]").dataset.r;let t=null;const put=()=>{clearTimeout(t);visQuiet(y=>{const r=y.items.find(i=>i.id===id);if(r)r.text=rtCut(ta.value.trim(),8000)})};ta.addEventListener("input",()=>{clearTimeout(t);t=setTimeout(put,700)});ta.addEventListener("change",put);ta.addEventListener("blur",put)});
+    o.querySelectorAll("[data-rm]").forEach(b=>b.onclick=async()=>{
+      const id=b.closest("[data-r]").dataset.r, r=visCur.items.find(i=>i.id===id);if(!r)return;
+      const rows=mesRows(visCur,f.id), ix=rows.findIndex(x=>x.id===id);
+      const ch=await visSheet(r.title,[{k:"ren",l:"Renommer la rubrique"},...(ix>0?[{k:"up",l:"Monter"}]:[]),...(ix<rows.length-1?[{k:"down",l:"Descendre"}]:[]),{k:"del",l:"Supprimer la rubrique",danger:true}]);
+      if(ch==="ren"){const t=await uiPrompt("Nom de la rubrique",r.title,{ok:"Renommer"});if(t&&t.trim())visSet(y=>{const x=y.items.find(i=>i.id===id);if(x)x.title=t.trim().slice(0,120)})}
+      else if(ch==="up"||ch==="down"){const o2=rows[ix+(ch==="up"?-1:1)];visSet(y=>{const ord=mesRows(y,f.id);const a=ord.findIndex(x=>x.id===id),b2=ord.findIndex(x=>x.id===o2.id);[ord[a],ord[b2]]=[ord[b2],ord[a]];ord.forEach((x,i)=>x.pos=i)})}
+      else if(ch==="del"){const n=mesIts(visCur,id).length;if(!await uiConfirm(`Supprimer la rubrique « ${r.title} »${n?` et ses ${plural(n,"élément")}`:r.text?" et son texte":""} ?\n\nElle ne sera plus reprise les jours suivants.`,{ok:"Supprimer",danger:true}))return;visSet(y=>{y.items=y.items.filter(i=>i.id!==id&&i.row!==id)})}
+    });
+    o.querySelector("[data-addrow]").onclick=async()=>{
+      const kind=await visSheet("Nouvelle rubrique",[{k:"list",l:"Liste d'éléments (sujet, qui, statut)"},{k:"text",l:"Texte libre"}]);if(!kind)return;
+      const t=await uiPrompt("Nom de la rubrique","",{ok:"Ajouter"});if(!t||!t.trim())return;
+      visSet(y=>{y.items.push({id:uid(),flow:f.id,mk:"row",key:null,title:t.trim().slice(0,120),kind,text:"",pos:Math.max(-1,...mesRows(y,f.id).map(i=>i.pos||0))+1})});
+    };
+  }
+  // copie riche (tableau) : se colle tel quel dans Confluence, Word ou Outlook
+  async function copyRich(html,text){
+    try{if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){await navigator.clipboard.write([new ClipboardItem({"text/html":new Blob([html],{type:"text/html"}),"text/plain":new Blob([text],{type:"text/plain"})})]);return true}}catch(e){}
+    try{const box=document.createElement("div");box.contentEditable="true";box.style.cssText="position:fixed;left:-9999px;top:0;opacity:0";box.innerHTML=html;document.body.appendChild(box);
+      const r=document.createRange();r.selectNodeContents(box);const sel=getSelection();sel.removeAllRanges();sel.addRange(r);const ok=document.execCommand("copy");sel.removeAllRanges();box.remove();return ok}catch(e){return false}
+  }
+  function mesDayHtml(v,d){
+    const f=mesFlow(v,d), k=mesDays(v).indexOf(d)+1, rows=f?mesRows(v,f.id):[];
+    const th='style="border:1px solid #C1C7D0;padding:8px 10px;background:#F4F5F7;text-align:left;vertical-align:top;width:28%"', td='style="border:1px solid #C1C7D0;padding:8px 10px;vertical-align:top"';
+    const li=i=>`<li><b>${esc(i.t)}</b>${i.d?" : "+esc(rtText(i.d)).replace(/\n/g,"<br>"):""}${i.who||i.st?` (${esc([i.who,i.st].filter(Boolean).join(" - "))})`:""}</li>`;
+    const title=`${VIS_TYPES.mes.l} – Jour ${k} – ${cap(dayLbl(d,true))}`;
+    const html=`<p><b>${esc(title)}</b></p><table style="border-collapse:collapse;width:100%"><thead><tr><th ${th}>Sujet</th><th ${th.replace("width:28%","")}>Description</th></tr></thead><tbody>${rows.map(r=>`<tr><th ${th}>${esc(r.title)}</th><td ${td}>${r.kind==="list"?(()=>{const its=mesIts(v,r.id);return its.length?`<ul>${its.map(li).join("")}</ul>`:""})():(r.text?rtHtml(r.text):"")}</td></tr>`).join("")}</tbody></table>`;
+    const text=[title,""].concat(rows.map(r=>`${r.title}\n${r.kind==="list"?mesIts(v,r.id).map(i=>`- ${i.t}${i.d?" : "+rtText(i.d):""}${i.who||i.st?` (${[i.who,i.st].filter(Boolean).join(" - ")})`:""}`).join("\n"):rtText(r.text||"")}\n`)).join("\n");
+    return {html,text,title};
+  }
+  async function mesPdf(v,only){
+    const p=proj(v.projectId)||{name:""}, days=(only||mesDays(v)).filter(d=>mesFlow(v,d));
+    if(!days.length){toast("Aucune journée commencée.");return}
+    const urls={};await Promise.all(v.notes.filter(n=>days.some(d=>(mesFlow(v,d)||{}).id===n.flow)).flatMap(n=>(n.photos||[]).map(async ph=>{urls[ph.id]=await visPhotoUrl(v,ph.id)})));
+    const sec=days.map(d=>{const h=mesDayHtml(v,d), ns=visNotes(v,mesFlow(v,d).id);
+      return `<section class="day"><h2>${esc(mesDayName(v,d))}</h2>${h.html.replace(/^<p><b>.*?<\/b><\/p>/,"")}${ns.length?`<h3>Notes, photos et vocaux du jour</h3>${ns.map(n=>`<div class="n"><div class="h">${hm(n.at)}${n.audio?` · enregistrement de ${mmss(n.audio.dur||0)}`:""}</div>${n.text?`<div>${rtHtml(n.text)}</div>`:""}${n.tr?`<p class="tr">${esc(n.tr.text).replace(/\n/g,"<br>")}</p>`:""}${(n.photos||[]).length?`<div class="ph">${n.photos.map(ph=>urls[ph.id]?`<figure><img src="${urls[ph.id]}" alt=""><figcaption>${esc(ph.caption||"")}</figcaption></figure>`:"").join("")}</div>`:""}</div>`).join("")}`:""}</section>`}).join("");
+    const css=`body{font-family:Arial,sans-serif;color:#16232B;margin:0;font-size:10.5pt}h1{font-size:18pt;margin:0}.sub{color:#51646F;margin:4px 0 14px}h2{font-size:13pt;color:#1D4E78;border-bottom:1px solid #C7D1D8;padding-bottom:3px;margin:16px 0 8px}h3{font-size:11pt;margin:12px 0 6px}ul{margin:0;padding-left:18px}li{margin:2px 0}table{break-inside:auto}tr{break-inside:avoid}p{margin:3px 0}.n{margin:0 0 8px;break-inside:avoid}.h{font-size:9pt;color:#51646F}.tr{font-style:italic;color:#3A4B55}.ph{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}figure{margin:0;width:48%}figure img{width:100%;border-radius:4px}figcaption{font-size:9pt;color:#51646F}.day+.day{break-before:page}.vh{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.vh img{max-height:52px;max-width:160px;object-fit:contain}@page{margin:14mm}`;
+    const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(v.title)}</title><style>${css}</style></head><body><div class="vh"><h1>${esc(v.title)}</h1>${pLogo(p)?`<img src="${p.logo}" alt="">`:""}</div><p class="sub">${esc(p.name)} · ${esc(only&&only.length===1?mesDayName(v,only[0]):visRangeTxt(v,true))}</p>${sec}</body></html>`;
+    printHtml(html,`mise-en-service-${(p.name||"projet").replace(/[^\wÀ-ÿ-]+/g,"-")}-${only&&only.length===1?only[0]:iso(new Date(visDate(v)))}`);
   }
   // ---------- Onglet Visites d'un projet ----------
   function visEnsure(){if(vis.loaded&&vis.acct!==visAcct()){vis.loaded=false;vis.map={};vis.urls={}}if(!vis.loaded)visLoad()}
@@ -5206,7 +5428,7 @@
         const ns=v.notes||[], c=visCounts(ns), its=visItemsOn(v), seen=its.filter(i=>i.seen).length, pr=v.prep||{}, pl=pr.plannedAt, nPart=(pr.participants||[]).length;
         const d=st==="prep"?pl:visDate(v);
         const stats=[plural(c.n,"note"),plural(c.ph,"photo"),c.q?plural(c.q,"question"):"",c.au?plural(c.au,"enregistrement"):""].filter(Boolean).join(" · ");
-        const nd=visNDays(v), meta=st==="prep"?[pl?(nd>1?`${visRangeTxt(v)} · début ${hm(pl)}`:`${dl(pl)} · ${hm(pl)}`):"Pas encore daté",pr.location||"",plural(its.length,"élément")+" à voir",nPart?plural(nPart,"participant"):""].filter(Boolean)
+        const nd=visNDays(v), meta=st==="prep"?[pl?(nd>1?`${visRangeTxt(v)} · début ${hm(pl)}`:`${dl(pl)} · ${hm(pl)}`):"Pas encore daté",pr.location||"",isMes(v)?VIS_TYPES.mes.l:plural(its.length,"élément")+" à voir",nPart?plural(nPart,"participant"):""].filter(Boolean)
           :st==="open"?[`Démarré ${dl(visDate(v))} à ${hm(visDate(v))}`,nd>1?`${nd} jours, jusqu'au ${new Date(visEndDay(v)+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}`:"",pr.location||"",stats]:[nd>1?visRangeTxt(v):dl(visDate(v)),stats];
         const trn=ns.filter(n=>n.audio&&!n.tr).length, pend=visPendingN(v);
         const tags=`<span class="tag ${st==="done"?"done-t":st==="prep"?"wait":"vt-act"}">${st==="done"?"Terminé":st==="prep"?"Préparé":"En cours"}</span>${vis.map[v.id]&&vis.map[v.id].dirty?`<span class="tag vt-act">En attente d'envoi</span>`:""}${st!=="prep"&&trn?`<span class="tag vt-au">${plural(trn,"enregistrement")} à transcrire</span>`:""}${st==="done"&&pend?`<span class="tag vt-cli">${plural(pend,"élément")} à créer dans le projet</span>`:""}${st==="done"&&!pend&&ns.some(n=>n.conv)?`<span class="tag done-t">Points et tâches créés</span>`:""}`;
