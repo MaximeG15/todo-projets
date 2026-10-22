@@ -1492,15 +1492,26 @@
     // ---- Haut à droite : actions sur le projet (Partager, Exporter, ⋯) ----
     const tools=$("#ptools"); tools.innerHTML="";
     const b=(txt,fn,cls,host)=>{const x=document.createElement("button");x.className="btn "+(cls||"ghost");x.type="button";x.textContent=txt;x.onclick=fn;(host||tools).appendChild(x);return x};
-    const ddMenu=(label,items,cls)=>{
+    const DDI={share:"M16 6l-4-4-4 4M12 2v13M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7",close:"M6 6l12 12M18 6 6 18",
+      plan:"M10 6h10M10 12h10M10 18h10M4 6l1.2 1.2L7.5 5M4 12l1.2 1.2L7.5 11M4 18l1.2 1.2L7.5 17",points:"M21 12a9 9 0 1 1-18 0a9 9 0 0 1 18 0zM12 7.5v5.5M12 16.5h.01",
+      recap:"M6 3h8l5 5v13H6zM14 3v5h5M9 13h7M9 17h5",rename:"M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",logo:"M4 5h16v14H4zM4 16l5-5 4 4 2-2 5 5M15 9.5h.01",
+      std:"M4 6h10M4 12h10M4 18h6M18 14v6M15 17h6",archive:"M3 4h18v4H3zM5 8v12h14V8M10 12h4",trash:"M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
+      sync:"M20 11a8 8 0 0 0-14.6-4.5M4 4v3h3M4 13a8 8 0 0 0 14.6 4.5M20 20v-3h-3",link:"M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
+      imp:"M12 3v12M7 10l5 5 5-5M5 21h14",unlink:"M4 4l16 16M10 14a4 4 0 0 0 5.7 0l1.5-1.5M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1M13 6.3l.3-.3a4 4 0 0 1 5.7 5.7l-.6.6",
+      quit:"M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"};
+    const ddSvg=k=>`<span class="ddi" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="${DDI[k]}"></path></svg></span>`;
+    const ddMenu=(label,items,cls,title)=>{
       const d=document.createElement("details");d.className="more ddm"+(cls?" "+cls:"");
-      d.innerHTML=`<summary class="btn" aria-label="${esc(label.replace(/[▾⋯]/g,"").trim()||"Plus d'actions")}">${label}</summary><div class="menu"></div>`;
+      d.innerHTML=`<summary class="btn" aria-label="${esc(label.replace(/[▾⋯]/g,"").trim()||"Plus d'actions")}">${label==="⋯"?`<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`:label}</summary><div class="ddbg" aria-hidden="true"></div><div class="menu">${title?`<div class="ddsh"><span class="ddgrab" aria-hidden="true"></span><div class="ddtt">${title}</div><button type="button" class="ddx" aria-label="Fermer">${ddSvg("close")}</button></div>`:""}</div>`;
       const m=d.querySelector(".menu");
+      d.querySelector(".ddbg").onclick=()=>{d.open=false};const dx0=d.querySelector(".ddx");if(dx0)dx0.onclick=()=>{d.open=false};
+      d.addEventListener("toggle",()=>document.body.classList.toggle("ddopen",d.open&&matchMedia("(max-width:760px)").matches));
       items.filter(Boolean).forEach(it=>{if(it==="-"){m.insertAdjacentHTML("beforeend",`<hr>`);return}if(it.hr){m.insertAdjacentHTML("beforeend",`<hr class="${it.cls||""}">`);return}
         if(it.colors){const pr=it.colors, taken=new Set(state.projects.filter(x=>x.id!==pr.id).map(x=>String(x.color||"").toUpperCase()));
-          const w=document.createElement("div");w.className="swatches";w.innerHTML=`<div class="mh">Couleur du projet</div><div class="sw">${COLORS.map(c=>`<button type="button" data-c="${c}" style="background:${c}" aria-label="Couleur ${c}${taken.has(c)?" (déjà utilisée par un autre projet)":""}" title="${taken.has(c)?"Déjà utilisée par un autre projet":"Choisir cette couleur"}" class="${String(pr.color).toUpperCase()===c?"on":""}${taken.has(c)?" taken":""}"></button>`).join("")}</div>`;
-          w.querySelectorAll("[data-c]").forEach(bt=>bt.onclick=()=>{d.open=false;const cur=proj(pr.id);if(cur){cur.color=bt.dataset.c;save();render()}});
-          m.appendChild(w);return}if(it.h){m.insertAdjacentHTML("beforeend",`<div class="mh">${esc(it.h)}</div>`);return}const x=document.createElement("button");x.type="button";x.textContent=it.t;if(it.cls)x.className=it.cls;x.onclick=()=>{d.open=false;it.fn()};m.appendChild(x)});
+          const w=document.createElement("div");w.className="swatches";w.innerHTML=`<div class="mh">Couleur du projet</div><div class="sw">${COLORS.map(c=>`<button type="button" data-c="${c}" style="background:${c}" aria-label="Couleur ${c}${taken.has(c)?" (déjà utilisée par un autre projet)":""}" aria-pressed="${String(pr.color).toUpperCase()===c}" title="${taken.has(c)?"Déjà utilisée par un autre projet":"Choisir cette couleur"}" class="${String(pr.color).toUpperCase()===c?"on":""}${taken.has(c)?" taken":""}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></button>`).join("")}</div>`;
+          w.querySelectorAll("[data-c]").forEach(bt=>bt.onclick=()=>{d.open=false;document.body.classList.remove("ddopen");const cur=proj(pr.id);if(cur){cur.color=bt.dataset.c;save();render()}});
+          m.appendChild(w);return}if(it.h){m.insertAdjacentHTML("beforeend",`<div class="mh${it.cls?" "+it.cls:""}">${esc(it.h)}</div>`);return}
+        const x=document.createElement("button");x.type="button";x.className=(it.cls||"")+(it.i?" ddrow":"");x.innerHTML=it.i?ddSvg(it.i)+`<span class="ddt">${esc(it.t)}</span>`:esc(it.t);x.onclick=()=>{d.open=false;document.body.classList.remove("ddopen");it.fn()};m.appendChild(x)});
       tools.appendChild(d);return d;
     };
     const initials=n=>String(n||"").replace(/@.*/,"").split(/[\s._-]+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("")||"?";
@@ -1517,11 +1528,12 @@
       const dx=ddMenu("Exporter ▾",[{h:"Documents"},{t:"Récap de la semaine",fn:openRecap},{t:"Plan d'actions (Excel / PDF)",fn:()=>openExport(p,"tasks")},{t:"Points ouverts (Excel / PDF)",fn:()=>openExport(p,"points")}],"ddexp");
       dx.querySelector("summary").innerHTML=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg><span class="ddl">Exporter</span><span class="ddc" aria-hidden="true">▾</span>`;
       // éléments affichés seulement sur téléphone, où Partager et Exporter sont regroupés dans le menu ⋯
-      const mob=p?[...(MODE==="cloud"&&isOwner(p.id)?[{t:shareOpen?"Fermer le partage":"Partager le projet…",fn:()=>{shareOpen=!shareOpen;render()},cls:"mobonly"}]:[]),
-        {t:"Exporter le plan d'actions",fn:()=>openExport(p,"tasks"),cls:"mobonly"},{t:"Exporter les points ouverts",fn:()=>openExport(p,"points"),cls:"mobonly"},{t:"Récap de la semaine",fn:openRecap,cls:"mobonly"},{t:"-",cls:"mobonly",hr:true}]:[];
+      const mob=p?[{h:"Partager et exporter",cls:"mobonly"},...(MODE==="cloud"&&isOwner(p.id)?[{t:shareOpen?"Fermer le partage":"Partager le projet…",i:shareOpen?"close":"share",fn:()=>{shareOpen=!shareOpen;render()},cls:"mobonly"}]:[]),
+        {t:"Exporter le plan d'actions",i:"plan",fn:()=>openExport(p,"tasks"),cls:"mobonly"},{t:"Exporter les points ouverts",i:"points",fn:()=>openExport(p,"points"),cls:"mobonly"},{t:"Récap de la semaine",i:"recap",fn:openRecap,cls:"mobonly"},{t:"-",cls:"mobonly",hr:true}]:[];
+      const ttl=p?`<span class="ddcol" style="background:${esc(p.color||"#888")}"></span><b>${esc(p.name)}</b>`:"";
       if(p){
-        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[...mob,{t:"Renommer le projet",fn:()=>renameProject(p)},{t:pLogo(p)?"Changer le logo du client…":"Ajouter le logo du client…",fn:()=>logoDialog(p)},{colors:p},{t:p.archived?"Réactiver le projet":"Archiver le projet",fn:()=>archiveProject(p,!p.archived)},...(MODE==="cloud"?[{t:"Ajouter les points ouverts standard…",fn:()=>tplDialog(p,false)}]:[]),...(xlOn(p.id)?["-",{h:"Lien Excel des points ouverts"},{t:"Synchroniser avec Excel",fn:()=>xlQuick(p)},...(xlFsOk()?[{t:"Choisir le fichier Excel lié…",fn:()=>xlLink(p)}]:[]),{t:"Importer un fichier Excel…",fn:()=>xlPick(p)},{t:"Désactiver le lien Excel",fn:()=>xlToggle(p,false)},{t:"Supprimer tous les points ouverts…",fn:()=>xlPurge(p),cls:"danger"}]:[]),"-",{t:"Supprimer le projet",fn:()=>deleteProject(p),cls:"danger"}],"ddmore");
-        else ddMenu("⋯",[...mob,{t:"Quitter le projet",fn:()=>shareRemove(p.id,cloud.email,true),cls:"danger"}],"ddmore");
+        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[...mob,{h:"Projet",cls:"mobonly"},{t:"Renommer le projet",i:"rename",fn:()=>renameProject(p)},{t:pLogo(p)?"Changer le logo du client…":"Ajouter le logo du client…",i:"logo",fn:()=>logoDialog(p)},...(MODE==="cloud"?[{t:"Ajouter les points ouverts standard…",i:"std",fn:()=>tplDialog(p,false)}]:[]),{colors:p},"-",...(xlOn(p.id)?[{h:"Lien Excel des points ouverts"},{t:"Synchroniser avec Excel",i:"sync",fn:()=>xlQuick(p)},...(xlFsOk()?[{t:"Choisir le fichier Excel lié…",i:"link",fn:()=>xlLink(p)}]:[]),{t:"Importer un fichier Excel…",i:"imp",fn:()=>xlPick(p)},{t:"Désactiver le lien Excel",i:"unlink",fn:()=>xlToggle(p,false)},{t:"Supprimer tous les points ouverts…",i:"trash",fn:()=>xlPurge(p),cls:"danger"},"-"]:[]),{t:p.archived?"Réactiver le projet":"Archiver le projet",i:"archive",fn:()=>archiveProject(p,!p.archived)},{t:"Supprimer le projet",i:"trash",fn:()=>deleteProject(p),cls:"danger"}],"ddmore",ttl);
+        else ddMenu("⋯",[...mob,{t:"Quitter le projet",i:"quit",fn:()=>shareRemove(p.id,cloud.email,true),cls:"danger"}],"ddmore",ttl);
       }
     }
     // ---- Barre d'affichage propre à l'onglet (au-dessus de la liste) ----

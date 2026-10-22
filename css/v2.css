@@ -702,3 +702,43 @@ span.rt{display:inline}
   .toolsbox .sub,.toolsbox .who-me,.toolsbox .fileinfo{margin-left:10px;margin-right:10px}
   .toolsbox .privlink{margin:6px 10px 4px}
 }
+
+/* ---------- Menu ⋯ du projet : icônes, rubriques ; panneau du bas sur téléphone ---------- */
+.ddm .menu .ddrow{display:flex;align-items:center;gap:10px;padding:6px 10px;font:inherit;color:var(--ink)}
+.ddm .menu .ddrow.danger,.ddm .menu .ddrow.danger .ddt{color:var(--late)}
+.ddi{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex:none;background:var(--sel);color:var(--steel)}
+.ddrow.danger .ddi{background:var(--latesoft);color:var(--late)}
+.ddt{flex:1;min-width:0}
+.ddsh,.ddbg{display:none}
+.swatches .sw button{border-radius:50%;display:grid;place-items:center;border:0}
+.swatches .sw button svg{display:none}
+.swatches .sw button.on{outline:0;box-shadow:0 0 0 2px var(--panel),0 0 0 4px var(--ink)}
+.swatches .sw button.on svg{display:block}
+@media (max-width:760px){
+  body.ddopen{overflow:hidden}
+  #ptools .ddm.ddmore>summary{width:44px;height:44px;min-height:44px;padding:0;justify-content:center;border-radius:12px;color:var(--chipink)}
+  .ddmore[open] .ddbg{display:block;position:fixed;inset:0;z-index:60;background:rgba(10,20,26,.45);animation:ddfade .18s ease-out}
+  .ddm.ddmore .menu{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:61;min-width:0;max-height:86vh;max-height:86dvh;overflow-y:auto;overscroll-behavior:contain;
+    border:0;border-radius:22px 22px 0 0;padding:0 12px calc(14px + env(safe-area-inset-bottom,0px));background:var(--panel);box-shadow:0 -10px 40px rgba(10,20,26,.25);animation:ddup .22s cubic-bezier(.2,.8,.2,1)}
+  .ddmore .ddsh{display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:1;margin:0 -12px;padding:20px 12px 10px 18px;background:var(--panel);border-bottom:1px solid var(--line2)}
+  .ddgrab{position:absolute;top:8px;left:50%;width:40px;height:4px;margin-left:-20px;border-radius:2px;background:var(--field)}
+  .ddtt{flex:1;min-width:0;display:flex;align-items:center;gap:10px}
+  .ddtt b{font:700 24px/1.1 "Barlow Condensed","Arial Narrow",sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ddcol{width:12px;height:12px;border-radius:50%;flex:none}
+  .ddm .menu .ddx{width:40px;height:40px;padding:0;display:grid;place-items:center;border-radius:12px;background:var(--chip);color:var(--chipink)}
+  .ddx .ddi{background:none;width:auto;height:auto;color:inherit}
+  .ddmore .menu .mh,.ddmore .menu .mh.mobonly{display:block;padding:16px 6px 6px;font-size:12.5px;font-weight:700;letter-spacing:.07em;color:var(--muted)}
+  .ddmore .menu button.ddrow,.ddmore .menu button.ddrow.mobonly{display:flex;min-height:52px;gap:12px;padding:6px 8px;font-size:16px;border-radius:12px}
+  .ddmore .menu .ddrow:active{background:var(--soft)}
+  .ddmore .ddrow .ddi{width:36px;height:36px;border-radius:11px}
+  .ddmore .menu hr{margin:8px 6px}
+  .ddmore .swatches{padding:0 0 6px}
+  .ddmore .swatches .sw{grid-template-columns:repeat(8,minmax(0,1fr));gap:10px;padding:6px 8px 4px}
+  .ddmore .swatches .sw button{width:100%;height:auto;aspect-ratio:1;max-width:40px;justify-self:center}
+  .ddmore .swatches .sw button:hover{transform:none}
+}
+@keyframes ddup{from{transform:translateY(100%)}to{transform:none}}
+@keyframes ddfade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.ddm.ddmore .menu,.ddmore[open] .ddbg{animation:none}}
+@media (min-width:761px){.ddm .menu .ddrow.mobonly,.ddm .menu .mh.mobonly{display:none}}
+@media (max-width:760px){.ddmore .menu button.ddrow,.ddmore .menu button.ddrow.mobonly{min-height:50px;padding:4px 8px}}
