@@ -60,7 +60,7 @@ with sync_playwright() as pw:
     # édition
     pg.locator(f'.pt[data-o="{first}"] .ttl').click()
     e=pg.locator(f'.pt[data-o="{first}"] .edit')
-    e.locator('[data-f="oname"]').fill("M. Martin");e.locator('[data-f="ans"]').fill("Par contrat");e.locator('[data-f="st"]').select_option("closed");e.locator('[data-k="ok"]').click()
+    e.locator('[data-f="oname"]').fill("M. Martin");e.locator('.rtw:has([data-f="ans"]) .rte').fill("Par contrat");e.locator('[data-f="st"]').select_option("closed");e.locator('[data-k="ok"]').click()
     o=[x for x in pts() if x["id"]==first][0]
     ok(o["ownerName"]=="M. Martin" and o["status"]=="closed" and o["answer"]=="Par contrat","modifier / répondre")
     ok(pg.locator(".showdone").count()==1,"points levés repliés")

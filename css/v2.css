@@ -587,3 +587,54 @@ body.mmopen{overflow:hidden}
 .mmch{color:var(--faint);display:grid;flex:none}
 .mmrow.danger .mmt > span{color:var(--late);font-weight:600}
 @media (min-width:761px){.mmenu{display:none}}
+
+/* =====================================================================
+   Texte enrichi : éditeur et affichage
+   ===================================================================== */
+.rt b{font-weight:700}.rt mark{background:#FFE58A;color:inherit;padding:0 2px;border-radius:2px}
+.rt .rc-r{color:var(--late)}.rt .rc-b{color:var(--cli)}.rt .rc-g{color:var(--ok)}
+.rt p{margin:0}.rt p + p,.rt p + ul,.rt p + ol,.rt ul + p,.rt ol + p,.rt h3 + p,.rt * + h3{margin-top:4px}
+.rt ul,.rt ol{margin:2px 0;padding-left:22px}.rt li{margin:1px 0}
+.rt h3{margin:0;font-size:1.08em;font-weight:700}
+.rt a{color:var(--cli);text-decoration:underline;overflow-wrap:anywhere}
+span.rt{display:inline}
+.ttl span.rt > p:first-child,.phyp span.rt > p:first-child,.pans span.rt > p:first-child{display:inline}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .rt mark{background:#6B5200;color:#FFF3C4}}
+:root[data-theme="dark"] .rt mark{background:#6B5200;color:#FFF3C4}
+/* éditeur */
+.rtw{position:relative;display:flex;flex-direction:column;border:1px solid var(--field);border-radius:10px;background:var(--panel);min-width:0}
+.rtw.on{border-color:var(--steel);box-shadow:0 0 0 1px var(--steel)}
+.rtb{display:none;align-items:center;gap:2px;flex-wrap:wrap;padding:4px 6px;border-bottom:1px solid var(--line);background:var(--soft);border-radius:10px 10px 0 0;position:relative}
+.rtw.on .rtb{display:flex}
+.rtbtn{min-width:34px;height:32px;padding:0 6px;border:0;border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:15px;display:inline-grid;place-items:center;cursor:pointer}
+.rtbtn:hover{background:var(--chip)}
+.rtbtn[aria-pressed="true"]{background:var(--line);}
+.rtbtn .rti{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:600}
+.rtmk{display:inline-block;padding:0 3px;border-radius:3px;background:#FFE58A;color:#16232B;font-weight:600;font-size:13px;line-height:18px}
+.rtcol{display:inline-flex;flex-direction:column;align-items:center;line-height:1;font-weight:700}
+.rtcol i{display:block;width:14px;height:3px;margin-top:2px;border-radius:2px;background:var(--late)}
+.rtsep{width:1px;height:20px;background:var(--line);margin:0 3px}
+.rte{min-height:72px;max-height:50vh;overflow-y:auto;padding:9px 11px;font:inherit;font-size:15px;line-height:1.45;color:var(--ink);outline:none;overflow-wrap:anywhere;cursor:text}
+.rtw.empty .rte::before{content:attr(data-ph);color:var(--faint);pointer-events:none;position:absolute}
+.rte[contenteditable="false"]{cursor:default;background:var(--soft)}
+.rtpop{position:absolute;top:100%;z-index:20;display:flex;flex-direction:column;min-width:130px;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--pop)}
+.rtpop button{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border:0;border-radius:7px;background:transparent;color:var(--ink);font:inherit;font-size:14px;cursor:pointer;text-align:left}
+.rtpop button:hover{background:var(--soft)}
+.rtpop i{width:14px;height:14px;border-radius:50%}
+/* champs existants : l'éditeur reprend leur place */
+.cform .rtw{flex:1}
+.visin .rtw{flex:1;border-radius:14px}
+.visin .rte{min-height:48px;max-height:30vh;font-size:16px}
+.viscap[data-vt="question"] .visin .rtw{border:2px solid var(--cli)}
+.viscap[data-vt="action"] .visin .rtw{border:2px solid var(--signal)}
+.flbl .rtw{margin-top:4px}
+/* téléphone : barre au-dessus du clavier */
+@media (max-width:760px){
+  .rtw.kb .rtb{display:flex;position:fixed;left:0;right:0;z-index:80;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;border-radius:0;border-top:1px solid var(--line);border-bottom:0;background:var(--panel);padding:5px 8px;box-shadow:0 -4px 12px rgba(15,30,40,.08)}
+  .rtw.kb .rtb::-webkit-scrollbar{display:none}
+  .rtw.kb .rtbtn{min-width:40px;height:36px;flex:none}
+  .rtw.kb .rtpop{top:auto;bottom:100%}
+}
+.rtw,.rte{text-transform:none;letter-spacing:normal;font-weight:400}
+.rtbtn{min-width:30px;padding:0 4px}
+.rt{white-space:normal}

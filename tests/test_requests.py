@@ -31,7 +31,7 @@ with sync_playwright() as pw:
     # détail
     row=pg.locator(f'.req[data-r="{rid}"]');row.locator(".ttl").click()
     e=row.locator(".edit")
-    e.locator('[data-f="scope"]').select_option("out");e.locator('[data-f="est"]').fill("2,5");e.locator('[data-f="quote"]').select_option("todo");e.locator('[data-f="desc"]').fill("Ajouter le code client sur l'étiquette");e.locator('[data-f="st"]').select_option("analysis")
+    e.locator('[data-f="scope"]').select_option("out");e.locator('[data-f="est"]').fill("2,5");e.locator('[data-f="quote"]').select_option("todo");e.locator('.rtw:has([data-f="desc"]) .rte').fill("Ajouter le code client sur l'étiquette");e.locator('[data-f="st"]').select_option("analysis")
     e.locator('[data-k="ok"]').click()
     r=rq(rid)[0];ok(r["scope"]=="out" and r["estimate"]==2.5 and r["quote"]=="todo" and r["status"]=="analysis","détail enregistré (périmètre, 2,5 j, devis, statut)")
     pg.screenshot(path=S+"req_proj.png")

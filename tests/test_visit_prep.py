@@ -53,7 +53,7 @@ with sync_playwright() as pw:
     ok(v.locator(".visitems .visit").count()==2,"flux : liste « À voir »")
     v.locator(".visit",has_text="Format des étiquettes").locator("[data-rep]").click()
     ok("Format des étiquettes" in v.locator(".visreply").inner_text(),"répondre : élément rappelé dans la saisie")
-    v.locator(".visin textarea").fill("Format 100x150 validé par le client");v.locator("[data-add]").click();pg.wait_for_timeout(300)
+    v.locator(".visin .rte").fill("Format 100x150 validé par le client");v.locator("[data-add]").click();pg.wait_for_timeout(300)
     ok(v.locator(".visnote .visre").count()==1 and v.locator(".visit.seen").count()==1,"réponse rattachée, élément marqué vu")
     v.locator(".visit",has_text="Photographier").locator("[data-seen]").click();pg.wait_for_timeout(200)
     v.locator("[data-back]").click();pg.wait_for_timeout(200)

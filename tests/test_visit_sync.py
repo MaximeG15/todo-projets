@@ -29,7 +29,7 @@ with sync_playwright() as pw:
     pg.locator("#lists [data-new]").click();pg.wait_for_timeout(400)
     ok(pg.evaluate("window.__persist")>=1,"C : stockage persistant demandé au navigateur")
     v=pg.locator("#visview");v.locator(".vistile",has_text="Réception").click()
-    add=lambda t:(v.locator(".visin textarea").fill(t),v.locator("[data-add]").click(),pg.wait_for_timeout(250))
+    add=lambda t:(v.locator(".visin .rte").fill(t),v.locator("[data-add]").click(),pg.wait_for_timeout(250))
     add("Note A");pg.wait_for_timeout(2500)
     db_notes=lambda:[n["text"] for n in pg.evaluate("window.__db.visits[0].notes")]
     ok(db_notes()==["Note A"],"visite envoyée")

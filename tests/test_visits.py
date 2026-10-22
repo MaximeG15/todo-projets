@@ -43,7 +43,7 @@ with sync_playwright() as pw:
     v.locator(".vistile",has_text="Réception").click();pg.wait_for_timeout(300)
     ok(v.locator(".vist b").inner_text()=="Réception","écran du flux")
     v.locator('[data-t="question"]').click()
-    v.locator(".visin textarea").fill("Question test sur les étiquettes fournisseur ?")
+    v.locator(".visin .rte").fill("Question test sur les étiquettes fournisseur ?")
     v.locator("[data-add]").click();pg.wait_for_timeout(300)
     ok(v.locator(".visnote .nt-q").count()==1,"note « Question client » ajoutée")
     # photos : deux photos annotées, légende
@@ -61,7 +61,7 @@ with sync_playwright() as pw:
     pg.mouse.move(bb["x"]+20,bb["y"]+20);pg.mouse.down();pg.mouse.move(bb["x"]+120,bb["y"]+90,steps=4);pg.mouse.up()
     ed.locator("[data-ok]").click();pg.wait_for_timeout(1500)
     ok(v.locator(".visstage .vph").count()==2,"2 photos jointes à la note en cours")
-    v.locator('[data-t="action"]').click();v.locator(".visin textarea").fill("Récupérer un exemple de bon de livraison")
+    v.locator('[data-t="action"]').click();v.locator(".visin .rte").fill("Récupérer un exemple de bon de livraison")
     v.locator("[data-add]").click();pg.wait_for_timeout(800)
     ok(v.locator(".visnote").count()==2 and v.locator(".visnote .vph img[src^='blob:']").count()==2,"note « Action » avec ses 2 photos affichées")
     pg.screenshot(path=OUT+"visit_flow.png")
@@ -107,7 +107,7 @@ with sync_playwright() as pw:
     ok(len(rows)==1 and len(rows[0]["notes"])==2,"visite enregistrée en ligne")
     # hors connexion
     ctx.set_offline(True);pg.wait_for_timeout(200)
-    v.locator('[data-t="note"]').click();v.locator(".visin textarea").fill("Note prise sans réseau")
+    v.locator('[data-t="note"]').click();v.locator(".visin .rte").fill("Note prise sans réseau")
     v.locator("[data-add]").click();pg.wait_for_timeout(2500)
     ok("Hors ligne" in v.locator(".visst").inner_text() and "attente" in v.locator(".visst").inner_text(),"hors connexion : enregistré sur le téléphone, en attente")
     ok(len(pg.evaluate("window.__db.visits")[0]["notes"])==2,"hors connexion : rien n'est envoyé")
@@ -163,7 +163,7 @@ with sync_playwright() as pw:
     pg.locator("#lists [data-new]").click();pg.wait_for_timeout(300)
     v=pg.locator("#visview");v.locator(".vistile",has_text="Stockage").click()
     v.locator("[data-cam]").click();pg.wait_for_timeout(1200);pg.locator(".visedit [data-ok]").click();pg.wait_for_timeout(800)
-    v.locator(".visin textarea").fill("Note locale");v.locator("[data-add]").click();pg.wait_for_timeout(500)
+    v.locator(".visin .rte").fill("Note locale");v.locator("[data-add]").click();pg.wait_for_timeout(500)
     ok("mode local" in v.locator(".visst").inner_text(),"mode local : enregistré sur cet appareil")
     # galerie : plusieurs photos d'un coup, depuis le flux puis depuis l'éditeur
     v.locator("[data-gal]").click();pg.wait_for_timeout(1500)
@@ -178,7 +178,7 @@ with sync_playwright() as pw:
     ok(v.locator(".visstage .vph").count()==6,"6 photos de la galerie jointes à la note")
     dims=pg.evaluate("""async()=>{const d=await new Promise(r=>{const q=indexedDB.open('todo-projets-visites');q.onsuccess=()=>r(q.result)});const all=await new Promise(r=>{const q=d.transaction('photos').objectStore('photos').getAll();q.onsuccess=()=>r(q.result)});const o=[];for(const p of all){const b=await createImageBitmap(p.blob);o.push([b.width,b.height])}return o}""")
     ok(dims.count([900,1200])==1,"photo enregistrée dans le sens choisi")
-    v.locator(".visin textarea").fill("Photos de la galerie");v.locator("[data-add]").click();pg.wait_for_timeout(500)
+    v.locator(".visin .rte").fill("Photos de la galerie");v.locator("[data-add]").click();pg.wait_for_timeout(500)
     pg.screenshot(path=OUT+"visit_gallery_flow.png")
     # accueil : import rapide de la galerie, puis choix du flux
     v.locator("[data-back]").click();pg.wait_for_timeout(200)
