@@ -288,7 +288,7 @@ dialog#recap::backdrop{background:rgba(17,24,29,.45)}
 .pfrow input{width:17px;height:17px;margin:0;accent-color:var(--nav)}
 .pfname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pfrow small{color:var(--muted);font-size:12px;white-space:nowrap}
-@media (max-width:760px){.pfmenu{left:0;right:auto;min-width:min(320px,calc(100vw - 28px))}}
+@media (max-width:899px){.pfmenu{left:0;right:auto;min-width:min(320px,calc(100vw - 28px))}}
 /* Réunions Outlook */
 .meet{display:flex;flex-direction:column;gap:1px;padding:6px 8px;border-radius:6px;border:1px solid #BFD3E0;background:#EEF5FA;font-size:12.5px;line-height:1.3;color:#1F3A4D}
 .meet .mt{font-weight:600;font-variant-numeric:tabular-nums}
@@ -372,8 +372,8 @@ dialog#calcfg::backdrop{background:rgba(17,24,29,.45)}
 .stucklbl{position:absolute;right:0;top:20px;font:700 17px "Barlow Condensed","Arial Narrow",sans-serif;color:var(--muted);visibility:hidden;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sticky.compact #ptabs:not([hidden]) + .stucklbl{visibility:visible}
 .task,.req,.pt,.group{scroll-margin-top:200px}
-@media (min-width:761px){html{scroll-padding-top:200px}}
-@media (max-width:760px){.sticky{position:static;margin-top:0;padding:0;background:none;box-shadow:none!important}.task,.req,.pt,.group{scroll-margin-top:0}}
+@media (min-width:900px){html{scroll-padding-top:200px}}
+@media (max-width:899px){.sticky{position:static;margin-top:0;padding:0;background:none;box-shadow:none!important}.task,.req,.pt,.group{scroll-margin-top:0}}
 @media print{.sticky{position:static}}
 /* En-tête : actions du projet et barre d'affichage */
 .head .tools{flex-wrap:nowrap}
@@ -479,7 +479,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
 @container (max-width:460px){.week{grid-template-columns:1fr}}
 @container (max-width:640px){.quick .qmain{flex-basis:100%}.quick select,.quick input[type=date],.quick .qw{flex:1 1 130px;width:auto}.quick .qadd{flex:1 1 100%}}
 /* Portable et tablette : colonne de navigation plus étroite */
-@media (min-width:761px) and (max-width:1180px){
+@media (min-width:900px) and (max-width:1180px){
   .side{flex-basis:228px;padding:20px 12px}
   .brand b{font-size:21px}
   main{padding:26px clamp(16px,3vw,32px) 56px}
@@ -492,7 +492,7 @@ dialog#expdlg::backdrop{background:rgba(17,24,29,.45)}
   .chk{width:22px;height:22px}
   .card .chk{width:20px;height:20px}
 }
-@media (max-width:760px){
+@media (max-width:899px){
   .side{flex:1 1 100%;min-width:0;max-width:100%;position:static;height:auto;gap:14px;padding:16px 14px 14px;overflow:visible}
   .views,.plist{min-width:0;max-width:100%}
   .menubtn{display:grid}
@@ -557,7 +557,7 @@ body.hasselbar{padding-bottom:calc(var(--selbarh,70px) + 40px)}
 .pttable .clamp{white-space:pre-line;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .pttable td.num{width:44px;color:var(--muted);font-variant-numeric:tabular-nums}
 /* ---------- Mobile : barre d'ajout repliée derrière le bouton + ---------- */
-@media (max-width:760px){
+@media (max-width:899px){
   body:not(.addopen) #quick,body:not(.addopen) #addslot > form{display:none}
   .fab svg{transition:transform .15s}
   body.addopen .fab svg{transform:rotate(45deg)}
@@ -641,7 +641,7 @@ body.hasdrawer .trashbtn,body.hasdrawer .fab{display:none}
 
 /* --- Barre de navigation du téléphone --- */
 .bnav{display:none}
-@media (max-width:760px){
+@media (max-width:899px){
   .side:not(.open) .views{display:none}
   .side.open .views{flex-direction:column;overflow:visible}
   .side.open .vbtn{width:100%;border-radius:8px}
@@ -661,7 +661,7 @@ body.hasdrawer .trashbtn,body.hasdrawer .fab{display:none}
 
 /* points : hypothèse et réponse sous la question (pas sur la même ligne) */
 .task.pt > div:not(.acts) > .phyp,.task.pt > div:not(.acts) > .pans,.task.req > div:not(.acts) > .note{flex:1 1 100%}
-@media (max-width:760px){
+@media (max-width:899px){
   .task{grid-template-columns:auto minmax(0,1fr) auto}
   .task .acts{grid-column:auto;justify-content:flex-end}
   .task .acts .sbtn{display:none}
@@ -809,7 +809,7 @@ body.mtgopen{overflow:hidden}
   .mtgbody.run{grid-template-columns:240px minmax(0,1fr)}
   .mtgbody.run .mtgside{grid-column:1/-1}
 }
-@media (max-width:760px){
+@media (max-width:899px){
   .mtgh{padding:10px 12px;gap:8px}
   .mtgbody,.mtgbody.run,.mtgbody.prep,.mtgbody.review{grid-template-columns:minmax(0,1fr);padding:12px}
   .mtgform form,.mtgform form.f-newpoint{grid-template-columns:minmax(0,1fr)}
@@ -836,7 +836,7 @@ body.mtgopen{overflow:hidden}
 /* ---------- Visites sur site (pensé pour le téléphone) ---------- */
 body.visopen{overflow:hidden}
 .visv{position:fixed;inset:0;z-index:55;background:var(--bg);color:var(--ink);display:flex;flex-direction:column}
-.visv > *{width:100%;max-width:760px;margin-left:auto;margin-right:auto;box-sizing:border-box}
+.visv > *{width:100%;max-width:899px;margin-left:auto;margin-right:auto;box-sizing:border-box}
 .vish{flex:none;max-width:none!important;background:var(--nav);color:var(--navink);padding:calc(10px + env(safe-area-inset-top,0px)) 16px 12px;display:flex;flex-direction:column;gap:10px}
 .vish > *{width:100%;max-width:728px;margin:0 auto}
 .visrow{display:flex;align-items:center;gap:8px}
@@ -952,7 +952,7 @@ body.visopen{overflow:hidden}
 .srchbtn{display:none}
 .mobonly-v{display:none!important}
 .ddm summary{white-space:nowrap}
-@media (max-width:760px){
+@media (max-width:899px){
   /* en-tête : logo, loupe et menu sur une seule ligne ; recherche et projets à la demande */
   .side:not(.open){gap:10px;padding:10px 14px}
   .side:not(.open) .brand svg{width:30px;height:30px}
@@ -991,22 +991,22 @@ body.visopen{overflow:hidden}
   .vbfilt[aria-expanded="true"]{background:var(--nav);color:#fff;border-color:var(--nav)}
   .viewbar .vbl{flex:1;min-width:0}
 }
-@media (min-width:761px){.vbfilt{display:none!important}}
-@media (max-width:760px){
+@media (min-width:900px){.vbfilt{display:none!important}}
+@media (max-width:899px){
   .app{align-content:flex-start}
   .head .tools{flex:none}
 }
-@media (max-width:760px){
+@media (max-width:899px){
   .head .tools .ddm > summary{height:40px;min-height:40px;padding:0 12px;display:flex;align-items:center;gap:4px}
 }
 .ddexp summary{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-@media (max-width:760px){.ddexp summary{width:44px;padding:0!important;justify-content:center}.ddexp .ddl,.ddexp .ddc{display:none}}
+@media (max-width:899px){.ddexp summary{width:44px;padding:0!important;justify-content:center}.ddexp .ddl,.ddexp .ddc{display:none}}
 
 /* =====================================================================
    Téléphone : écran Projets, accueil du projet, rubriques en plein écran
    ===================================================================== */
 .pback{display:none}
-@media (max-width:760px){
+@media (max-width:899px){
   .pback:not([hidden]){display:inline-flex;align-items:center;gap:2px;margin:-4px 0 4px -6px;padding:4px 8px 4px 2px;border:0;background:none;color:var(--steel);font:inherit;font-size:14px;cursor:pointer;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #ptabs{display:none!important}
   body[data-mode="projects"] .fab,body[data-mode="projects"] #viewbar,body[data-mode="projects"] .head .tools{display:none!important}
@@ -1133,7 +1133,7 @@ body.visopen{overflow:hidden}
 .logodrop.busy{opacity:.55}
 .logodrop img{max-width:100%;max-height:130px;object-fit:contain}
 .logodrop small{display:block;margin-top:6px;font-size:12px}
-@media (max-width:760px){.head h1 .plogo{height:30px;max-width:90px}}
+@media (max-width:899px){.head h1 .plogo{height:30px;max-width:90px}}
 .logodlg .logodel{color:var(--late)}
 /* Visite : galerie et clôture */
 .vistop{display:flex;gap:6px;align-items:center}
@@ -1142,7 +1142,7 @@ body.visopen{overflow:hidden}
 .visgal{width:52px;height:52px;flex:none;border:1px solid var(--line);border-radius:50%;background:var(--panel);color:var(--ink);display:grid;place-items:center;cursor:pointer}
 .visedit footer .btn.ico{flex:none;width:56px;padding:0;display:grid;place-items:center}
 .visf .visdone:not(.primary){background:var(--panel);border:1px solid var(--field);color:var(--ink);font-weight:600}
-@media (max-width:760px){.task.mtgrow .acts .sbtn[data-fin]{display:inline-flex;align-items:center}}
+@media (max-width:899px){.task.mtgrow .acts .sbtn[data-fin]{display:inline-flex;align-items:center}}
 /* Visionneuse photo : navigation entre les photos d'une note */
 .visphv{position:relative;flex:1;min-height:0;display:flex;touch-action:pan-y}
 .visphv img{flex:1;min-height:0;min-width:0;object-fit:contain;width:100%;user-select:none;-webkit-user-drag:none}
@@ -1205,7 +1205,7 @@ body.visopen{overflow:hidden}
 @media (prefers-reduced-motion:reduce){.bellbtn.on svg{animation:none}}
 .belln{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;border-radius:10px;background:var(--late);color:#fff;font:700 11px/20px Barlow,sans-serif;text-align:center;border:2px solid var(--bg)}
 .bellbtn.m{display:none}
-@media (max-width:760px){
+@media (max-width:899px){
   .bellbtn.d{display:none}
   .bellbtn.m{display:grid;margin-left:auto;width:44px;height:44px;border:0;background:var(--nav2);color:#fff;border-radius:8px}
   .bellbtn.m .belln{border-color:var(--nav)}
@@ -1213,7 +1213,7 @@ body.visopen{overflow:hidden}
 }
 .notifpop{position:fixed;z-index:80;width:min(420px,calc(100vw - 16px));max-height:min(72vh,640px);display:flex;flex-direction:column;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 44px rgba(22,35,43,.24);overflow:hidden}
 .notifpop[hidden]{display:none}
-@media (max-width:760px){.notifpop{width:auto}}
+@media (max-width:899px){.notifpop{width:auto}}
 .nph{display:flex;align-items:center;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--line2)}
 .nph b{flex:1;font:700 20px/1 "Barlow Condensed","Arial Narrow",sans-serif}
 .npread{border:0;background:none;color:var(--steel);font:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:4px 6px;border-radius:6px}

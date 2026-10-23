@@ -70,7 +70,7 @@
 .foot .status.ok::before{color:var(--ok)}
 .side .privlink{color:var(--muted)}
 /* la corbeille est dans la barre latérale (plus de bouton flottant sur ordinateur) */
-@media (min-width:761px){
+@media (min-width:900px){
   .mobonly-v{display:flex!important}
   .trashbtn{display:none!important}
 }
@@ -136,7 +136,7 @@ select,input[type=text],input[type=date],input[type=email],input[type=search],in
 dialog.uidlg{border-radius:16px}
 
 /* ---------- Téléphone ---------- */
-@media (max-width:760px){
+@media (max-width:899px){
   .side{background:var(--panel);border-right:0;border-bottom:1px solid var(--line);padding:12px 14px 10px}
   .brand b{font-size:21px}
   .menubtn{background:var(--chip);color:var(--ink);border-radius:12px}
@@ -169,7 +169,7 @@ dialog.uidlg{border-radius:16px}
 .card .cm .st.wait{color:var(--wait)}
 
 /* ---------- Fiche de détail (tâche, point, demande) : propriétés alignées ---------- */
-@media (min-width:761px){
+@media (min-width:900px){
   .edit.drawer{gap:6px 10px}
   .edit.drawer .dfield{display:grid!important;grid-template-columns:132px minmax(0,1fr);align-items:center;gap:10px;grid-column:1/-1!important;text-transform:none;letter-spacing:0;font-size:14px;font-weight:500;color:var(--muted)}
   .edit.drawer .dfield.wide:has(textarea){align-items:start}
@@ -190,7 +190,7 @@ dialog.uidlg{border-radius:16px}
 .quick .qparse{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:2px 8px 6px;font-size:12.5px}
 .quick .qparse .qpl{color:var(--muted);font-weight:600}
 .quick .qparse .tag .plogo{width:14px;height:14px;padding:0}
-@media (max-width:760px){.quick .qmain input::placeholder{font-size:14px}}
+@media (max-width:899px){.quick .qmain input::placeholder{font-size:14px}}
 
 /* ---------- Vue d'ensemble du projet (ordinateur) ---------- */
 .ovcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
@@ -229,7 +229,7 @@ dialog.uidlg{border-radius:16px}
 @media (max-width:1100px){.ovcards{grid-template-columns:repeat(2,minmax(0,1fr))}.ovgrid{grid-template-columns:1fr}}
 
 /* ---------- Accueil du projet (téléphone) : rubriques en liste ---------- */
-@media (max-width:760px){
+@media (max-width:899px){
   .phtiles{display:flex!important;flex-direction:column;gap:0!important;background:var(--panel);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
   .phtile{display:grid!important;grid-template-columns:40px minmax(0,1fr) auto;grid-template-areas:"ic t n" "ic s n";align-items:center;column-gap:12px;row-gap:1px;min-height:64px;padding:10px 16px!important;border:0!important;border-bottom:1px solid var(--line2)!important;border-radius:0!important;box-shadow:none!important;text-align:left}
   .phtile:last-child{border-bottom:0!important}
@@ -242,7 +242,7 @@ dialog.uidlg{border-radius:16px}
   .phacts .btn{height:50px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;font-size:15px;white-space:nowrap;padding:0 8px}
   .phacts .btn svg{width:18px;height:18px}
 }
-@media (min-width:761px){.phacts{display:none}}
+@media (min-width:900px){.phacts{display:none}}
 
 /* ---------- Rechercher ou créer (Ctrl+K) ---------- */
 dialog.cmdk{width:min(680px,calc(100vw - 24px));max-height:min(620px,calc(100vh - 80px));margin-top:min(12vh,110px);padding:0;border:0;border-radius:16px;box-shadow:0 24px 64px rgba(15,30,40,.35);background:var(--panel);color:var(--ink);overflow:hidden}
@@ -262,10 +262,10 @@ dialog.cmdk::backdrop{background:rgba(15,30,40,.42)}
 .cmdt{flex:1;min-width:0;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cmdm{flex:none;max-width:45%;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cmdf{display:flex;flex-wrap:wrap;gap:16px;padding:9px 18px;border-top:1px solid var(--line);background:var(--soft);font-size:12.5px;color:var(--muted)}
-@media (max-width:760px){dialog.cmdk{margin-top:12px}.cmdf{display:none}.cmdm{display:none}}
+@media (max-width:899px){dialog.cmdk{margin-top:12px}.cmdf{display:none}.cmdm{display:none}}
 
 /* ---------- Téléphone : glisser une tâche ---------- */
-@media (max-width:760px){
+@media (max-width:899px){
   #lists .task[data-id]:not(.pt):not(.req){touch-action:pan-y;position:relative;overflow:hidden}
   #lists .task.swiping > *{transform:translateX(var(--sx,0));transition:none}
   #lists .task.swiping{box-shadow:none}
@@ -477,7 +477,7 @@ dialog.cmdk::backdrop{background:rgba(15,30,40,.42)}
 .vacts .btn svg{width:16px;height:16px}
 .vacts .vmore{width:36px;padding:0;justify-content:center}
 .task.vr-open{border:2px solid var(--signal)}
-@media (max-width:760px){
+@media (max-width:899px){
   .task.vrow{flex-wrap:wrap;gap:10px 12px}
   .task.vrow > .vbody{flex:1 1 calc(100% - 70px)}
   .vacts{flex:1 1 100%;justify-content:flex-end}
@@ -586,7 +586,7 @@ body.mmopen{overflow:hidden}
 .mmn{font-size:14px;font-weight:600;color:var(--muted)}
 .mmch{color:var(--faint);display:grid;flex:none}
 .mmrow.danger .mmt > span{color:var(--late);font-weight:600}
-@media (min-width:761px){.mmenu{display:none}}
+@media (min-width:900px){.mmenu{display:none}}
 
 /* =====================================================================
    Texte enrichi : éditeur et affichage
@@ -629,7 +629,7 @@ span.rt{display:inline}
 .viscap[data-vt="action"] .visin .rtw{border:2px solid var(--signal)}
 .flbl .rtw{margin-top:4px}
 /* téléphone : barre au-dessus du clavier */
-@media (max-width:760px){
+@media (max-width:899px){
   .rtw.kb .rtb{display:flex;position:fixed;left:0;right:0;z-index:80;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;border-radius:0;border-top:1px solid var(--line);border-bottom:0;background:var(--panel);padding:5px 8px;box-shadow:0 -4px 12px rgba(15,30,40,.08)}
   .rtw.kb .rtb::-webkit-scrollbar{display:none}
   .rtw.kb .rtbtn{min-width:40px;height:36px;flex:none}
@@ -642,7 +642,7 @@ span.rt{display:inline}
 /* =====================================================================
    Barre latérale (ordinateur) : épurée
    ===================================================================== */
-@media (min-width:761px){
+@media (min-width:900px){
   .side{gap:4px;padding:18px 12px calc(14px + env(safe-area-inset-bottom,0px));position:sticky}
   .brand{padding:0 8px 12px}
   .side .search{margin:0 0 12px}
@@ -687,14 +687,14 @@ span.rt{display:inline}
   .toolsbox .who-me{margin:0 2px 6px;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
   .toolsbox .privlink{margin-top:8px}
 }
-@media (min-width:761px){
+@media (min-width:900px){
   .toolsbox .backup .btn{box-sizing:border-box;border:0!important;background:transparent!important;font-weight:500!important;color:var(--ink);height:36px;padding:0 10px!important;display:flex;align-items:center}
   .toolsbox .backup .btn:hover{background:var(--soft)!important}
   .toolsbox .backup .btn.primary{color:var(--ink)}
   .toolsbox .backup .btn[data-a="out"]{color:var(--late)!important;border-top:1px solid var(--line2)!important;border-radius:0 0 9px 9px;margin-top:4px}
   .toolsbox .fileinfo{margin:0 2px 4px;font-size:13px;color:var(--muted)}
 }
-@media (min-width:761px){
+@media (min-width:900px){
   .toolsbox[open]{padding:8px}
   .toolsbox .backup .btn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
   .toolsbox .backup .btn[data-a="loc"]{order:8}
@@ -714,7 +714,7 @@ span.rt{display:inline}
 .swatches .sw button svg{display:none}
 .swatches .sw button.on{outline:0;box-shadow:0 0 0 2px var(--panel),0 0 0 4px var(--ink)}
 .swatches .sw button.on svg{display:block}
-@media (max-width:760px){
+@media (max-width:899px){
   body.ddopen{overflow:hidden}
   #ptools .ddm.ddmore>summary{width:44px;height:44px;min-height:44px;padding:0;justify-content:center;border-radius:12px;color:var(--chipink)}
   .ddmore[open] .ddbg{display:block;position:fixed;inset:0;z-index:60;background:rgba(10,20,26,.45);animation:ddfade .18s ease-out}
@@ -740,8 +740,8 @@ span.rt{display:inline}
 @keyframes ddup{from{transform:translateY(100%)}to{transform:none}}
 @keyframes ddfade{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){.ddm.ddmore .menu,.ddmore[open] .ddbg{animation:none}}
-@media (min-width:761px){.ddm .menu .ddrow.mobonly,.ddm .menu .mh.mobonly{display:none}}
-@media (max-width:760px){.ddmore .menu button.ddrow,.ddmore .menu button.ddrow.mobonly{min-height:50px;padding:4px 8px}}
+@media (min-width:900px){.ddm .menu .ddrow.mobonly,.ddm .menu .mh.mobonly{display:none}}
+@media (max-width:899px){.ddmore .menu button.ddrow,.ddmore .menu button.ddrow.mobonly{min-height:50px;padding:4px 8px}}
 /* déplacement sur plusieurs jours */
 .vdd b .vddto{font-style:normal;font-size:.62em;font-weight:700;color:var(--muted);margin-left:1px}
 .visdur{margin:-2px 0 2px;font-size:13.5px}
@@ -837,7 +837,7 @@ span.rt{display:inline}
   .mesr > .vism.notes{flex:1;padding:0;overflow-y:auto}
   .mesr > .viscap{border:1px solid var(--line);border-radius:16px;padding:12px;box-shadow:none}
 }
-@media (max-width:760px){.mesbar > div{flex-basis:100%}.mesbar .btn{flex:1;justify-content:center}}
+@media (max-width:899px){.mesbar > div{flex-basis:100%}.mesbar .btn{flex:1;justify-content:center}}
 .t-req .phic{background:var(--clisoft);color:var(--cli)}
 .wseg button{white-space:nowrap}
 .tag.mes-ann{background:var(--chip);color:var(--muted);font-weight:600;text-decoration:line-through}
@@ -866,5 +866,27 @@ dialog.mtgpick{width:min(620px,calc(100vw - 24px))}
 .mtgpick .mpmsg{margin:8px 0;color:var(--chipink);line-height:1.45;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
 .mtgpick .mpmsg p{margin:0}
 .mtgpick .uibtns .sp{flex:1}
-@media (max-width:760px){.mtgpick .mpt{width:84px}}
+@media (max-width:899px){.mtgpick .mpt{width:84px}}
 .mtgpick .mpt em{display:block;font-style:normal;color:var(--ink);font-weight:700}
+/* ---------- Ordre des projets : glisser-déposer ---------- */
+#plist li.pli{position:relative;transition:transform .18s cubic-bezier(.2,.8,.2,1)}
+#plist.pdragging{user-select:none;-webkit-user-select:none}
+#plist.pdragging .pbtn{cursor:grabbing}
+#plist li.pdrag{z-index:5;transition:none}
+#plist li.pdrag .pbtn{background:var(--panel);box-shadow:0 8px 22px rgba(15,30,40,.18),0 0 0 1px var(--line);transform:scale(1.02);border-radius:10px}
+#plist li.pdrop{transition:transform .17s cubic-bezier(.2,.8,.2,1)}
+#plist li.pli .pbtn{touch-action:pan-y}
+@media (prefers-reduced-motion:reduce){#plist li.pli,#plist li.pdrop{transition:none}}
+/* ---------- Responsive : ordinateur, grand écran, tablette ---------- */
+/* la zone principale prend toute la place à côté de la barre latérale (jamais en dessous) */
+@media (min-width:900px){main{flex:1 1 0;min-width:0}}
+/* grand écran : le contenu s'élargit au lieu de rester à 1100 px collé à gauche */
+.wrap{max-width:min(1480px,100%)}
+@media (min-width:1700px){main{padding-left:clamp(40px,3.5vw,72px);padding-right:clamp(40px,3.5vw,72px)}}
+/* tablette en paysage / petit portable : barre latérale plus étroite */
+@media (min-width:900px) and (max-width:1180px){.side{flex-basis:236px}main{padding-left:24px;padding-right:24px}}
+/* noms des projets alignés, qu'il y ait un logo ou une pastille de couleur */
+.pbtn .plogo{width:22px;height:22px}
+.pbtn .dot{margin:0 2px}
+@media (max-width:899px){.side{flex-basis:100%}main{flex-basis:100%}}
+@media (min-width:600px) and (max-width:899px){.pjgrid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}main{padding-left:24px;padding-right:24px}}

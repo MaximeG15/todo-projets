@@ -19,7 +19,7 @@
   // Préférences d'affichage : stockées à part, jamais dans le fichier de données
   let ui={mode:"list",showDone:true};
   try{Object.assign(ui,JSON.parse(localStorage.getItem("todo-projets-ui")||"{}"))}catch(e){}
-  try{if(window.matchMedia("(max-width:760px)").matches)ui.mode="projects"}catch(e){} // sur téléphone, l'appli s'ouvre sur l'écran Projets
+  try{if(window.matchMedia("(max-width:899px)").matches)ui.mode="projects"}catch(e){} // sur téléphone, l'appli s'ouvre sur l'écran Projets
   const saveUi=()=>{try{localStorage.setItem("todo-projets-ui",JSON.stringify(ui))}catch(e){}};
   let weekStart=null; // lundi de la semaine affichée
   const mondayOf=d=>{const x=new Date(d);x.setHours(0,0,0,0);const wd=(x.getDay()+6)%7;x.setDate(x.getDate()-wd);return x};
@@ -283,6 +283,8 @@
   const rowT=t=>({id:t.id,project_id:t.projectId,title:t.title,priority:t.priority||"normale",due:t.due||null,status:t.status==="waiting"?"todo":(t.status||"todo"),waiting:t.status==="waiting",waiting_for:t.waitingFor||"",deleted_at:t.deletedAt||null,note:t.note||"",who:t.who||"",created_at:t.createdAt||Date.now(),done_at:t.doneAt||null,updated_at:t.updatedAt||Date.now(),updated_by:cloud.email,checklist:Array.isArray(t.checklist)?t.checklist:[],repeat:t.repeat||null,family:t.family||null,request_id:t.requestId||null});
   const rowP=p=>({id:p.id,name:p.name,color:p.color||null,archived:!!p.archived,logo:pLogo(p)||null,updated_at:p.updatedAt||Date.now()});
   const fromT=r=>({id:r.id,projectId:r.project_id,title:r.title,priority:r.priority,due:r.due||"",status:r.waiting&&r.status==="todo"?"waiting":r.status,waitingFor:r.waiting_for||"",deletedAt:r.deleted_at?Number(r.deleted_at):null,note:r.note||"",who:r.who||"",createdAt:Number(r.created_at),doneAt:r.done_at?Number(r.done_at):null,updatedAt:Number(r.updated_at),updatedBy:r.updated_by||"",checklist:Array.isArray(r.checklist)?r.checklist:[],repeat:r.repeat||null,family:r.family||"",requestId:r.request_id||null});
+  // ordre d'affichage des projets choisi par l'utilisateur (barre de gauche) ; les projets inconnus de l'ordre restent à la suite
+  const projSort=(list,order)=>{if(!Array.isArray(order)||!order.length)return list;const pos=new Map(order.map((id,i)=>[id,i]));return list.slice().sort((a,b)=>(pos.has(a.id)?pos.get(a.id):1e6)-(pos.has(b.id)?pos.get(b.id):1e6))};
   const fromP=r=>{const p={id:r.id,name:r.name,color:r.color||COLORS[0],archived:!!r.archived};if(r.logo&&LOGO_RX.test(r.logo))p.logo=r.logo;return p};
   const rowR=r=>({id:r.id,project_id:r.projectId,title:r.title,description:r.description||"",requester:r.requester||"",received:r.received||null,due:r.due||null,priority:r.priority||"normale",status:r.status||"new",scope:r.scope||"",estimate:r.estimate==null||r.estimate===""?null:Number(r.estimate),quote:r.quote||"",created_at:r.createdAt||Date.now(),updated_at:r.updatedAt||Date.now(),closed_at:r.closedAt||null,deleted_at:r.deletedAt||null,updated_by:cloud.email});
   const rowO=o=>({id:o.id,project_id:o.projectId,text:o.text,answer:o.answer||"",hypothesis:o.hypothesis||"",erp:o.erp||"",theme:o.theme||"",owner:o.owner||"",owner_name:o.ownerName||"",status:o.status==="closed"?"closed":"open",task_id:o.taskId||null,request_id:o.requestId||null,created_at:o.createdAt||Date.now(),updated_at:o.updatedAt||Date.now(),closed_at:o.closedAt||null,deleted_at:o.deletedAt||null,updated_by:cloud.email,excel_ref:o.xl||null,answer_new_at:o.ansNew||null});
@@ -371,6 +373,7 @@
       const pm={};PR.data.forEach(r=>pm[String(r.email).toLowerCase()]={first:r.first_name,last:r.last_name});
       const js=JSON.stringify(pm);if(js!==this._lastPr){this._lastPr=js;this.profiles=pm;this._cmChanged=true;$("#whoami").textContent=nameOf(this.email)}
       if(!pm[this.email]&&!this._askedProfile){this._askedProfile=true;ensureProfile()}
+      const me=PR.data.find(r=>this.user&&r.user_id===this.user.id);if(me&&Array.isArray(me.project_order)&&!this._orderPending)this.projOrder=me.project_order;
     }
     const err=P.error||M.error||T.error;
     if(!C.error){
@@ -409,6 +412,7 @@
     this.meta=meta;
     requests=requests.filter(r=>projects.some(p=>p.id===r.projectId));
     points=points.filter(o=>projects.some(p=>p.id===o.projectId));
+    projects=projSort(projects,this.projOrder);
     const next={projects,tasks,requests,points,deleted:[]};
     if(canon(next)!==canon(state)||JSON.stringify(meta)!==this._lastMeta){this._lastMeta=JSON.stringify(meta);this._cmChanged=false;applyState(next)}
     else if(this._cmChanged){this._cmChanged=false;render()}
@@ -1381,7 +1385,8 @@
       const badge=m?(m.owner!==cloud.user.id?`<span class="pshared" title="Partagé par ${esc(nameOf(m.ownerEmail))}"><span class="vsr">invité</span>${PSH}</span>`:(m.members.length?`<span class="pshared" title="Partagé avec ${esc(m.members.map(nameOf).join(", "))}"><span class="vsr">partagé</span>${PSH}</span>`:"")):"";
       const li=document.createElement("li");
       li.innerHTML=`<button class="pbtn${p.archived?" arch":""}" type="button" aria-current="${view===p.id}">${pMark(p)}<span class="pname">${esc(p.name)}</span>${badge}${ansOf(p.id).length?`<span class="pansn" title="${ansTxt(ansOf(p.id).length)} (Excel)">${ansOf(p.id).length}</span>`:""}<span class="count">${nOpen}</span><span class="pbar" title="${pct} % terminé"><i style="width:${pct}%;background:${p.color}"></i></span></button>`;
-      li.firstChild.onclick=()=>openProject(p.id);
+      li.firstChild.onclick=e=>{if(projDrag.justDropped){e.preventDefault();return}openProject(p.id)};
+      if(!p.archived){li.dataset.pid=p.id;li.className="pli";projDragBind(li)}
       pl.appendChild(li);
     };
     const actP=state.projects.filter(p=>!p.archived), archP=state.projects.filter(p=>p.archived);
@@ -1506,7 +1511,7 @@
       d.innerHTML=`<summary class="btn" aria-label="${esc(label.replace(/[▾⋯]/g,"").trim()||"Plus d'actions")}">${label==="⋯"?`<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`:label}</summary><div class="ddbg" aria-hidden="true"></div><div class="menu">${title?`<div class="ddsh"><span class="ddgrab" aria-hidden="true"></span><div class="ddtt">${title}</div><button type="button" class="ddx" aria-label="Fermer">${ddSvg("close")}</button></div>`:""}</div>`;
       const m=d.querySelector(".menu");
       d.querySelector(".ddbg").onclick=()=>{d.open=false};const dx0=d.querySelector(".ddx");if(dx0)dx0.onclick=()=>{d.open=false};
-      d.addEventListener("toggle",()=>document.body.classList.toggle("ddopen",d.open&&matchMedia("(max-width:760px)").matches));
+      d.addEventListener("toggle",()=>document.body.classList.toggle("ddopen",d.open&&matchMedia("(max-width:899px)").matches));
       items.filter(Boolean).forEach(it=>{if(it==="-"){m.insertAdjacentHTML("beforeend",`<hr>`);return}if(it.hr){m.insertAdjacentHTML("beforeend",`<hr class="${it.cls||""}">`);return}
         if(it.colors){const pr=it.colors, taken=new Set(state.projects.filter(x=>x.id!==pr.id).map(x=>String(x.color||"").toUpperCase()));
           const w=document.createElement("div");w.className="swatches";w.innerHTML=`<div class="mh">Couleur du projet</div><div class="sw">${COLORS.map(c=>`<button type="button" data-c="${c}" style="background:${c}" aria-label="Couleur ${c}${taken.has(c)?" (déjà utilisée par un autre projet)":""}" aria-pressed="${String(pr.color).toUpperCase()===c}" title="${taken.has(c)?"Déjà utilisée par un autre projet":"Choisir cette couleur"}" class="${String(pr.color).toUpperCase()===c?"on":""}${taken.has(c)?" taken":""}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></button>`).join("")}</div>`;
@@ -5571,12 +5576,72 @@
   // ---------- Téléphone : écran Projets (icônes) et accueil du projet ----------
   // Sur téléphone, « Projets » (barre du bas) ouvre la grille des projets ; un projet s'ouvre sur son accueil
   // (alerte, quatre rubriques, prochaines échéances) et chaque rubrique s'affiche en plein écran avec un retour.
-  const isPhone=()=>window.matchMedia("(max-width:760px)").matches;
+  const isPhone=()=>window.matchMedia("(max-width:899px)").matches;
   const projIni=n=>{const w=String(n||"").replace(/[^\p{L}\p{N}\s/'-]/gu," ").split(/[\s/'-]+/).filter(Boolean);return ((w.length>1?w[0][0]+w[1][0]:(w[0]||"?").slice(0,2))||"?").toUpperCase()};
   const ICO={req:"M4 4h16v12H8l-4 4zM8 9h8M8 12h5",tasks:"M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2",points:"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5M12 16v.5",meetings:"M3 5h18v16H3zM3 10h18M8 3v4M16 3v4",visits:"M3 9.5 12 4l9 5.5V20H3zM7 20v-8h10v8M7 14.5h10M7 17.5h10"};
   const svgI=d=>`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"></path></svg>`;
   function openProject(id){if(view!==id)shareOpen=false;if(view==="all"&&ui.who==="__me")ui.who=""; // le filtre « Mes tâches » de la vue Tâches ne suit pas dans le projet
     view=id;if(ui.scope==="today")ui.scope="all";ui.mode=isPhone()?"home":(["dash","trash","requests","projects","home"].includes(ui.mode)?"list":ui.mode);saveUi();editing=null;query="";$("#search").value="";closeMenu();render();window.scrollTo({top:0})}
+  // ---------- Ordre des projets : glisser-déposer dans la barre de gauche (souris, tactile après appui long, Alt+flèches) ----------
+  const projDrag={on:false,justDropped:false};
+  function projSetOrder(ids){
+    const pos=new Map(ids.map((id,i)=>[id,i]));
+    const act=state.projects.filter(p=>!p.archived).sort((a,b)=>(pos.has(a.id)?pos.get(a.id):1e6)-(pos.has(b.id)?pos.get(b.id):1e6));
+    state.projects=act.concat(state.projects.filter(p=>p.archived));
+    const order=state.projects.map(p=>p.id);
+    if(MODE==="cloud"&&cloud.user){cloud.projOrder=order;cloud._orderPending=true;
+      cloudClient().from("profiles").update({project_order:order}).eq("user_id",cloud.user.id).then(({error})=>{cloud._orderPending=false;if(error)toast("Ordre des projets non enregistré en ligne : "+(error.message||"erreur"))},()=>{cloud._orderPending=false})}
+    else save();
+    render();
+  }
+  function projDragBind(li){
+    const btn=li.querySelector(".pbtn");
+    btn.addEventListener("keydown",e=>{
+      if(!e.altKey||(e.key!=="ArrowUp"&&e.key!=="ArrowDown"))return;e.preventDefault();
+      const ids=[...li.parentNode.querySelectorAll("li.pli")].map(x=>x.dataset.pid), i=ids.indexOf(li.dataset.pid), j=i+(e.key==="ArrowUp"?-1:1);
+      if(j<0||j>=ids.length)return;[ids[i],ids[j]]=[ids[j],ids[i]];projSetOrder(ids);
+      const nb=document.querySelector(`#plist li[data-pid="${li.dataset.pid}"] .pbtn`);if(nb)nb.focus();
+    });
+    btn.addEventListener("pointerdown",e=>{
+      if(e.button!==0||projDrag.on)return;
+      const touch=e.pointerType!=="mouse", y0=e.clientY, x0=e.clientX;let started=false, timer=null, items, idx, h, gap, rects, target;
+      const begin=()=>{
+        started=true;projDrag.on=true;
+        items=[...li.parentNode.querySelectorAll("li.pli")];idx=items.indexOf(li);target=idx;
+        rects=items.map(x=>x.getBoundingClientRect());h=rects[idx].height;gap=items.length>1?(rects[Math.min(1,items.length-1)].top-rects[0].bottom):0;
+        li.classList.add("pdrag");li.parentNode.classList.add("pdragging");
+        try{btn.setPointerCapture(e.pointerId)}catch(x){}
+        if(navigator.vibrate&&touch)try{navigator.vibrate(15)}catch(x){}
+      };
+      const move=ev=>{
+        if(!started){
+          if(touch){if(Math.abs(ev.clientY-y0)>8||Math.abs(ev.clientX-x0)>8){clearTimeout(timer);cleanup()}return}
+          if(Math.abs(ev.clientY-y0)<5)return;begin();
+        }
+        ev.preventDefault();
+        const dy=ev.clientY-y0;li.style.transform=`translateY(${dy}px)`;
+        const mid=rects[idx].top+h/2+dy;
+        let t=0;rects.forEach((r,k)=>{if(k!==idx&&mid>r.top+r.height/2)t++});
+        if(t!==target){target=t;items.forEach((x,k)=>{if(k===idx)return;const sh=(idx<target&&k>idx&&k<=target)?-(h+gap):(idx>target&&k<idx&&k>=target)?(h+gap):0;x.style.transform=sh?`translateY(${sh}px)`:""})}
+      };
+      const up=()=>{
+        clearTimeout(timer);
+        if(!started){cleanup();return}
+        const final=(target-idx)*(h+gap)+(target>idx?0:0);
+        li.classList.add("pdrop");li.style.transform=`translateY(${final}px)`;
+        const ids=items.map(x=>x.dataset.pid);const [m]=ids.splice(idx,1);ids.splice(target,0,m);
+        projDrag.justDropped=true;setTimeout(()=>{projDrag.justDropped=false},250);
+        setTimeout(()=>{items.forEach(x=>{x.style.transform="";x.classList.remove("pdrag","pdrop")});li.parentNode&&li.parentNode.classList.remove("pdragging");projDrag.on=false;if(target!==idx)projSetOrder(ids)},170);
+        cleanup(true);
+      };
+      const cleanup=keep=>{document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",up);document.removeEventListener("pointercancel",up);if(!keep&&!started)projDrag.on=false};
+      document.addEventListener("pointermove",move,{passive:false});document.addEventListener("pointerup",up);document.addEventListener("pointercancel",up);
+      if(touch)timer=setTimeout(()=>{if(!started)begin()},300);
+    });
+    btn.addEventListener("contextmenu",e=>{if(projDrag.on)e.preventDefault()});
+    btn.title=btn.title||"Glisser pour changer l'ordre (ou Alt + flèches)";
+  }
+  window.__projOrder=()=>state.projects.map(p=>p.name); // utilisé par les tests
   function renderProjects(L){
     const alive=live(), act=state.projects.filter(p=>!p.archived), arch=state.projects.filter(p=>p.archived);
     const tile=p=>{const open=alive.filter(t=>t.projectId===p.id&&t.status!=="done"), late=open.filter(isLate).length;
@@ -6155,7 +6220,7 @@
     pop.dataset.fresh=JSON.stringify(d.late.concat(d.soon).filter(x=>!seen.has(x.k)).map(x=>x.k));
     // tout ce qui est affiché est considéré comme vu (les réponses du client restent jusqu'à leur lecture)
     ui.notifSeen=d.late.concat(d.soon).map(x=>x.k);saveUi();
-    const r=btn.getBoundingClientRect(), phone=window.innerWidth<=760;
+    const r=btn.getBoundingClientRect(), phone=window.innerWidth<=899;
     pop.style.top=Math.round(r.bottom+8)+"px";
     if(phone){pop.style.left="8px";pop.style.right="8px"}else{pop.style.left="auto";pop.style.right=Math.max(8,Math.round(window.innerWidth-r.right))+"px"}
     pop.hidden=false;btn.setAttribute("aria-expanded","true");
@@ -6309,7 +6374,7 @@
   // l'utilisateur touche l'écran : Chrome sur Android ignore les entrées posées sans action de l'utilisateur.
   // Chaque appui sur Retour remonte d'un niveau jusqu'à l'accueil (Projets sur téléphone, Ma journée sur ordinateur) ; à l'accueil, Retour quitte l'appli.
   // accueil : écran Projets sur téléphone, Ma journée sur ordinateur
-  const navHome=()=>window.matchMedia("(max-width:760px)").matches?{view:"all",mode:"projects",scope:"all",who:""}:{view:"all",mode:"list",scope:"today",who:""};
+  const navHome=()=>window.matchMedia("(max-width:899px)").matches?{view:"all",mode:"projects",scope:"all",who:""}:{view:"all",mode:"list",scope:"today",who:""};
   const nav={stack:[],restoring:false,depth:0,inPop:false};
   const navSnap=()=>({view,mode:ui.mode,scope:ui.scope,who:ui.who||""});
   const navKey=x=>x.mode==="projects"?"all|projects":[x.view,x.mode,x.scope,x.mode==="list"&&x.scope==="today"?"":x.who].join("|");
