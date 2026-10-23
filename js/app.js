@@ -1525,7 +1525,10 @@
         sb.innerHTML=`${who.length>1?`<span class="avs">${who.slice(0,4).map((e,i)=>`<span style="background:${AVC[i%AVC.length]}" title="${esc(nameOf(e))}">${esc(initials(nameOf(e)))}</span>`).join("")}${who.length>4?`<span class="more4">+${who.length-4}</span>`:""}</span>`:""}${shareOpen?"Fermer le partage":"Partager"}`;
         sb.title=who.length>1?"Partagé avec "+m.members.map(nameOf).join(", "):"Partager ce projet avec un collègue";
       }
-      if(p&&mode==="points"&&xlOn(p.id)&&(MODE!=="cloud"||isOwner(p.id))&&xlFsOk())b("Synchroniser avec Excel",()=>xlQuick(p),"deskonly");
+      if(p&&mode==="points"&&(MODE!=="cloud"||isOwner(p.id))){
+        if(xlOn(p.id)&&xlFsOk())b("Synchroniser avec Excel",()=>xlQuick(p),"deskonly");
+        const xb=b("",()=>xlCfg(p),"deskonly xlcfgbtn");xb.innerHTML=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4zM4 9h16M4 14h16M10 4v16"></path></svg><span>${xlOn(p.id)?"Lien Excel":"Connecter Excel"}</span>`;xb.title=xlOn(p.id)?"Fichier Excel lié : réglages et explications":"Synchroniser les points ouverts avec un fichier Excel (SharePoint / OneDrive)";
+      }
       const dx=ddMenu("Exporter ▾",[{h:"Documents"},{t:"Récap de la semaine",fn:openRecap},{t:"Plan d'actions (Excel / PDF)",fn:()=>openExport(p,"tasks")},{t:"Points ouverts (Excel / PDF)",fn:()=>openExport(p,"points")}],"ddexp");
       dx.querySelector("summary").innerHTML=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg><span class="ddl">Exporter</span><span class="ddc" aria-hidden="true">▾</span>`;
       // éléments affichés seulement sur téléphone, où Partager et Exporter sont regroupés dans le menu ⋯
@@ -1533,7 +1536,7 @@
         {t:"Exporter le plan d'actions",i:"plan",fn:()=>openExport(p,"tasks"),cls:"mobonly"},{t:"Exporter les points ouverts",i:"points",fn:()=>openExport(p,"points"),cls:"mobonly"},{t:"Récap de la semaine",i:"recap",fn:openRecap,cls:"mobonly"},{t:"-",cls:"mobonly",hr:true}]:[];
       const ttl=p?`<span class="ddcol" style="background:${esc(p.color||"#888")}"></span><b>${esc(p.name)}</b>`:"";
       if(p){
-        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[...mob,{h:"Projet",cls:"mobonly"},{t:"Renommer le projet",i:"rename",fn:()=>renameProject(p)},{t:pLogo(p)?"Changer le logo du client…":"Ajouter le logo du client…",i:"logo",fn:()=>logoDialog(p)},...(MODE==="cloud"?[{t:"Ajouter les points ouverts standard…",i:"std",fn:()=>tplDialog(p,false)}]:[]),{colors:p},"-",...(xlOn(p.id)?[{h:"Lien Excel des points ouverts"},{t:"Synchroniser avec Excel",i:"sync",fn:()=>xlQuick(p)},...(xlFsOk()?[{t:"Choisir le fichier Excel lié…",i:"link",fn:()=>xlLink(p)}]:[]),{t:"Importer un fichier Excel…",i:"imp",fn:()=>xlPick(p)},{t:"Désactiver le lien Excel",i:"unlink",fn:()=>xlToggle(p,false)},{t:"Supprimer tous les points ouverts…",i:"trash",fn:()=>xlPurge(p),cls:"danger"},"-"]:[]),{t:p.archived?"Réactiver le projet":"Archiver le projet",i:"archive",fn:()=>archiveProject(p,!p.archived)},{t:"Supprimer le projet",i:"trash",fn:()=>deleteProject(p),cls:"danger"}],"ddmore",ttl);
+        if(MODE!=="cloud"||isOwner(p.id))ddMenu("⋯",[...mob,{h:"Projet",cls:"mobonly"},{t:"Renommer le projet",i:"rename",fn:()=>renameProject(p)},{t:pLogo(p)?"Changer le logo du client…":"Ajouter le logo du client…",i:"logo",fn:()=>logoDialog(p)},...(MODE==="cloud"?[{t:"Ajouter les points ouverts standard…",i:"std",fn:()=>tplDialog(p,false)}]:[]),{colors:p},"-",{t:xlOn(p.id)?"Lien Excel des points ouverts…":"Synchroniser les points ouverts avec Excel…",i:"sync",fn:()=>xlCfg(p),cls:"deskonly"},{t:p.archived?"Réactiver le projet":"Archiver le projet",i:"archive",fn:()=>archiveProject(p,!p.archived)},{t:"Supprimer le projet",i:"trash",fn:()=>deleteProject(p),cls:"danger"}],"ddmore",ttl);
         else ddMenu("⋯",[...mob,{t:"Quitter le projet",i:"quit",fn:()=>shareRemove(p.id,cloud.email,true),cls:"danger"}],"ddmore",ttl);
       }
     }
@@ -3207,14 +3210,47 @@
     ifr.srcdoc=html;
   }
   // ---------- Lien Excel des points ouverts (mise à jour à sens unique : Excel vers appli) ----------
-  // Fonction cachée, activée par projet avec « /excel » dans la recherche. L'Excel n'est jamais modifié.
+  // Disponible sur tous les projets : « Lien Excel » dans les points ouverts (explication et choix du fichier). L'Excel n'est jamais modifié.
   // Chaque point lié garde (xl) les dernières valeurs lues dans l'Excel : ensuite, un champ n'est repris que s'il a changé dans l'Excel.
   // Au premier rapprochement (ou après un changement des règles de lecture, XL_VER), les écarts entre appli et Excel sont soumis à l'utilisateur.
   const XL_VER=2;
-  const xlOn=pid=>!!(ui.xl&&ui.xl[pid]);
-  function xlToggle(p,on){
-    ui.xl=ui.xl||{};if(on)ui.xl[p.id]=true;else delete ui.xl[p.id];saveUi();render();
-    toast(on?`Lien Excel activé pour « ${p.name} » : bouton « Synchroniser avec Excel » dans les points ouverts.`:`Lien Excel désactivé pour « ${p.name} ».`);
+  // un projet est lié quand un fichier Excel a été choisi sur ce poste (ou par l'ancienne activation « /excel »)
+  const xlOn=pid=>!!((ui.xlFile&&ui.xlFile[pid])||(ui.xl&&ui.xl[pid]));
+  async function xlUnlink(p){
+    if(!await uiConfirm(`Délier le fichier Excel de « ${p.name} » ?\n\nLes points ouverts restent dans l'appli ; ils ne seront simplement plus mis à jour depuis l'Excel.`,{ok:"Délier"}))return;
+    if(ui.xl)delete ui.xl[p.id];if(ui.xlFile)delete ui.xlFile[p.id];if(ui.xlPend)delete ui.xlPend[p.id];delete xlNeed[p.id];delete xlHandles[p.id];
+    try{const db=await xlIdb();db.transaction("xl","readwrite").objectStore("xl").delete(p.id)}catch(e){}
+    saveUi();render();toast(`Fichier Excel délié de « ${p.name} ».`);
+  }
+  // Fenêtre d'explication et de réglage, sur le modèle du lien vers l'agenda Outlook
+  function xlCfg(p){
+    const linked=xlOn(p.id), f=ui.xlFile&&ui.xlFile[p.id], last=ui.xlLast&&ui.xlLast[p.id]?new Date(ui.xlLast[p.id]):null, fs=xlFsOk();
+    const d=document.createElement("dialog");d.className="xlcfg";d.setAttribute("aria-labelledby","xlcfgt");
+    d.innerHTML=`<form method="dialog" class="rbox">
+      <h2 id="xlcfgt" style="margin:0;font:700 26px/1.1 'Barlow Condensed','Arial Narrow',sans-serif">Synchroniser les points ouverts avec Excel</h2>
+      ${linked?`<p class="xlstate"><b>Fichier lié${f?" : "+esc(f):""}</b>${last?`<span>Dernière mise à jour le ${last.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})} à ${last.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</span>`:""}<span>Relu automatiquement toutes les 10 minutes quand l'appli est ouverte sur cet ordinateur.</span></p>`:""}
+      <ol class="calsteps">
+        <li>Dans <b>SharePoint</b>, ouvrez le dossier qui contient le fichier des points ouverts et cliquez sur <b>Synchroniser</b> (ou <b>Ajouter un raccourci à Mes fichiers</b>). OneDrive copie le fichier sur votre ordinateur et le tient à jour.</li>
+        <li>Vérifiez que le tableau a une colonne <b>Description</b> (ou « Point ouvert », « Question »). Les colonnes <b>N°</b>, <b>Thème / Sujet</b>, <b>Statut / État</b>, <b>Acteur</b>, <b>Hypothèse Mecalux</b>, <b>Retour client</b> et <b>ERP</b> sont reconnues par leur titre, dans n'importe quel ordre.</li>
+        <li>Cliquez sur <b>${linked?"Changer de fichier":"Choisir le fichier Excel"}</b> puis ouvrez le fichier dans votre dossier OneDrive (par exemple « OneDrive - Mecalux »). Autorisez l'accès quand le navigateur le demande.</li>
+      </ol>
+      ${fs?"":`<p class="gerr">Ce navigateur ne permet pas de lier un fichier. Ouvrez l'appli dans Edge ou Chrome sur ordinateur, ou utilisez « Importer une fois » à chaque mise à jour.</p>`}
+      <p class="hint">Mise à jour à sens unique, de l'Excel vers l'appli : le fichier n'est jamais modifié. Au premier rapprochement, les écarts entre l'appli et l'Excel vous sont soumis ; ensuite, seuls les changements faits dans l'Excel sont repris. Le lien est mémorisé sur cet ordinateur uniquement.</p>
+      <div class="ractions">
+        ${linked&&fs?`<button class="btn primary" type="button" data-a="sync">Synchroniser maintenant</button><button class="btn" type="button" data-a="link">Changer de fichier</button>`:fs?`<button class="btn primary" type="button" data-a="link">Choisir le fichier Excel</button>`:""}
+        <button class="btn" type="button" data-a="pick">Importer une fois…</button>
+        ${linked?`<button class="btn" type="button" data-a="unlink">Délier le fichier</button>`:""}
+        <button class="btn ghost" type="button" data-a="x">Fermer</button>
+      </div>
+      ${(state.points||[]).some(x=>x.projectId===p.id)?`<button type="button" class="btn ghost danger xlpurge" data-a="purge">Supprimer tous les points ouverts du projet…</button>`:""}
+    </form>`;
+    document.body.appendChild(d);
+    const close=()=>{try{d.close()}catch(e){}d.remove()};
+    d.addEventListener("cancel",e=>{e.preventDefault();close()});
+    d.querySelector("form").onsubmit=e=>e.preventDefault();
+    d.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>{const a=b.dataset.a;close();
+      if(a==="sync")xlQuick(p);else if(a==="link")xlLink(p);else if(a==="pick")xlPick(p);else if(a==="unlink")xlUnlink(p);else if(a==="purge")xlPurge(p)});
+    if(d.showModal)d.showModal();else d.setAttribute("open","");
   }
   const XL_F=["text","theme","hypothesis","answer","status","owner","erp"];
   const XL_LBL={text:"description",theme:"thème",hypothesis:"commentaire Mecalux",answer:"commentaire client",status:"statut",owner:"acteur",erp:"sujet ERP"};
@@ -5952,7 +5988,7 @@
       e.preventDefault();e.target.value="";query="";
       const p=proj(view);
       if(!p||(MODE==="cloud"&&!isOwner(p.id))){render();return}
-      xlToggle(p,!xlOn(p.id));
+      render();xlCfg(p);
     }
   });
   $("#calsave").onclick=saveCalCfg;

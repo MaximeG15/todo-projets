@@ -841,3 +841,11 @@ span.rt{display:inline}
 .t-req .phic{background:var(--clisoft);color:var(--cli)}
 .wseg button{white-space:nowrap}
 .tag.mes-ann{background:var(--chip);color:var(--muted);font-weight:600;text-decoration:line-through}
+/* ---------- Lien Excel des points ouverts : fenêtre d'explication ---------- */
+dialog.xlcfg{border:0;border-radius:16px;padding:0;width:min(640px,calc(100vw - 24px));background:var(--panel);color:var(--ink);box-shadow:var(--pop)}
+dialog.xlcfg::backdrop{background:rgba(17,24,29,.45)}
+.xlcfg .calsteps{line-height:1.45}
+.xlstate{margin:0;display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:12px;background:var(--oksoft,#E7F5EE);color:var(--okink,#1F6B47);font-size:13.5px}
+.xlstate b{font-size:14.5px}
+.xlpurge{align-self:flex-start;color:var(--late)}
+.xlcfgbtn{display:inline-flex;align-items:center;gap:6px}

@@ -3,11 +3,15 @@ from helpers import APP,OUT,on_dialog
 import json, datetime, openpyxl
 from playwright.sync_api import sync_playwright
 def open_xl_menu(pg,label="Importer un fichier Excel"):
-    # ouvre le menu ⋯ (nouvel essai si un rendu différé l'a refermé)
+    # ouvre la fenêtre « Lien Excel » depuis le menu ⋯ et renvoie le bouton demandé
+    label={"Importer un fichier Excel":"Importer une fois"}.get(label,label)
     for _ in range(4):
-        if not pg.locator(".ddmore[open]").count():pg.locator(".ddmore summary").click()
+        if not pg.locator("dialog.xlcfg").count():
+            if not pg.locator(".ddmore[open]").count():pg.locator(".ddmore summary").click()
+            try:pg.locator(".ddmore .menu button",has_text="Excel").first.click(timeout=1500)
+            except Exception:pass
         try:
-            pg.locator(".ddmore .menu button",has_text=label).wait_for(state="visible",timeout=1500);return pg.locator(".ddmore .menu button",has_text=label)
+            b=pg.locator("dialog.xlcfg button",has_text=label);b.wait_for(state="visible",timeout=1500);return b
         except Exception:pg.wait_for_timeout(200)
     return pg.locator(".ddmore .menu button",has_text=label)
 errs=[]
@@ -39,10 +43,10 @@ with sync_playwright() as pw:
     pt=lambda i:[x for x in st()["points"] if x["id"]==i][0]
     pg.locator(".pbtn",has_text="Projet Alpha").click()
     pg.locator(".ddmore summary").click()
-    ok(pg.locator(".ddmore .menu",has_text="Excel").count()==0,"fonction invisible par défaut")
-    pg.keyboard.press("Escape");pg.locator("#search").fill("/excel");pg.locator("#search").press("Enter");pg.wait_for_timeout(200)
+    ok(pg.locator(".ddmore .menu button",has_text="Excel").count()==1,"lien Excel disponible par défaut dans le menu ⋯")
+    pg.keyboard.press("Escape")
     btn=open_xl_menu(pg)
-    ok(btn.count()==1,"commande cachée /excel : menu disponible")
+    ok(btn.count()==1 and "SharePoint" in pg.locator("dialog.xlcfg").inner_text(),"fenêtre d'explication (SharePoint, OneDrive, colonnes)")
     with pg.expect_file_chooser() as fc: btn.click()
     fc.value.set_files(v1);pg.wait_for_timeout(600)
     print("   ",seen[-1].replace("\n"," | ")[:400])
@@ -71,7 +75,7 @@ with sync_playwright() as pw:
     ok(pt("a")["status"]=="open" and not any(x["text"]=="Second nouveau point" for x in st()["points"]),"annulation de la mise à jour")
     # autre projet : rien
     pg.locator(".pbtn",has_text="Projet Bêta").click();pg.locator(".ddmore summary").click()
-    ok(pg.locator(".ddmore .menu",has_text="Excel").count()==0,"autre projet : fonction absente")
+    ok(pg.locator(".ddmore .menu button",has_text="Synchroniser les points ouverts avec Excel").count()==1,"autre projet : lien Excel proposé, non lié")
     # Excel avec N° et colonnes « Commentaire » ; points liés par une ancienne version (sans N°) : écarts soumis
     HDR[:]=["N°","Date d'ouverture","Sujets ouverts","Description","Commentaire Mecalux","Commentaires CLIENT","Statut","Acteur","Sujet ERP ?"]
     v3=xlsx("v3.xlsx",[[1,d,"Réception",A,"Mecalux propose 100x150","Validé","Clôturé",None,"NON"],[2,d,"Expédition","Nombre de quais de chargement à prévoir ?","Deux quais",None,"Ouvert","Client",None],[3,d,"Expédition","Gestion des numéros de série à l'expédition (scan obligatoire)",None,None,None,None,"OUI"]])
