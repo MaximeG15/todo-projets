@@ -47,7 +47,7 @@ with sync_playwright() as pw:
     # tactile
     m=b.new_context(viewport={"width":390,"height":844},has_touch=True,is_mobile=True).new_page()
     m.add_init_script("localStorage.setItem('todo-projets',%s);localStorage.setItem('todo-mode','local');localStorage.setItem('todo-projets-ui','{}')"%json.dumps(json.dumps(data)))
-    m.goto(APP);m.wait_for_timeout(300)
+    m.goto(APP);m.wait_for_timeout(300);m.locator(".bnav [data-b=mine]").tap();m.wait_for_timeout(200)
     m.locator('.task[data-id="a"] .stepstag').tap();m.wait_for_timeout(150)
     g=m.locator('.task[data-id="a"] ul.steps li').nth(2).locator(".grip");g.scroll_into_view_if_needed();m.wait_for_timeout(100);bb=g.bounding_box();t0=m.locator('.task[data-id="a"] ul.steps li').nth(0).bounding_box()
     cdp=m.context.new_cdp_session(m)

@@ -19,6 +19,7 @@
   // Préférences d'affichage : stockées à part, jamais dans le fichier de données
   let ui={mode:"list",showDone:true};
   try{Object.assign(ui,JSON.parse(localStorage.getItem("todo-projets-ui")||"{}"))}catch(e){}
+  try{if(window.matchMedia("(max-width:760px)").matches)ui.mode="projects"}catch(e){} // sur téléphone, l'appli s'ouvre sur l'écran Projets
   const saveUi=()=>{try{localStorage.setItem("todo-projets-ui",JSON.stringify(ui))}catch(e){}};
   let weekStart=null; // lundi de la semaine affichée
   const mondayOf=d=>{const x=new Date(d);x.setHours(0,0,0,0);const wd=(x.getDay()+6)%7;x.setDate(x.getDate()-wd);return x};
@@ -6215,17 +6216,19 @@
   // ---------- Bouton « retour » du téléphone (et du navigateur) : retour en arrière dans l'appli ----------
   // Une entrée d'historique par niveau (écran précédent, fenêtre, panneau, visite ouverte…), posée au moment où
   // l'utilisateur touche l'écran : Chrome sur Android ignore les entrées posées sans action de l'utilisateur.
-  // Chaque appui sur Retour remonte d'un niveau jusqu'à « Ma journée » (accueil) ; à l'accueil, Retour quitte l'appli.
-  const NAV_HOME={view:"all",mode:"list",scope:"today",who:""};
+  // Chaque appui sur Retour remonte d'un niveau jusqu'à l'accueil (Projets sur téléphone, Ma journée sur ordinateur) ; à l'accueil, Retour quitte l'appli.
+  // accueil : écran Projets sur téléphone, Ma journée sur ordinateur
+  const navHome=()=>window.matchMedia("(max-width:760px)").matches?{view:"all",mode:"projects",scope:"all",who:""}:{view:"all",mode:"list",scope:"today",who:""};
   const nav={stack:[],restoring:false,depth:0,inPop:false};
   const navSnap=()=>({view,mode:ui.mode,scope:ui.scope,who:ui.who||""});
-  const navKey=x=>[x.view,x.mode,x.scope,x.mode==="list"&&x.scope==="today"?"":x.who].join("|");
+  const navKey=x=>x.mode==="projects"?"all|projects":[x.view,x.mode,x.scope,x.mode==="list"&&x.scope==="today"?"":x.who].join("|");
   try{history.replaceState({todoNav:0},"")}catch(e){}
   function navRecord(){
     if(nav.restoring||!state||!state.projects)return;
     const x=navSnap();
-    if(!nav.stack.length)nav.stack.push(NAV_HOME);
-    if(navKey(x)===navKey(NAV_HOME)){nav.stack=[NAV_HOME];return} // revenu à l'accueil : Retour quittera l'appli
+    const home=navHome();
+    if(!nav.stack.length)nav.stack.push(home);
+    if(navKey(x)===navKey(home)){nav.stack=[home];return} // revenu à l'accueil : Retour quittera l'appli
     const top=nav.stack[nav.stack.length-1];
     if(navKey(top)!==navKey(x)){nav.stack.push(x);if(nav.stack.length>60)nav.stack.splice(1,1)}
   }

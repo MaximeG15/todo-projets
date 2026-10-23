@@ -20,8 +20,7 @@ with sync_playwright() as pw:
     pg.locator(".phtile",has_text="Points").click();pg.wait_for_timeout(200)
     ok(mode()=="points","rubrique Points ouverts")
     back();ok(mode()=="home" and pg.url==url,"retour : accueil du projet, l'appli reste ouverte")
-    back();ok(mode()=="projects","retour : écran Projets")
-    back();ok(mode()==start,"retour : écran de départ (%s)"%start)
+    back();ok(mode()=="projects" and start=="projects" and pg.url==url,"retour : écran Projets (écran de départ sur téléphone)")
     # visite : flux puis accueil de la visite puis fermeture
     pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.locator(".phtile",has_text="Déplacements").click();pg.wait_for_timeout(200)
     on=pg.locator("#lists [data-new]")
@@ -36,7 +35,10 @@ with sync_playwright() as pw:
     pg.locator("#visview [data-vm]").click();pg.wait_for_timeout(200)
     ok(pg.locator("dialog.vissheet").count()==1,"menu de la visite ouvert")
     back();ok(pg.locator("dialog[open]").count()==0 and pg.locator("#visview").is_visible(),"retour : menu fermé, on reste dans la visite")
-    back();back();back();back()
+    for i in range(6):
+        st=pg.evaluate("window.__navState()")
+        if st["stack"]<=1 and st["want"]==0:break
+        back()
     # cloche
     pg.locator(".bellbtn.m").click();pg.wait_for_timeout(200)
     ok(pg.locator("#notifpop").is_visible(),"panneau de notifications ouvert")
@@ -49,7 +51,7 @@ with sync_playwright() as pw:
         st=pg.evaluate("window.__navState()")
         if st["stack"]<=1 and st["want"]==0:break
         back()
-    ok(pg.locator('.bnav [data-b=today]').get_attribute("aria-current")=="true" and pg.url==url,"retour : arrivée sur Ma journée (accueil)")
+    ok(mode()=="projects" and pg.url==url,"retour : arrivée sur l'écran Projets (accueil)")
     back()
     ok(pg.url!=url,"à l'accueil, Retour quitte l'appli")
     errs[:]=[e for e in errs if "Access is denied for this document" not in e] # script de test exécuté sur la page vide après la sortie
