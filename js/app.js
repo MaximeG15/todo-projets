@@ -278,7 +278,7 @@
   }
   const LOGO_RX=/^data:image\/(png|webp|jpeg);base64,[A-Za-z0-9+/=]+$/;
   function pLogo(p){return p&&typeof p.logo==="string"&&p.logo.length<=150000&&LOGO_RX.test(p.logo)?p.logo:""}
-  function pMark(p,cls){return pLogo(p)?`<img class="plogo${cls?" "+cls:""}" src="${p.logo}" alt="">`:`<span class="dot" style="background:${p.color}"></span>`}
+  function pMark(p,cls){return pLogo(p)?`<img class="plogo${cls?" "+cls:""}" src="${p.logo}" alt="">`:`<span class="dot" style="--pc:${p.color}"></span>`}
   const isOwner=pid=>{const m=cloud.meta[pid];return !m||m.owner===cloud.user.id};
   const rowT=t=>({id:t.id,project_id:t.projectId,title:t.title,priority:t.priority||"normale",due:t.due||null,status:t.status==="waiting"?"todo":(t.status||"todo"),waiting:t.status==="waiting",waiting_for:t.waitingFor||"",deleted_at:t.deletedAt||null,note:t.note||"",who:t.who||"",created_at:t.createdAt||Date.now(),done_at:t.doneAt||null,updated_at:t.updatedAt||Date.now(),updated_by:cloud.email,checklist:Array.isArray(t.checklist)?t.checklist:[],repeat:t.repeat||null,family:t.family||null,request_id:t.requestId||null});
   const rowP=p=>({id:p.id,name:p.name,color:p.color||null,archived:!!p.archived,logo:pLogo(p)||null,updated_at:p.updatedAt||Date.now()});
@@ -1469,8 +1469,22 @@
     // Téléphone : retour à l'accueil du projet depuis une rubrique
     {const pb=$("#pback");if(pb){const on=!!p&&mode!=="home"&&!query.trim();pb.hidden=!on;if(on){pb.innerHTML=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>${esc(p.name)}`;pb.onclick=()=>{ui.mode="home";saveUi();editing=null;editingPt=null;render();window.scrollTo({top:0})}}}}
     // ---- Indicateurs du projet (bandeau sous le titre) ----
-    const K=$("#kpis");K.innerHTML="";K.hidden=true;
-    if(p&&!query.trim()&&["list","agenda","requests"].includes(mode)){
+    const K=$("#kpis");K.innerHTML="";K.hidden=true;K.classList.remove("jkpis");
+    // couleur du projet ouvert : halo de l'en-tête et repères (design 3.0)
+    {const mn=document.querySelector("main");if(mn){if(p)mn.style.setProperty("--pc",p.color||"#2F4A5A");else mn.style.removeProperty("--pc");mn.classList.toggle("inproj",!!p)}}
+    if(!p&&!query.trim()&&mode==="list"&&ui.scope==="today"){
+      // Ma journée : quatre compteurs (aujourd'hui, en retard, en attente, réunions du jour)
+      const hid=hiddenSet(), mine=open.filter(t=>!hid.has(t.projectId)&&(!ui.who||ui.who===""||(ui.who==="__me"?isMyTask(t):true)));
+      const nT=mine.filter(t=>isToday(t)&&t.status!=="waiting").length, nL=mine.filter(isLate).length, nW=mine.filter(t=>t.status==="waiting").length;
+      let nM=null;try{if(MODE==="cloud"&&ui.showMeetings&&cal.events){const d=meetingsByDay(mondayOf(new Date()))[iso(today())]||[];nM=d.filter(m=>!m.allDay&&m.busy!=="FREE").length}}catch(e){}
+      const jk=(n,l,c,go)=>`<button type="button" class="jk ${c}"${go?` data-jgo="${go}"`:""}><b>${n}</b><span>${esc(l)}</span></button>`;
+      K.innerHTML=jk(nT,"pour aujourd'hui","jt","today")+jk(nL,"en retard","jl","late")+jk(nW,"en attente","jw","wait")+(nM!=null?jk(nM,nM>1?"réunions aujourd'hui":"réunion aujourd'hui","jm","meet"):jk(mine.filter(needsRelance).length,"relances à faire","jm","wait"));
+      K.classList.add("jkpis");K.hidden=false;
+      K.querySelectorAll("[data-jgo]").forEach(b=>b.onclick=()=>{const g=b.dataset.jgo;
+        if(g==="meet"){ui.mode="agenda";ui.scope="all";saveUi();render();return}
+        const h=[...document.querySelectorAll("#lists .group > h2, #lists h2")].find(x=>g==="late"?/retard/i.test(x.textContent):g==="wait"?/attente|relance/i.test(x.textContent):/aujourd/i.test(x.textContent));
+        if(h)h.scrollIntoView({behavior:"smooth",block:"start"})});
+    } else if(p&&!query.trim()&&["list","agenda","requests"].includes(mode)){
       const po=alive.filter(t=>t.projectId===p.id&&t.status!=="done");
       const pts=livePts().filter(o=>o.projectId===p.id&&o.status!=="closed"), cli=pts.filter(o=>o.owner==="client").length;
       const nxt=po.filter(t=>t.due&&!isLate(t)).sort((a,b)=>a.due<b.due?-1:1)[0];
@@ -5645,7 +5659,7 @@
   function renderProjects(L){
     const alive=live(), act=state.projects.filter(p=>!p.archived), arch=state.projects.filter(p=>p.archived);
     const tile=p=>{const open=alive.filter(t=>t.projectId===p.id&&t.status!=="done"), late=open.filter(isLate).length;
-      return `<button type="button" class="pjt" data-p="${esc(p.id)}"><span class="pjic${pLogo(p)?" haslogo":""}" style="${pLogo(p)?`--pc:${esc(p.color||"#999")}`:`background:${esc(p.color||"#999")}`}">${pLogo(p)?`<img src="${p.logo}" alt="">`:esc(projIni(p.name))}${late?`<em aria-label="${late} en retard">${late}</em>`:""}</span><b>${esc(p.name)}</b>${ansOf(p.id).length?`<span class="pjans">${ansTxt(ansOf(p.id).length).replace(" du client"," client")}</span>`:`<span>${open.length} tâche${open.length>1?"s":""}</span>`}</button>`};
+      return `<button type="button" class="pjt" data-p="${esc(p.id)}"><span class="pjic${pLogo(p)?" haslogo":""}" style="--pc:${esc(p.color||"#999")}">${pLogo(p)?`<img src="${p.logo}" alt="">`:esc(projIni(p.name))}${late?`<em aria-label="${late} en retard">${late}</em>`:""}</span><b>${esc(p.name)}</b>${ansOf(p.id).length?`<span class="pjans">${ansTxt(ansOf(p.id).length).replace(" du client"," client")}</span>`:`<span>${open.length} tâche${open.length>1?"s":""}</span>`}</button>`};
     L.innerHTML=`<section class="pjgrid" aria-label="Projets en cours">${act.map(tile).join("")}<button type="button" class="pjt" data-newp><span class="pjic add">${svgI("M12 5v14M5 12h14")}</span><b>Nouveau</b></button></section>
       ${arch.length?`<details class="pjarch"${ui.showArch?" open":""}><summary>Projets archivés <span>${arch.length}</span></summary><section class="pjgrid">${arch.map(tile).join("")}</section></details>`:""}
 `;

@@ -890,3 +890,112 @@ dialog.mtgpick{width:min(620px,calc(100vw - 24px))}
 .pbtn .dot{margin:0 2px}
 @media (max-width:899px){.side{flex-basis:100%}main{flex-basis:100%}}
 @media (min-width:600px) and (max-width:899px){.pjgrid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}main{padding-left:24px;padding-right:24px}}
+
+/* =====================================================================
+   Design 3.0 – même DA, avec des dégradés qui portent le sens :
+   action principale (jaune), sélection, couleur des projets, états.
+   ===================================================================== */
+:root{
+  --g-pri:linear-gradient(135deg,#FFD24A 0%,#F2B705 55%,#E39A00 100%);
+  --g-pri-sh:0 6px 16px -6px rgba(227,154,0,.55),inset 0 1px 0 rgba(255,255,255,.45);
+  --g-act:linear-gradient(90deg,#FFF1C2 0%,#FFF8E3 100%);
+  --g-ink:linear-gradient(135deg,#1F3240 0%,#0F1E28 100%);
+  --halo-y:rgba(255,226,140,.38); --halo-b:rgba(190,214,234,.45);
+  --sheen:linear-gradient(135deg,rgba(255,255,255,.55) 0%,rgba(255,255,255,0) 70%);
+  --g-side:linear-gradient(180deg,#FFFFFF 0%,#F7F9FB 100%);
+  --g-btn:linear-gradient(180deg,#FFFFFF 0%,#F6F8FA 100%);
+  --card-sh:0 1px 2px rgba(15,30,40,.05),0 6px 18px -10px rgba(15,30,40,.16);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --g-act:linear-gradient(90deg,rgba(242,183,5,.24) 0%,rgba(242,183,5,.08) 100%);
+  --g-ink:linear-gradient(135deg,#1C2C37 0%,#0B151C 100%);
+  --halo-y:rgba(242,183,5,.10); --halo-b:rgba(120,170,210,.12);
+  --sheen:linear-gradient(135deg,rgba(255,255,255,.07) 0%,rgba(255,255,255,0) 70%);
+  --g-side:linear-gradient(180deg,#141F26 0%,#111A20 100%);
+  --g-btn:linear-gradient(180deg,#1B2730 0%,#172128 100%);
+  --card-sh:0 1px 2px rgba(0,0,0,.3);
+}}
+:root[data-theme="dark"]{
+  --g-act:linear-gradient(90deg,rgba(242,183,5,.24) 0%,rgba(242,183,5,.08) 100%);
+  --g-ink:linear-gradient(135deg,#1C2C37 0%,#0B151C 100%);
+  --halo-y:rgba(242,183,5,.10); --halo-b:rgba(120,170,210,.12);
+  --sheen:linear-gradient(135deg,rgba(255,255,255,.07) 0%,rgba(255,255,255,0) 70%);
+  --g-side:linear-gradient(180deg,#141F26 0%,#111A20 100%);
+  --g-btn:linear-gradient(180deg,#1B2730 0%,#172128 100%);
+  --card-sh:0 1px 2px rgba(0,0,0,.3);
+}
+/* boutons */
+.btn.primary,.visok,.visfab,.viscam{background:var(--g-pri);border-color:transparent;color:#16232B;box-shadow:var(--g-pri-sh)}
+.btn.primary:hover{filter:brightness(1.03) saturate(1.05);border-color:transparent}
+.btn:not(.primary):not(.ghost):not(.danger):not(.sm){background-image:var(--g-btn)}
+.bnav [data-b="add"] .badd{background:var(--g-pri);box-shadow:0 10px 22px -8px rgba(227,154,0,.75),inset 0 1px 0 rgba(255,255,255,.45)}
+/* barre latérale : sélection en jaune pâle avec un trait jaune */
+@media (min-width:900px){
+  .side{background:var(--g-side)}
+  .vbtn[aria-current="true"],.pbtn[aria-current="true"]{position:relative;background:var(--g-act);box-shadow:inset 0 0 0 1px rgba(242,183,5,.22);font-weight:700}
+  .vbtn[aria-current="true"]::before,.pbtn[aria-current="true"]::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:2px;background:var(--g-pri)}
+  .vbtn[aria-current="true"] .vic{color:#B07800}
+  .vbtn[aria-current="true"] .n,.pbtn[aria-current="true"] .count{background:transparent}
+}
+/* couleur des projets : pastilles et tuiles en dégradé */
+.dot[style*="--pc"]{background:linear-gradient(135deg,var(--pc) 0%,color-mix(in srgb,var(--pc) 62%,#000) 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
+.pbtn .dot[style*="--pc"]{width:20px;height:20px;border-radius:6px;margin:0 1px}
+.pjic:not(.haslogo):not(.add){background:linear-gradient(135deg,var(--pc) 0%,color-mix(in srgb,var(--pc) 58%,#000) 100%);box-shadow:0 10px 20px -10px color-mix(in srgb,var(--pc) 70%,#000),inset 0 1px 0 rgba(255,255,255,.28)}
+/* halo d'en-tête : jaune à gauche (ou couleur du projet), bleu acier à droite */
+main{background:radial-gradient(900px 320px at 0 0,var(--halo-y),transparent 70%),radial-gradient(760px 300px at 100% 0,var(--halo-b),transparent 70%);background-repeat:no-repeat}
+main.inproj{background:radial-gradient(900px 320px at 0 0,color-mix(in srgb,var(--pc) 16%,transparent),transparent 70%),radial-gradient(760px 300px at 100% 0,var(--halo-b),transparent 70%);background-repeat:no-repeat}
+/* onglets : soulignement en dégradé */
+.ptabs button[aria-selected="true"]{border-bottom-color:transparent;border-image:var(--g-pri) 1;border-image-slice:0 0 1 0;border-bottom-width:3px;border-bottom-style:solid}
+/* états : reflet léger sur les étiquettes (garde la couleur de chaque état) */
+.tag.late,.tag.today,.tag.wait,.tag.done-t,.tag.vt-act,.tag.vt-cli,.tag.vt-au,.tag.mes-todo,.tag.doing,.tag.hi,.tag.ansnew{background-image:var(--sheen)}
+/* cartes : ombre douce */
+.task,.ovcard,.kpi,.viscard,.mesrow{box-shadow:var(--card-sh)}
+.ovcard{position:relative;overflow:hidden}
+.ovcard::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:var(--g-pri);opacity:.9}
+.vbar i{background:linear-gradient(90deg,#E39A00,#FFD24A)}
+.kpi{background-image:var(--sheen)}
+/* Ma journée : quatre compteurs */
+.jkpis{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.jk{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:14px 16px;border:0;border-radius:16px;font:inherit;text-align:left;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(15,30,40,.05);background-image:var(--sheen)}
+.jk b{font:700 30px/1 "Barlow Condensed","Arial Narrow",sans-serif;font-variant-numeric:tabular-nums}
+.jk span{font-size:13.5px;color:var(--chipink)}
+.jk:hover{filter:brightness(.98)}
+.jk.jt{background-color:var(--signalsoft)}.jk.jt b{color:var(--signalink)}
+.jk.jl{background-color:var(--latesoft)}.jk.jl b{color:var(--late)}
+.jk.jw{background-color:var(--waitsoft)}.jk.jw b{color:var(--wait)}
+.jk.jm{background-color:var(--clisoft)}.jk.jm b{color:var(--cli)}
+.jk.jt{background-image:linear-gradient(135deg,rgba(255,255,255,.5),rgba(255,210,74,.35))}
+.jk.jl{background-image:linear-gradient(135deg,rgba(255,255,255,.5),rgba(201,60,60,.12))}
+.jk.jw{background-image:linear-gradient(135deg,rgba(255,255,255,.5),rgba(107,79,187,.12))}
+.jk.jm{background-image:linear-gradient(135deg,rgba(255,255,255,.5),rgba(44,111,183,.12))}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .jk{background-image:var(--sheen)!important}}
+:root[data-theme="dark"] .jk{background-image:var(--sheen)!important}
+@media (max-width:899px){.jkpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.jk{padding:10px 12px}.jk b{font-size:24px}}
+/* déplacements : en-tête sombre sur tous les écrans (visite, mise en service, préparation, bilan) */
+.vish{background:var(--g-ink);color:#fff;border-bottom:0}
+.vish .visback{color:#C9D6DE}
+.vish .visback.vismb{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14);color:#E6ECEF}
+.vish .vist span{color:#9AABB5}
+.vish .btn:not(.primary){background:rgba(255,255,255,.08);background-image:none;border-color:rgba(255,255,255,.18);color:#fff}
+.vish .btn:not(.primary):hover{background:rgba(255,255,255,.14)}
+.vish .visst{background:rgba(108,197,154,.16);color:#9BE0BC}
+.vish .visst.wait{background:rgba(242,183,5,.18);color:#FFD877}
+.vish .visst.off,.vish .visst.loc{background:rgba(255,255,255,.1);color:#C9D6DE}
+.vish .vischips button{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14);color:#E6ECEF}
+.vish .vischips button[aria-selected="true"]{background:var(--g-pri);border-color:transparent;color:#16232B}
+.vish .mesdays button{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14);color:#E6ECEF}
+.vish .mesdays button[aria-selected="true"]{background:var(--g-pri);border-color:transparent;color:#16232B;box-shadow:0 8px 16px -8px rgba(227,154,0,.8)}
+.vish .mesdays .mesadd{color:#C9D6DE;border-color:rgba(255,255,255,.25)}
+@media (min-width:900px){.visrow > .visback[data-back]{border-right-color:rgba(255,255,255,.14)}}
+/* mise en service : liseré des rubriques en dégradé */
+.mesrow.mr-ok{border-left:0;position:relative;padding-left:18px}.mesrow.mr-ok::before,.mesrow.mr-pb::before,.mesrow.mr-todo::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;border-radius:16px 0 0 16px}
+.mesrow.mr-pb,.mesrow.mr-todo{border-left:0;position:relative;padding-left:18px}
+.mesrow.mr-ok::before{background:linear-gradient(180deg,#6CC59A,#2F8A5F)}
+.mesrow.mr-pb::before{background:linear-gradient(180deg,#F08A6E,#C93C3C)}
+.mesrow.mr-todo::before{background:linear-gradient(180deg,#8CB8E8,#2C6FB7)}
+.mesrow{overflow:hidden}
+/* corrections design 3.0 */
+#visview .vish .btn:not(.primary){background:rgba(255,255,255,.1);background-image:none;border:1px solid rgba(255,255,255,.22);color:#fff}
+#visview .vish .btn:not(.primary):hover{background:rgba(255,255,255,.16)}
+@media (min-width:900px){.sticky:not(.compact){background:transparent}}
+.mesrow:not(.mr-ok):not(.mr-pb):not(.mr-todo){border-left:1px solid var(--line)}
