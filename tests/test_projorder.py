@@ -1,5 +1,5 @@
 import os,sys;sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
-from helpers import APP,OUT,FAKE
+from helpers import APP,OUT,FAKE,on_dialog
 import json
 from playwright.sync_api import sync_playwright
 # Ordre des projets : glisser-déposer dans la barre de gauche (souris), Alt+flèches, ordre conservé, enregistré en ligne
@@ -34,9 +34,11 @@ with sync_playwright() as pw:
     ok(order()==["Diamond Europe","Projet test","Ladrôme","Perso/RH/Autres"],"ordre conservé après rechargement")
     pg.close()
     # téléphone : l'écran Projets suit le même ordre
-    m=b.new_page(viewport={"width":390,"height":844});m.add_init_script("localStorage.setItem('todo-projets',%s);localStorage.setItem('todo-mode','local')"%json.dumps(json.dumps({**data,"projects":[P[0],P[3],P[1],P[2]]})))
+    m=b.new_page(viewport={"width":390,"height":844});on_dialog(m,lambda d:d.accept("Nouveau client" if d.type=="prompt" else None));m.add_init_script("localStorage.setItem('todo-projets',%s);localStorage.setItem('todo-mode','local')"%json.dumps(json.dumps({**data,"projects":[P[0],P[3],P[1],P[2]]})))
     m.goto(APP);m.wait_for_timeout(400)
     ok(m.locator(".pjt[data-p] b").all_inner_texts()[:2]==["Diamond Europe","Projet test"],"téléphone : écran Projets dans le même ordre")
+    m.locator(".bnav [data-b=add]").click();m.wait_for_timeout(400)
+    ok(m.locator("#__none").count()==0 and m.evaluate("JSON.parse(localStorage.getItem('todo-projets')).projects.some(p=>p.name==='Nouveau client')"),"téléphone : le + de l'écran Projets crée un projet")
     m.close()
     # en ligne : ordre enregistré dans le profil
     pg=b.new_page(viewport={"width":1440,"height":900})

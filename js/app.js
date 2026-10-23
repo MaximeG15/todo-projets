@@ -6134,6 +6134,8 @@
   // Mobile : la barre d'ajout est repliée ; le bouton + l'ouvre (et la referme)
   $("#fab").onclick=()=>{
     if(ui.mode==="home"&&view!=="all"&&proj(view)){phoneAdd(proj(view));return}
+    // écran Projets : le + crée un nouveau projet
+    if(ui.mode==="projects"&&view==="all"&&!query.trim()){document.body.classList.remove("addopen");(async()=>{const n=await uiPrompt("Nom du nouveau projet","",{ok:"Créer"});if(n&&n.trim())addProject(n)})();return}
     const open=!document.body.classList.contains("addopen");
     document.body.classList.toggle("addopen",open);
     $("#fab").setAttribute("aria-expanded",open);$("#fab").setAttribute("aria-label",open?"Fermer la saisie":"Ajouter");
