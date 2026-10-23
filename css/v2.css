@@ -849,3 +849,22 @@ dialog.xlcfg::backdrop{background:rgba(17,24,29,.45)}
 .xlstate b{font-size:14.5px}
 .xlpurge{align-self:flex-start;color:var(--late)}
 .xlcfgbtn{display:inline-flex;align-items:center;gap:6px}
+/* ---------- Nouvelle réunion : choix de la réunion Outlook ---------- */
+dialog.mtgpick{width:min(620px,calc(100vw - 24px))}
+.mtgpick .mpq{font:inherit;font-size:15px;color:var(--ink);background:var(--panel);border:1px solid var(--field);border-radius:10px;padding:9px 12px;min-height:42px;box-sizing:border-box;width:100%}
+.mtgpick .mpl{display:flex;flex-direction:column;gap:2px;max-height:min(52vh,460px);overflow-y:auto;margin:0 -4px;padding:0 4px}
+.mtgpick .mph{position:sticky;top:0;z-index:1;background:var(--panel);padding:10px 4px 4px;font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.mtgpick .mpi{display:flex;align-items:center;gap:12px;width:100%;padding:10px;border:0;border-radius:10px;background:transparent;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.mtgpick .mpi:hover,.mtgpick .mpi:focus-visible{background:var(--soft)}
+.mtgpick .mpi.sug{background:var(--signalsoft)}
+.mtgpick .mpi.past .mpn b{color:var(--chipink);font-weight:500}
+.mtgpick .mpt{flex:none;width:96px;font-size:13px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.mtgpick .mpn{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.mtgpick .mpn b{font-size:15px;font-weight:600}
+.mtgpick .mpn small{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mtgpick .crb{flex:none;font-size:11px;font-weight:700;color:#1F5C43;background:#DDF0E5;border-radius:4px;padding:1px 6px}
+.mtgpick .mpmsg{margin:8px 0;color:var(--chipink);line-height:1.45;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.mtgpick .mpmsg p{margin:0}
+.mtgpick .uibtns .sp{flex:1}
+@media (max-width:760px){.mtgpick .mpt{width:84px}}
+.mtgpick .mpt em{display:block;font-style:normal;color:var(--ink);font-weight:700}

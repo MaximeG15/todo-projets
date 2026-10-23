@@ -1037,8 +1037,8 @@
   const OUTLOOK_HOSTS=["outlook.office365.com","outlook.office.com","outlook.live.com"];
   const cal={events:null,fetchedAt:0,loading:false,error:"",hasLink:null,lastTry:0};
   async function fnError(error){try{const j=await error.context.json();return j}catch(e){return {code:"",message:error&&error.message||"Erreur inconnue"}}}
-  async function loadMeetings(force){
-    if(MODE!=="cloud"||!cloud.user||!ui.showMeetings||cal.loading)return;
+  async function loadMeetings(force,need){ // need : chargé même si l'affichage dans l'agenda est désactivé (choix d'une réunion)
+    if(MODE!=="cloud"||!cloud.user||(!ui.showMeetings&&!need)||cal.loading)return;
     if(!force&&cal.events&&Date.now()-cal.fetchedAt<10*60e3)return;
     if(!force&&!cal.events&&Date.now()-cal.lastTry<60e3)return; // pas de nouvel essai immédiat après un échec
     cal.loading=true;cal.lastTry=Date.now();cal.error="";if(ui.mode==="agenda")renderMeetStatus();
@@ -1046,7 +1046,7 @@
       const {data,error}=await cloudClient().functions.invoke("outlook-ics",{method:"POST",body:{}});
       if(error){
         const j=await fnError(error);
-        if(j.code==="no_link"){cal.hasLink=false;cal.events=null;cal.error="";cal.loading=false;ui.showMeetings=false;saveUi();render();openCalCfg();return}
+        if(j.code==="no_link"){cal.hasLink=false;cal.events=null;cal.error="";cal.loading=false;ui.showMeetings=false;saveUi();render();if(!need)openCalCfg();return}
         cal.error=j.message||"Calendrier indisponible pour le moment.";
       } else {
         const text=typeof data==="string"?data:(data instanceof Blob?await data.text():String(data||""));
@@ -1398,7 +1398,7 @@
     // en-tête
     const p=view==="all"?null:proj(view);
     const agenda=mode==="agenda";
-    $("#quick").hidden=mode==="dash"||mode==="trash"||mode==="requests"||mode==="points"||mode==="home"||mode==="projects"||mode==="overview"||mode==="visits";
+    $("#quick").hidden=mode==="dash"||mode==="trash"||mode==="requests"||mode==="points"||mode==="home"||mode==="projects"||mode==="overview"||mode==="visits"||mode==="meetings";
     $("#wrap").classList.toggle("wide",agenda||mode==="dash");
     // onglets du projet : tâches / demandes client
     const tabs=$("#ptabs");$("#stucklbl").textContent=p?p.name:"";
@@ -3634,12 +3634,65 @@
     const ps=state.projects.filter(p=>!p.archived);
     return ps.find(p=>t.includes(norm(p.name)))||ps.find(p=>norm(p.name).split(/[^a-z0-9]+/).some(w=>w.length>=4&&t.includes(w)))||null;
   }
-  async function mtgFromOutlook(ev){
+  async function mtgFromOutlook(ev,pid){
     const ex=mtgForOutlook(ev);if(ex){mtgOpen(ex);return}
     const ps=state.projects.filter(p=>!p.archived);if(!ps.length){uiAlert("Créez d'abord un projet.");return}
-    const g=guessProject(ev.title);
-    const r=await mtgNewDialog({title:ev.title,startsAt:ev.allDay?null:ev.start,endsAt:ev.allDay?null:ev.end,location:ev.location,outlookKey:outlookKey(ev),projectId:(g||ps[0]).id,guessed:!!g});
-    if(r)mtgOpen(r,"prep");
+    const g=pid?null:guessProject(ev.title);
+    const r=await mtgNewDialog({title:ev.title,startsAt:ev.allDay?null:ev.start,endsAt:ev.allDay?null:ev.end,location:ev.location,outlookKey:outlookKey(ev),projectId:pid||(g||ps[0]).id,guessed:!!g});
+    if(r){if(pid){ui.mode="meetings";saveUi();render()}mtgOpen(r,"prep")}
+  }
+  // « Nouvelle réunion » d'un projet : choisir la réunion Outlook à laquelle rattacher le compte rendu (ou une réunion hors Outlook)
+  async function mtgStart(p){
+    const manual=async()=>{const r=await mtgNewDialog({projectId:p.id});if(r){ui.mode="meetings";saveUi();render();mtgOpen(r,"prep")}};
+    if(MODE!=="cloud"||!cloud.user)return manual();
+    const pick=await mtgPickOutlook(p);
+    if(pick==="manual")return manual();
+    if(pick)return mtgFromOutlook(pick,p.id);
+  }
+  function mtgPickOutlook(p){
+    return new Promise(async res=>{
+      const from=addDays(today(),-14).getTime(), to=addDays(today(),22).getTime();
+      const evs=()=>{if(!cal.events)return [];try{return ICS.instances(cal.events,from,to).filter(e=>e.title).sort((a,b)=>a.start-b.start)}catch(e){return []}};
+      const pn=norm(p.name), pw=pn.split(/[^a-z0-9]+/).filter(w=>w.length>=4);
+      const mine=e=>{const t=norm(e.title+" "+(e.location||""));return t.includes(pn)||pw.some(w=>t.includes(w))};
+      if(typeof window.__testDialog==="function"){
+        if(!cal.events)await loadMeetings(true,true);
+        const list=evs();const r=await window.__testDialog({type:"mtgpick",message:p.name,options:list.map(e=>e.title),hasLink:cal.hasLink!==false});
+        if(!r||r.ok===false)return res(null);if(r.v==="__manual")return res("manual");return res(list.find(e=>e.title===r.v)||null);
+      }
+      const d=document.createElement("dialog");d.className="uidlg mtgpick";d.setAttribute("aria-label","Nouvelle réunion");
+      d.innerHTML=`<form method="dialog"><h3>Nouvelle réunion</h3><p class="uimsg">Choisissez la réunion Outlook à laquelle rattacher le compte rendu.</p>
+        <input type="search" class="mpq" placeholder="Rechercher une réunion…" aria-label="Rechercher une réunion" hidden>
+        <div class="mpl" role="list"></div>
+        <div class="uibtns"><button type="button" class="btn" data-man>Réunion hors Outlook</button><span class="sp"></span><button type="button" class="btn ghost" data-x>Annuler</button></div></form>`;
+      document.body.appendChild(d);
+      const L=d.querySelector(".mpl"), Q=d.querySelector(".mpq");let list=[];
+      const close=v=>{try{d.close()}catch(e){}d.remove();res(v)};
+      const row=(e,k,sg)=>{const cr=mtgForOutlook(e), now=Date.now();return `<button type="button" class="mpi${e.end<now?" past":""}${sg?" sug":""}" data-i="${k}"><span class="mpt">${sg?`<em>${esc(new Date(e.start).toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"}))}</em>`:""}${e.allDay?"Journée":`${hm(e.start)} – ${hm(e.end)}`}</span><span class="mpn"><b>${esc(e.title)}</b>${e.location?`<small>${esc(e.location)}</small>`:""}</span>${cr?`<span class="crb" title="Compte rendu déjà créé : il sera ouvert">CR</span>`:""}</button>`};
+      const dayH=t=>{const d0=new Date(t),td=iso(today()),di=iso(d0);return (di===td?"Aujourd'hui · ":di===iso(addDays(today(),1))?"Demain · ":di===iso(addDays(today(),-1))?"Hier · ":"")+d0.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})};
+      const paint=()=>{
+        if(cal.loading&&!cal.events){L.innerHTML=`<p class="mpmsg">Chargement de vos réunions Outlook…</p>`;return}
+        if(cal.hasLink===false){L.innerHTML=`<div class="mpmsg"><p>Votre agenda Outlook n'est pas encore relié à l'appli. Reliez-le une fois pour choisir vos réunions ici et les voir dans l'agenda.</p><button type="button" class="btn primary" data-cal>Relier mon agenda Outlook</button></div>`;L.querySelector("[data-cal]").onclick=()=>{close(null);openCalCfg()};return}
+        if(!cal.events){L.innerHTML=`<p class="mpmsg">${esc(cal.error||"Réunions Outlook indisponibles pour le moment.")}</p>`;return}
+        list=evs();Q.hidden=!list.length;
+        const q=norm(Q.value.trim());const shown=list.map((e,k)=>({e,k})).filter(x=>!q||norm(x.e.title+" "+(x.e.location||"")).includes(q));
+        if(!shown.length){L.innerHTML=`<p class="mpmsg">${q?"Aucune réunion ne correspond.":"Aucune réunion Outlook sur les deux dernières semaines ni les trois prochaines."}</p>`;return}
+        const now=Date.now(), sug=q?[]:shown.filter(x=>mine(x.e)).sort((a,b)=>Math.abs(a.e.start-now)-Math.abs(b.e.start-now)).slice(0,4);
+        let h=sug.length?`<div class="mph">Pour ${esc(p.name)}</div>${sug.map(x=>row(x.e,x.k,true)).join("")}`:"";
+        let last="";shown.forEach(x=>{const dh=dayH(x.e.start);if(dh!==last){h+=`<div class="mph" data-day="${iso(new Date(x.e.start))}">${esc(cap(dh))}</div>`;last=dh}h+=row(x.e,x.k)});
+        L.innerHTML=h;
+        L.querySelectorAll("[data-i]").forEach(b=>b.onclick=()=>close(list[+b.dataset.i]));
+        if(!q&&!sug.length){const t=L.querySelector(`[data-day="${iso(today())}"]`)||[...L.querySelectorAll("[data-day]")].find(x=>x.dataset.day>iso(today()));if(t)L.scrollTop=t.offsetTop-L.offsetTop}
+      };
+      Q.oninput=paint;
+      d.addEventListener("cancel",e=>{e.preventDefault();close(null)});
+      d.querySelector("[data-x]").onclick=()=>close(null);
+      d.querySelector("[data-man]").onclick=()=>close("manual");
+      d.querySelector("form").onsubmit=e=>e.preventDefault();
+      if(d.showModal)d.showModal();else d.setAttribute("open","");
+      paint();
+      if(!cal.events||Date.now()-cal.fetchedAt>10*60e3){const w=loadMeetings(true,true);paint();await w;while(cal.loading)await new Promise(r=>setTimeout(r,200));if(document.contains(d))paint()}
+    });
   }
   // Boîte de création : projet, type, thème (pour un atelier) ; réunion manuelle : intitulé, date et heure en plus
   function mtgNewDialog(o){
@@ -3988,8 +4041,8 @@
   // ---------- Onglet Réunions d'un projet ----------
   function renderMeetings(L,p){
     const top=document.createElement("div");top.className="mtgtop";
-    top.innerHTML=`<button type="button" class="btn primary" data-new>Nouvelle réunion</button><span class="muted">Astuce : dans l'agenda de la semaine, cliquez sur une réunion Outlook pour créer son compte rendu.</span>`;
-    top.querySelector("[data-new]").onclick=async()=>{const r=await mtgNewDialog({projectId:p.id});if(r)mtgOpen(r,"prep")};
+    top.innerHTML=`<button type="button" class="btn primary" data-new>Nouvelle réunion</button><span class="muted">${MODE==="cloud"?"Choisissez la réunion dans votre agenda Outlook, ou créez une réunion hors Outlook.":"Astuce : en mode en ligne, vous pouvez rattacher le compte rendu à une réunion de votre agenda Outlook."}</span>`;
+    top.querySelector("[data-new]").onclick=()=>mtgStart(p);
     L.appendChild(top);
     const ms=mtgList(p.id);
     const g=document.createElement("section");g.className="group";
@@ -5555,7 +5608,7 @@
       ${nxt.length?`<section class="phnext" aria-label="Prochaines échéances"><h3>Prochaines échéances</h3>${nxt.map(t=>`<button type="button" class="phrow" data-t="${esc(t.id)}"><span class="phck" aria-hidden="true"></span><span class="pht">${esc(t.title)}</span><span class="phd${isLate(t)?" late":""}">${isLate(t)?"En retard":esc(shortDay(t.due))}</span></button>`).join("")}</section>`:""}`;
     L.querySelector(".phtiles").insertAdjacentHTML("afterend",`<div class="phacts"><button type="button" class="btn primary" data-act="visit">${svgI("M3 9.5 12 4l9 5.5V20H3zM7 20v-8h10v8M7 14.5h10M7 17.5h10")}Démarrer un déplacement</button><button type="button" class="btn" data-act="mtg">${svgI("M3 6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v14H3zM3 10h18M8 3v4M16 3v4")}Nouvelle réunion</button></div>`);
     L.querySelector('[data-act="visit"]').onclick=()=>{ui.mode="visits";saveUi();render();visNew(p)};
-    L.querySelector('[data-act="mtg"]').onclick=async()=>{const r=await mtgNewDialog({projectId:p.id});if(r){ui.mode="meetings";saveUi();render();mtgOpen(r,"prep")}};
+    L.querySelector('[data-act="mtg"]').onclick=()=>mtgStart(p);
     L.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{ui.mode=b.dataset.go;if(ui.mode==="list")ui.scope="all";saveUi();editing=null;render();window.scrollTo({top:0})});
     L.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{ui.mode="list";ui.scope="all";saveUi();editing=b.dataset.t;render();const el=document.querySelector(`.task[data-id="${b.dataset.t}"]`);if(el)el.scrollIntoView({block:"center"})});
   }
@@ -6226,7 +6279,7 @@
         if(cur){
           add("Ce projet","◎",`${cur.name} · Vue d'ensemble`,"",()=>{ui.mode=isPhone()?"home":"overview";saveUi();render()});
           add("Ce projet","!",`${cur.name} · Points ouverts`,"",()=>{ui.mode="points";saveUi();render()});
-          add("Ce projet","R","Nouvelle réunion",cur.name,async()=>{const r=await mtgNewDialog({projectId:cur.id});if(r){ui.mode="meetings";saveUi();render();mtgOpen(r,"prep")}});
+          add("Ce projet","R","Nouvelle réunion",cur.name,()=>mtgStart(cur));
           add("Ce projet","V","Démarrer un déplacement",cur.name,()=>{ui.mode="visits";saveUi();render();visNew(cur)});
         }
         state.projects.filter(x=>!x.archived).forEach(x=>add("Projets",x.name.slice(0,2).toUpperCase(),x.name,"",()=>openProject(x.id)));
