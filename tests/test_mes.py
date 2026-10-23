@@ -85,13 +85,19 @@ with sync_playwright() as pw:
     ok(row("Formation").count()==1 and row("Process OK").locator(".mesit").count()==0,"jour 2 : rubriques de la veille reprises, éléments « Fait » non repris")
     ok(row("Problèmes majeurs").locator(".mesit",has_text="Déclenchement").count()==1 and row("Points à traiter").locator(".mesit",has_text="Documents").count()==1,"jour 2 : éléments en cours et à faire repris")
     ok(row("Statut de l'installation").locator(".rte").inner_text().strip()=="","jour 2 : textes vides")
+    R["mesitem"]={"t":"Étiquettes supports","st":"Fait"};R["dialog"]="upd"
+    row("Process OK").locator("[data-addit]").click();pg.wait_for_timeout(400)
+    ok(row("Process OK").locator(".mesit",has_text="Étiquettes supports").count()==1 and "Pierre" in row("Process OK").inner_text(),"sujet déjà saisi la veille : mis à jour au lieu d'être doublé")
+    R["mesitem"]={"t":"Documents de réception","st":"En cours"};R["dialog"]="upd"
+    row("Points à traiter").locator("[data-addit]").click();pg.wait_for_timeout(400)
+    ok(v.locator(".mesit",has_text="Documents de réception").count()==1 and "En cours" in v.locator(".mesit",has_text="Documents de réception").inner_text(),"sujet déjà présent dans la journée : point existant mis à jour")
     R["mesitem"]={"t":"Transporteur","d":"Format du téléphone Bpost","who":"Adrien","st":"Annulée"}
     row("Problèmes majeurs").locator("[data-addit]").click();pg.wait_for_timeout(300)
     ok(row("Problèmes majeurs").locator(".tag.mes-ann").count()==1,"état « Annulée » disponible")
     R["sheet"]=["Copier pour Excel (points Go Live)"]
     v.locator("[data-cr]").click();pg.wait_for_timeout(500)
     rows=[r.split("\t") for r in (pg.evaluate("window.__clipt") or "").split("\r\n") if r]
-    ok(len(rows)==4 and rows[0][:2]==["1","Déclenchement des réapprovisionnements"] and [r[1] for r in rows].count("Déclenchement des réapprovisionnements")==1 and any(r[1]=="Étiquettes supports" and r[3]=="Fait" for r in rows) and rows[-1][3]=="Annulée","copie Excel : N°, Sujet, Commentaire, État, Qui – sans doublon d'un jour sur l'autre")
+    ok(len(rows)==4 and rows[0][:2]==["1","Déclenchement des réapprovisionnements"] and [r[1] for r in rows].count("Étiquettes supports")==1 and [r[1] for r in rows].count("Documents de réception")==1 and [r[1] for r in rows].count("Déclenchement des réapprovisionnements")==1 and any(r[1]=="Étiquettes supports" and r[3]=="Fait" for r in rows) and rows[-1][3]=="Annulée","copie Excel : N°, Sujet, Commentaire, État, Qui – sans doublon d'un jour sur l'autre")
     # notes du jour sur téléphone
     v.locator(".mesnotes [data-f]").click();pg.wait_for_timeout(300)
     v.locator(".visin .rte").fill("Point sécurité à 14h");v.locator("[data-add]").click();pg.wait_for_timeout(300)

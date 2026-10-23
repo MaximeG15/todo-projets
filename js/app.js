@@ -5002,9 +5002,17 @@
   function mesItemDialog(rowId,itId){
     const v=visCur, it=itId?v.items.find(i=>i.id===itId):null, row=v.items.find(i=>i.id===(it?it.row:rowId));if(!row)return;
     const rows=mesRows(v,row.flow).filter(r=>r.kind==="list");
-    const save=r=>{if(!r||!String(r.t||"").trim())return;
-      visSet(y=>{let x=itId&&y.items.find(i=>i.id===itId);
-        if(!x){x={id:uid(),flow:row.flow,mk:"it",row:row.id,c:Date.now(),pos:Math.max(-1,...mesIts(y,row.id).map(i=>i.pos||0))+1};y.items.push(x)}
+    // même sujet déjà saisi (sans description différente) : proposer de mettre à jour le point existant plutôt que d'en créer un double
+    const twin=r=>{if(itId)return null;const t=norm(r.t), d=norm(rtText(r.d||""));const ds=mesDays(v), dayOf=i=>(v.flows.find(f=>f.id===i.flow)||{}).day||"";
+      return (v.items||[]).filter(i=>i.mk==="it"&&norm(i.t)===t&&(!d||norm(rtText(i.d||""))===d)).sort((a,b)=>ds.indexOf(dayOf(b))-ds.indexOf(dayOf(a)))[0]||null};
+    const save=async r=>{if(!r||!String(r.t||"").trim())return;
+      const tw=twin(r);let link=null, upd=null;
+      if(tw){const same=tw.flow===row.flow, dn=mesDayName(v,(v.flows.find(f=>f.id===tw.flow)||{}).day||"");
+        const ch=await uiDialog({kind:"dialog",title:"Ce point existe déjà",msg:`« ${tw.t} » (${tw.st||"sans état"}${tw.who?", "+tw.who:""}) a déjà été saisi ${same?"dans cette journée":"le "+dn}.\n\nMettre à jour ce point évite un doublon dans le compte rendu et dans la copie Excel.`,buttons:[{v:null,label:"Annuler",cls:"ghost"},{v:"new",label:"Créer un nouveau point"},{v:"upd",label:"Mettre à jour le point existant",cls:"primary",focus:true}]});
+        if(!ch)return;if(ch==="upd"){if(same)upd=tw.id;else link=tw}}
+      if(upd&&!String(r.d||"").trim())r.d=tw.d||"";if(link&&!String(r.d||"").trim())r.d=link.d||"";if((upd||link)&&!String(r.who||"").trim())r.who=(upd?tw:link).who||"";
+      visSet(y=>{let x=(itId||upd)&&y.items.find(i=>i.id===(itId||upd));
+        if(!x){x={id:uid(),flow:row.flow,mk:"it",row:row.id,c:link&&link.c||Date.now(),...(link?{from:link.from||link.id}:{}),pos:Math.max(-1,...mesIts(y,row.id).map(i=>i.pos||0))+1};y.items.push(x)}
         x.t=String(r.t).trim().slice(0,300);x.d=rtCut(String(r.d||"").trim(),4000);x.who=String(r.who||"").trim().slice(0,80);x.st=MES_ST[r.st]?r.st:"En cours";
         if(r.row&&rows.some(z=>z.id===r.row)&&r.row!==x.row){x.row=r.row;x.pos=Math.max(-1,...mesIts(y,r.row).map(i=>i.pos||0))+1}else mesRoute(y,x)})};
     const del=()=>visSet(y=>{y.items=y.items.filter(i=>i.id!==itId)});
