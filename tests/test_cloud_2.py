@@ -15,7 +15,7 @@ with sync_playwright() as pw:
     pg.add_init_script("window.__db.client_requests=[{id:'rq1',project_id:'p2',title:'Demande partagée',description:'',requester:'Client',received:'2026-10-01',due:'2026-10-20',priority:'normale',status:'waiting',scope:'in',estimate:'1.5',quote:'sent',created_at:1,updated_at:1,closed_at:null,deleted_at:null,updated_by:'bruno@exemple.test'}];localStorage.setItem('todo-mode','cloud');localStorage.setItem('todo-projets-ui','{}')")
     pg.goto(APP);pg.wait_for_timeout(800)
     db=lambda t:pg.evaluate("window.__db."+t)
-    pg.locator(".vbtn",has_text="Demandes client").click()
+    pg.locator(".vbtn",has_text="Tableau de bord").click();pg.wait_for_timeout(200);pg.locator(".kpis .kpi",has_text="Demandes client ouvertes").click()
     t=pg.locator("#lists").inner_text()
     ok("Demande partagée" in t and "1,5 j" in t and "Devis envoyé" in t,"lecture client_requests (estimation numérique, devis)")
     f=pg.locator("#reqadd");f.locator('[data-q="proj"]').select_option("p1");f.locator('[data-q="title"]').fill("Nouvelle demande");f.locator(".qadd").click();pg.wait_for_timeout(300)

@@ -1318,7 +1318,6 @@
     if(ui.mode==="projects"){if(isPhone())view="all";else ui.mode="list"}
     if(ui.mode==="home"&&(view==="all"||!isPhone()))ui.mode="list";
     if((ui.mode==="points"||ui.mode==="meetings"||ui.mode==="visits"||ui.mode==="overview")&&view==="all")ui.mode="list";
-    if(ui.mode==="requests"&&view!=="all")ui.mode="list"; // les demandes client se consultent depuis la vue globale
     if(["list","agenda"].includes(ui.mode))ui.taskMode=ui.mode;
     if(ui.mode==="trash"||ui.mode==="dash")view="all";
     const mode=ui.mode;
@@ -1344,21 +1343,22 @@
     const go=(mode,scope)=>()=>{query="";$("#search").value="";ui.mode=mode;ui.scope=scope;saveUi();view="all";editing=null;shareOpen=false;weekStart=null;closeMenu();render()};
     vb("today","Ma journée",nToday,view==="all"&&mode==="list"&&ui.scope==="today",go("list","today"));
     vb("agenda","Agenda de la semaine",nWeek,view==="all"&&mode==="agenda",go("agenda","all"));
-    vb("all","Toutes les tâches",open.length,view==="all"&&mode==="list"&&ui.scope==="all"&&ui.who!=="__me",()=>{if(ui.who==="__me")ui.who="";go("list","all")()});
+    // « Tâches » : une seule entrée ; le filtre Mes tâches / Toutes est dans la vue (choix mémorisé)
+    const tasksWho=()=>MODE==="cloud"?(ui.tasksWho!=null?ui.tasksWho:"__me"):"";
+    const goTasks=()=>{ui.who=tasksWho();go("list","all")()};
+    vb("all","Tâches",MODE==="cloud"&&tasksWho()==="__me"?open.filter(isMyTask).length:open.length,view==="all"&&mode==="list"&&ui.scope==="all",goTasks);
     // barre de navigation du téléphone
     {const bn=$("#bnav");if(bn){
       const mine=MODE==="cloud";
-      bn.querySelector('[data-b="mine"] .bl').textContent=mine?"Mes tâches":"Toutes";
-      const act={today:view==="all"&&mode==="list"&&ui.scope==="today",mine:view==="all"&&mode==="list"&&ui.scope==="all"&&(mine?ui.who==="__me":true),agenda:mode==="agenda",menu:mode==="projects"||view!=="all"};
+      bn.querySelector('[data-b="mine"] .bl').textContent="Tâches";
+      const act={today:view==="all"&&mode==="list"&&ui.scope==="today",mine:view==="all"&&mode==="list"&&ui.scope==="all",agenda:mode==="agenda",menu:mode==="projects"||view!=="all"};
       bn.querySelectorAll("[data-b]").forEach(x=>{const k=x.dataset.b;x.setAttribute("aria-current",!!act[k]);
         if(k==="add"){x.onclick=()=>{mmClose();$("#fab").click()};x.setAttribute("aria-expanded",document.body.classList.contains("addopen"));return}
         x.onclick=k==="menu"?()=>{closeMenu();query="";$("#search").value="";ui.mode="projects";view="all";editing=null;saveUi();render();window.scrollTo({top:0})}
           :k==="today"?()=>{if(ui.who==="__me")ui.who="";go("list","today")()}
           :k==="agenda"?()=>{go("agenda","all")()}
-          :()=>{ui.who=mine?"__me":"";go("list","all")()}});
+          :goTasks});
     }}
-    if(MODE==="cloud")vb("mine","Mes tâches",open.filter(isMyTask).length,view==="all"&&mode==="list"&&ui.scope==="all"&&ui.who==="__me",()=>{ui.who="__me";go("list","all")()});
-    vb("req","Demandes client",nReq||"",view==="all"&&mode==="requests",go("requests","all"));
     vb("dash","Tableau de bord","",mode==="dash",go("dash","all"));
     vb("trash","Corbeille",nTrash||"",mode==="trash",go("trash","all"));V.lastChild.classList.add("mobonly-v");
     const tb=$("#trashbtn");
@@ -1405,7 +1405,7 @@
       const nT=alive.filter(t=>t.projectId===p.id&&t.status!=="done").length, nR=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)).length;
       tabs.hidden=false;
       const nO=livePts().filter(o=>o.projectId===p.id&&o.status!=="closed").length;
-      tabs.innerHTML=`${isPhone()?"":`<button type="button" role="tab" aria-selected="${mode==="overview"}" data-tab="overview">Vue d'ensemble</button>`}<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"&&mode!=="meetings"&&mode!=="visits"&&mode!=="overview"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points<span class="tlx"> ouverts</span> <span>${nO}</span>${ansOf(p.id).length?`<i class="ansdot" title="${ansTxt(ansOf(p.id).length)}" aria-label="${ansTxt(ansOf(p.id).length)}"></i>`:""}</button><button type="button" role="tab" aria-selected="${mode==="meetings"}" data-tab="meetings">Réunions <span>${mtgList(p.id).length}</span></button><button type="button" role="tab" aria-selected="${mode==="visits"}" data-tab="visits">Déplacements <span>${(visEnsure(),visList(p.id).length)}</span></button>`;
+      tabs.innerHTML=`${isPhone()?"":`<button type="button" role="tab" aria-selected="${mode==="overview"}" data-tab="overview">Vue d'ensemble</button>`}<button type="button" role="tab" aria-selected="${mode!=="requests"&&mode!=="points"&&mode!=="meetings"&&mode!=="visits"&&mode!=="overview"}" data-tab="tasks">Tâches <span>${nT}</span></button><button type="button" role="tab" aria-selected="${mode==="points"}" data-tab="points">Points<span class="tlx"> ouverts</span> <span>${nO}</span>${ansOf(p.id).length?`<i class="ansdot" title="${ansTxt(ansOf(p.id).length)}" aria-label="${ansTxt(ansOf(p.id).length)}"></i>`:""}</button><button type="button" role="tab" aria-selected="${mode==="requests"}" data-tab="requests">Demandes<span class="tlx"> client</span> <span>${nR}</span></button><button type="button" role="tab" aria-selected="${mode==="meetings"}" data-tab="meetings">Réunions <span>${mtgList(p.id).length}</span></button><button type="button" role="tab" aria-selected="${mode==="visits"}" data-tab="visits">Déplacements <span>${(visEnsure(),visList(p.id).length)}</span></button>`;
       tabs.querySelectorAll("[data-tab]").forEach(x=>x.onclick=()=>{const k=x.dataset.tab;ui.mode=k==="tasks"?(ui.taskMode||"list"):k;if(ui.mode!=="list")ui.scope="all";saveUi();editing=null;editingReq=null;editingPt=null;render()});
     } else {tabs.hidden=true;tabs.innerHTML=""}
     if(!weekStart)weekStart=mondayOf(new Date());
@@ -1556,6 +1556,11 @@
         wn.querySelectorAll("[data-w]").forEach(x=>x.onclick=()=>{const n=+x.dataset.w;weekStart=n?addDays(weekStart,7*n):mondayOf(new Date());render()});
         vl.appendChild(wn);
       }
+      if(mode==="list"&&!p&&ui.scope==="all"&&MODE==="cloud"){
+        const ws=document.createElement("div");ws.className="seg wseg";ws.setAttribute("role","group");ws.setAttribute("aria-label","Tâches affichées");
+        [["__me","Mes tâches"],["","Toutes"]].forEach(([w,l])=>{const x=document.createElement("button");x.type="button";x.textContent=l;x.dataset.who=w||"all";x.setAttribute("aria-pressed",w==="__me"?ui.who==="__me":ui.who!=="__me");x.onclick=()=>{ui.who=w;ui.tasksWho=w;saveUi();editing=null;render()};ws.appendChild(x)});
+        vl.appendChild(ws);
+      }
       if(mode==="list"){
         const gb=document.createElement("label");gb.className="whobox";
         gb.innerHTML=`Grouper par <select aria-label="Grouper par"><option value="due">Échéance</option><option value="family">Famille</option></select>`;
@@ -1574,10 +1579,10 @@
         mb.title=MODE==="cloud"?"Afficher ou masquer vos réunions Outlook dans l'agenda":"Disponible en mode en ligne";
         if(MODE==="cloud"&&ui.showMeetings)b("Réglages du calendrier",openCalCfg,"",vr);
       }
-      if(people.length||MODE==="cloud"){
+      if((people.length||MODE==="cloud")&&!(!p&&ui.scope==="all"&&MODE==="cloud"&&ui.who==="__me")){
         const w=document.createElement("label");w.className="whobox";
-        w.innerHTML=`Responsable <select id="whosel" aria-label="Filtrer par responsable"><option value="">Tout le monde</option>${MODE==="cloud"?`<option value="__me">Mes tâches</option>`:""}${people.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")}<option value="__none">Non attribuées</option></select>`;
-        const sel=w.querySelector("select");sel.value=ui.who||"";sel.onchange=e=>{ui.who=e.target.value;saveUi();render()};
+        w.innerHTML=`Responsable <select id="whosel" aria-label="Filtrer par responsable"><option value="">Tout le monde</option>${MODE==="cloud"&&p?`<option value="__me">Mes tâches</option>`:""}${people.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")}<option value="__none">Non attribuées</option></select>`;
+        const sel=w.querySelector("select");sel.value=ui.who||"";sel.onchange=e=>{ui.who=e.target.value;if(!p&&(ui.who===""||ui.who==="__me"))ui.tasksWho=ui.who;saveUi();render()};
         vr.appendChild(w);
       }
     }
@@ -5452,9 +5457,10 @@
   // (alerte, quatre rubriques, prochaines échéances) et chaque rubrique s'affiche en plein écran avec un retour.
   const isPhone=()=>window.matchMedia("(max-width:760px)").matches;
   const projIni=n=>{const w=String(n||"").replace(/[^\p{L}\p{N}\s/'-]/gu," ").split(/[\s/'-]+/).filter(Boolean);return ((w.length>1?w[0][0]+w[1][0]:(w[0]||"?").slice(0,2))||"?").toUpperCase()};
-  const ICO={tasks:"M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2",points:"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5M12 16v.5",meetings:"M3 5h18v16H3zM3 10h18M8 3v4M16 3v4",visits:"M3 9.5 12 4l9 5.5V20H3zM7 20v-8h10v8M7 14.5h10M7 17.5h10"};
+  const ICO={req:"M4 4h16v12H8l-4 4zM8 9h8M8 12h5",tasks:"M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2",points:"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5M12 16v.5",meetings:"M3 5h18v16H3zM3 10h18M8 3v4M16 3v4",visits:"M3 9.5 12 4l9 5.5V20H3zM7 20v-8h10v8M7 14.5h10M7 17.5h10"};
   const svgI=d=>`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"></path></svg>`;
-  function openProject(id){if(view!==id)shareOpen=false;view=id;if(ui.scope==="today")ui.scope="all";ui.mode=isPhone()?"home":(["dash","trash","requests","projects","home"].includes(ui.mode)?"list":ui.mode);saveUi();editing=null;query="";$("#search").value="";closeMenu();render();window.scrollTo({top:0})}
+  function openProject(id){if(view!==id)shareOpen=false;if(view==="all"&&ui.who==="__me")ui.who=""; // le filtre « Mes tâches » de la vue Tâches ne suit pas dans le projet
+    view=id;if(ui.scope==="today")ui.scope="all";ui.mode=isPhone()?"home":(["dash","trash","requests","projects","home"].includes(ui.mode)?"list":ui.mode);saveUi();editing=null;query="";$("#search").value="";closeMenu();render();window.scrollTo({top:0})}
   function renderProjects(L){
     const alive=live(), act=state.projects.filter(p=>!p.archived), arch=state.projects.filter(p=>p.archived);
     const tile=p=>{const open=alive.filter(t=>t.projectId===p.id&&t.status!=="done"), late=open.filter(isLate).length;
@@ -5472,10 +5478,12 @@
     const pts=livePts().filter(o=>o.projectId===p.id), po=pts.filter(o=>o.status!=="closed"), pcli=po.filter(o=>o.owner==="client").length;
     const ms=mtgList(p.id), drafts=ms.filter(m=>m.status==="draft").length;
     visEnsure();const vs=visList(p.id), vOpen=vs.filter(v=>v.status==="open").length, vPrep=vs.filter(v=>v.status==="prep");
+    const rq=liveReq().filter(r=>r.projectId===p.id&&reqOpen(r)), rqLate=rq.filter(r=>reqLate(r)).length;
     const dshort=ms=>new Date(ms).toLocaleDateString("fr-FR",{day:"numeric",month:"long"});
     const tiles=[
       ["list","Tâches","tasks","t-tasks",open.length,open.length>1?"ouvertes":"ouverte",late.length?`${late.length} en retard`:"Rien en retard",!!late.length],
       ["points","Points ouverts","points","t-points",po.length,po.length>1?"ouverts":"ouvert",ansOf(p.id).length?ansTxt(ansOf(p.id).length):po.length?`${pcli} à répondre par le client`:"Aucun point ouvert",!!ansOf(p.id).length],
+      ["requests","Demandes client","req","t-req",rq.length,"en cours",rqLate?`${rqLate} en retard`:rq.some(r=>r.status==="new")?plural(rq.filter(r=>r.status==="new").length,"nouvelle"):rq.length?"Rien en retard":"Aucune demande en cours",!!rqLate],
       ["meetings","Réunions","meetings","t-mtg",ms.length,ms.length>1?"comptes rendus":"compte rendu",drafts?`${drafts} brouillon${drafts>1?"s":""} à finaliser`:ms.length?`Dernier : ${dshort(ms[0].startsAt||ms[0].createdAt)}`:"Aucun compte rendu",false],
       ["visits","Déplacements","visits","t-vis",vs.length,vs.length>1?"déplacements":"déplacement",vOpen?`${vOpen} en cours`:vPrep.length?`Préparé${vPrep[0].prep&&vPrep[0].prep.plannedAt?" : "+(visNDays(vPrep[0])>1?visRangeTxt(vPrep[0]):dshort(vPrep[0].prep.plannedAt)):""}`:vs.length?`Dernier : ${dshort(visDate(vs[0]))}`:"Aucun déplacement",false]];
     const nxt=open.filter(t=>t.due).sort((a,b)=>(isLate(b)-isLate(a))||(a.due<b.due?-1:1)).slice(0,3);
@@ -5874,7 +5882,7 @@
       const inst=$("#installbtn")&&!$("#installbtn").hidden;
       o.innerHTML=`<header class="mmtop"><h2>Menu</h2><button type="button" class="mmclose" data-mmclose aria-label="Fermer le menu">${mmSvg(MMI.x,20)}</button></header>
         <div class="mmbody">${card}
-        ${mmGroup("Vues",[mmRow("v:Agenda de la semaine","agenda","Agenda de la semaine",{n:cnt("Agenda de la semaine"),c:"wait"}),mmRow("v:Toutes les tâches","all","Toutes les tâches",{n:cnt("Toutes les tâches")}),mmRow("v:Demandes client","req","Demandes client",{n:cnt("Demandes client"),c:"cli"}),mmRow("v:Tableau de bord","dash","Tableau de bord",{c:"ok"}),mmRow("v:Corbeille","trash","Corbeille",{n:cnt("Corbeille"),c:"mut"})])}
+        ${mmGroup("Vues",[mmRow("v:Agenda de la semaine","agenda","Agenda de la semaine",{n:cnt("Agenda de la semaine"),c:"wait"}),mmRow("v:Tâches","all","Tâches",{n:cnt("Tâches")}),mmRow("v:Tableau de bord","dash","Tableau de bord",{c:"ok"}),mmRow("v:Corbeille","trash","Corbeille",{n:cnt("Corbeille"),c:"mut"})])}
         ${mmGroup("Réglages",[mmRow("p:acct","acct","Compte et sauvegarde",{sub:w.cl?"Copie de secours, mot de passe":"Fichier, copie de secours, mode en ligne"}),mmRow("#privacybtn","shield","Données et confidentialité"),...(inst?[mmRow("#installbtn","install","Installer l'application",{chev:false})]:[])])}</div>`;
     }
     const cl=o.querySelector("[data-mmclose]");if(cl)cl.onclick=mmClose;

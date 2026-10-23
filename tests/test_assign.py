@@ -14,7 +14,7 @@ with sync_playwright() as pw:
     pg.add_init_script("localStorage.setItem('todo-mode','cloud');localStorage.setItem('todo-projets-ui',JSON.stringify({mode:'list',scope:'all'}))")
     pg.goto(APP);pg.wait_for_timeout(800)
     tk=lambda i:[x for x in pg.evaluate("window.__db.tasks") if x["id"]==i][0]
-    ok(pg.locator("#views .vbtn",has_text="Mes tâches").count()==1,"menu « Mes tâches » en mode en ligne")
+    ok(pg.locator("#views .vbtn",has_text="Mes tâches").count()==0 and pg.locator("#views .vbtn[data-v=all]").inner_text().startswith("Tâches"),"une seule entrée « Tâches » dans la barre")
     # attribution par le nom d'un membre du projet (projet partagé par Bruno)
     r=pg.locator('.task[data-id="t2"]');r.locator(".ttl").click()
     ed=pg.locator('.task[data-id="t2"] .edit');ed.locator('input[aria-label="Responsable"]').fill("bruno d");ed.locator('[data-k="ok"]').click();pg.wait_for_timeout(400)
@@ -27,12 +27,15 @@ with sync_playwright() as pw:
     ok(me and me[0]["who"]=="alice@exemple.test","saisie rapide : attribuée à moi (e-mail)")
     ok(pg.locator(".task .tag.who.me").count()>=1,"mes tâches mises en évidence")
     # vue Mes tâches
-    pg.locator("#views .vbtn",has_text="Mes tâches").click();pg.wait_for_timeout(200)
+    pg.locator("#views .vbtn[data-v=all]").click();pg.wait_for_timeout(200)
+    ok(pg.locator('.wseg [data-who="__me"]').get_attribute("aria-pressed")=="true","« Tâches » : filtre « Mes tâches » par défaut")
     titles=pg.eval_on_selector_all("#lists .task .ttl","e=>e.map(x=>x.textContent.trim())")
     ok(titles==["Préparer la recette"],"vue « Mes tâches » : seulement mes tâches (%s)"%titles)
     ok("Mes tâches" in pg.locator("#ptitle").inner_text(),"titre « Mes tâches »")
-    pg.locator("#views .vbtn",has_text="Toutes les tâches").click();pg.wait_for_timeout(200)
-    ok(pg.locator("#lists .task").count()>=3,"« Toutes les tâches » retire le filtre")
+    pg.locator('.wseg [data-who="all"]').click();pg.wait_for_timeout(200)
+    ok(pg.locator("#lists .task").count()>=3,"filtre « Toutes » : toutes les tâches")
+    pg.locator(".pbtn",has_text="Projet Alpha").click();pg.locator("#views .vbtn[data-v=all]").click();pg.wait_for_timeout(200)
+    ok(pg.locator('.wseg [data-who="all"]').get_attribute("aria-pressed")=="true","filtre mémorisé")
     # attribution groupée
     pg.locator(".pbtn",has_text="Projet Alpha").click()
     pg.locator("#viewbar button",has_text="Sélectionner").click()

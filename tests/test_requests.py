@@ -19,12 +19,12 @@ with sync_playwright() as pw:
     pg.goto(APP);pg.wait_for_timeout(400)
     st=lambda: pg.evaluate("JSON.parse(localStorage.getItem('todo-projets'))")
     rq=lambda i:[r for r in st()["requests"] if r["id"]==i]
-    ok(pg.locator(".vbtn",has_text="Demandes client").locator(".n").inner_text()=="1","compteur Demandes client (vue globale)")
+    ok(pg.locator(".vbtn",has_text="Demandes client").count()==0,"plus d'entrée Demandes client dans la barre latérale")
     pg.locator(".pbtn",has_text="Projet Alpha").click()
-    ok(pg.locator("#ptabs").is_visible() and pg.locator('#ptabs [data-tab="requests"]').count()==0,"onglets du projet visibles, sans onglet Demandes client")
-    pg.locator(".vbtn",has_text="Demandes client").click()
+    ok(pg.locator('#ptabs [data-tab="requests"]').is_visible(),"onglet Demandes client dans le projet")
+    pg.locator('#ptabs [data-tab="requests"]').click()
     ok(pg.locator("#reqadd").is_visible() and pg.locator("#quick").is_hidden(),"vue Demandes client : formulaire dédié")
-    f=pg.locator("#reqadd");f.locator('[data-q="proj"]').select_option(label="Projet Alpha");f.locator('[data-q="title"]').fill("Modifier l'étiquette colis");f.locator('[data-q="who"]').fill("Mme Durand");f.locator('[data-q="due"]').fill("2026-10-16");f.locator('[data-q="prio"]').select_option("haute");f.locator(".qadd").click()
+    f=pg.locator("#reqadd");f.locator('[data-q="title"]').fill("Modifier l'étiquette colis");f.locator('[data-q="who"]').fill("Mme Durand");f.locator('[data-q="due"]').fill("2026-10-16");f.locator('[data-q="prio"]').select_option("haute");f.locator(".qadd").click()
     rs=[r for r in st()["requests"] if r["projectId"]=="p1"]
     ok(len(rs)==1 and rs[0]["status"]=="new" and rs[0]["received"]==time.strftime("%Y-%m-%d") and rs[0]["requester"]=="Mme Durand","demande créée (statut Nouvelle, reçue aujourd'hui)")
     rid=rs[0]["id"]
@@ -71,15 +71,15 @@ with sync_playwright() as pw:
     pg.locator(".trow",has_text="étiquette colis").filter(has=pg.locator(".reqtag")).locator("[data-r]").click()
     ok(not rq(rid)[0].get("deletedAt"),"demande restaurée")
     ok(all(not t.get("deletedAt") for t in st()["tasks"] if t.get("requestId")==rid),"tâches liées restaurées avec la demande")
-    # vue globale
-    pg.locator(".vbtn",has_text="Demandes client").click()
+    # vue globale (depuis le tableau de bord)
+    pg.locator(".vbtn",has_text="Tableau de bord").click();pg.wait_for_timeout(200);pg.locator(".kpis .kpi",has_text="Demandes client ouvertes").click()
     t=pg.locator("#lists").inner_text()
     ok("Interface Sage X3" in t and "étiquette colis" in t and pg.locator("#reqadd [data-q=proj]").count()==1,"vue globale : toutes les demandes + choix du projet")
     ok("Réponse en retard" in t,"réponse en retard signalée")
     pg.screenshot(path=S+"req_global.png")
     pg.locator(".vbtn",has_text="Tableau de bord").click()
     ok("Demandes client ouvertes" in pg.locator(".kpis").inner_text(),"indicateur sur le tableau de bord")
-    pg.set_viewport_size({"width":390,"height":844});pg.locator("#menubtn").click();pg.locator("#mmenu .mmrow",has_text="Demandes client").click();pg.wait_for_timeout(200)
+    pg.set_viewport_size({"width":390,"height":844});pg.wait_for_timeout(200)
     ok(pg.evaluate("document.documentElement.scrollWidth")<=390,"mobile : pas de débordement")
     pg.screenshot(path=S+"req_m.png",full_page=True)
     # export json contient les demandes

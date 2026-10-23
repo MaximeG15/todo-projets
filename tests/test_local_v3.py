@@ -54,7 +54,7 @@ with sync_playwright() as pw:
     pg.locator(".trow [data-r]").click()
     ok(pg.locator(".trow").count()==0 and not task("e")[0].get("deletedAt"),"Restaurer depuis la corbeille")
     # --- terminer + annuler
-    pg.locator(".vbtn",has_text="Toutes les tâches").click()
+    pg.locator(".vbtn",has_text="Tâches").click()
     pg.locator('.task[data-id="a"] .chk').click(); pg.wait_for_timeout(100)
     ok(task("a")[0]["status"]=="done","tâche a terminée")
     pg.locator("#toast button").click()
@@ -97,7 +97,7 @@ with sync_playwright() as pw:
     ok([p for p in st()["projects"] if p["id"]=="p3"][0].get("archived"),"projet archivé")
     ok(pg.locator(".parch").count()==1 and pg.locator(".pbtn",has_text="GOHY").count()==0,"section Projets archivés repliée")
     ok("Clôturer" not in pg.locator("#lists").inner_text(),"tâches archivées masquées")
-    n_all=pg.locator(".vbtn",has_text="Toutes les tâches").locator(".n").inner_text()
+    n_all=pg.locator(".vbtn",has_text="Tâches").locator(".n").inner_text()
     ok(n_all=="5","compteur hors archivés = %s"%n_all)
     pg.locator(".parch").click()
     pg.locator(".pbtn",has_text="GOHY").click()
@@ -106,7 +106,7 @@ with sync_playwright() as pw:
     pg.locator(".ddmore summary").click();pg.locator(".ddmore .menu button",has_text="Réactiver").click()
     ok(not [p for p in st()["projects"] if p["id"]=="p3"][0].get("archived"),"projet réactivé")
     # --- Vider les terminées -> corbeille
-    pg.locator(".vbtn",has_text="Toutes les tâches").click()
+    pg.locator(".vbtn",has_text="Tâches").click()
     pg.locator(".donerow .vider").click()
     ok(task("f")[0].get("deletedAt"),"Vider les terminées : à la corbeille")
     pg.locator("#toast button").click(); ok(not task("f")[0].get("deletedAt"),"annulation du vidage")

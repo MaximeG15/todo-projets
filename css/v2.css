@@ -838,3 +838,5 @@ span.rt{display:inline}
   .mesr > .viscap{border:1px solid var(--line);border-radius:16px;padding:12px;box-shadow:none}
 }
 @media (max-width:760px){.mesbar > div{flex-basis:100%}.mesbar .btn{flex:1;justify-content:center}}
+.t-req .phic{background:var(--clisoft);color:var(--cli)}
+.wseg button{white-space:nowrap}
