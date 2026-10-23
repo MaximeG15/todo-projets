@@ -840,3 +840,4 @@ span.rt{display:inline}
 @media (max-width:760px){.mesbar > div{flex-basis:100%}.mesbar .btn{flex:1;justify-content:center}}
 .t-req .phic{background:var(--clisoft);color:var(--cli)}
 .wseg button{white-space:nowrap}
+.tag.mes-ann{background:var(--chip);color:var(--muted);font-weight:600;text-decoration:line-through}

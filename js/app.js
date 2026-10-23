@@ -4969,7 +4969,8 @@
   }
   // ---------- Mise en service : un compte rendu par jour ----------
   const MES_ROWS=p=>[["ok","Process OK / Actions réalisées","list"],["pb","Problèmes majeurs et points en cours","list"],["todo","Points à traiter / Actions à venir","list"],["statut","Statut de l'installation","text"],["rc","Ressenti "+(p.name||"client"),"text"],["rm","Ressenti Mecalux","text"]];
-  const MES_ST={"Fait":"done-t","En cours":"vt-act","À faire":"mes-todo"};
+  const MES_ST={"Fait":"done-t","En cours":"vt-act","À faire":"mes-todo","Annulée":"mes-ann"};
+  const mesClosed=st=>st==="Fait"||st==="Annulée";
   function mesDays(v){const s=new Set(visDays(v));(v.flows||[]).forEach(f=>{if(f.day)s.add(f.day)});return [...s].sort()}
   const mesFlow=(v,d)=>(v.flows||[]).find(f=>f.day===d);
   const mesRows=(v,fid)=>(v.items||[]).filter(i=>i.mk==="row"&&i.flow===fid).sort((a,b)=>(a.pos||0)-(b.pos||0));
@@ -4985,7 +4986,7 @@
     const prev=y.flows.filter(x=>x.day&&x.day<d&&mesRows(y,x.id).length).pop();
     let pos=0;
     if(prev)mesRows(y,prev.id).forEach(r=>{const nr={id:uid(),flow:f.id,mk:"row",key:r.key||null,title:r.title,kind:r.kind,text:"",pos:pos++};y.items.push(nr);
-      if(r.kind==="list")mesIts(y,r.id).filter(i=>i.st!=="Fait").forEach((i,j)=>y.items.push({id:uid(),flow:f.id,mk:"it",row:nr.id,t:i.t,d:i.d||"",who:i.who||"",st:i.st,pos:j,from:i.from||i.id}))});
+      if(r.kind==="list")mesIts(y,r.id).filter(i=>!mesClosed(i.st)).forEach((i,j)=>y.items.push({id:uid(),flow:f.id,mk:"it",row:nr.id,t:i.t,d:i.d||"",who:i.who||"",st:i.st,pos:j,from:i.from||i.id,...(i.c?{c:i.c}:{})}))});
     else MES_ROWS(proj(y.projectId)||{}).forEach(([key,title,kind])=>y.items.push({id:uid(),flow:f.id,mk:"row",key,title,kind,text:"",pos:pos++}));
     return f;
   }
@@ -4994,6 +4995,7 @@
   // « Fait » range l'élément dans « Process OK » ; repassé à faire, il retourne dans la rubrique correspondante
   function mesRoute(y,it){const rows=mesRows(y,it.flow), cur=rows.find(r=>r.id===it.row), by=k=>rows.find(r=>r.key===k);
     if(it.st==="Fait"&&by("ok"))it.row=by("ok").id;
+    else if(it.st==="Annulée"){if(!cur){const t=by("pb")||rows.find(r=>r.kind==="list");if(t)it.row=t.id}}
     else if((!cur||cur.key==="ok")&&it.st!=="Fait"){const t=by(it.st==="En cours"?"pb":"todo")||by("pb")||by("todo")||rows.find(r=>r.kind==="list"&&r.key!=="ok");if(t)it.row=t.id}}
   function mesPeople(v){const s=new Map();const add=n=>{n=String(n||"").trim();if(n&&!s.has(norm(n)))s.set(norm(n),n)};
     ((v.prep||{}).participants||[]).filter(x=>x.side!=="client").forEach(x=>add(x.name.split(/\s+/)[0]));(v.items||[]).forEach(i=>{if(i.mk==="it")add(i.who)});return [...s.values()].slice(0,12)}
@@ -5002,7 +5004,7 @@
     const rows=mesRows(v,row.flow).filter(r=>r.kind==="list");
     const save=r=>{if(!r||!String(r.t||"").trim())return;
       visSet(y=>{let x=itId&&y.items.find(i=>i.id===itId);
-        if(!x){x={id:uid(),flow:row.flow,mk:"it",row:row.id,pos:Math.max(-1,...mesIts(y,row.id).map(i=>i.pos||0))+1};y.items.push(x)}
+        if(!x){x={id:uid(),flow:row.flow,mk:"it",row:row.id,c:Date.now(),pos:Math.max(-1,...mesIts(y,row.id).map(i=>i.pos||0))+1};y.items.push(x)}
         x.t=String(r.t).trim().slice(0,300);x.d=rtCut(String(r.d||"").trim(),4000);x.who=String(r.who||"").trim().slice(0,80);x.st=MES_ST[r.st]?r.st:"En cours";
         if(r.row&&rows.some(z=>z.id===r.row)&&r.row!==x.row){x.row=r.row;x.pos=Math.max(-1,...mesIts(y,r.row).map(i=>i.pos||0))+1}else mesRoute(y,x)})};
     const del=()=>visSet(y=>{y.items=y.items.filter(i=>i.id!==itId)});
@@ -5017,7 +5019,7 @@
       <div class="uifld"><span>Qui</span>${ppl.length?`<div class="meschips">${ppl.map(n=>`<button type="button" data-who="${esc(n)}">${esc(n)}</button>`).join("")}</div>`:""}<input type="text" data-k="who" maxlength="80" placeholder="Nom" aria-label="Qui"></div>
       <div class="uifld"><span>Statut</span><div class="meschips" role="radiogroup" aria-label="Statut">${Object.keys(MES_ST).map(k=>`<button type="button" role="radio" data-st="${esc(k)}" aria-checked="false">${esc(k)}</button>`).join("")}</div></div>
       ${rows.length>1?`<label class="uifld"><span>Rubrique</span><select data-k="row">${rows.map(r=>`<option value="${esc(r.id)}">${esc(r.title)}</option>`).join("")}</select></label>`:""}
-      <p class="muted">Un élément passé à « Fait » se range tout seul dans « Process OK / Actions réalisées ».</p>
+      <p class="muted">Un élément passé à « Fait » se range tout seul dans « Process OK / Actions réalisées ». Les éléments « Fait » et « Annulée » ne sont pas repris le lendemain.</p>
       <div class="uibtns">${it?`<button type="button" class="btn danger" data-del>Supprimer</button><span class="sp"></span>`:""}<button type="button" class="btn ghost" data-x>Annuler</button><button type="button" class="btn primary" data-ok>Enregistrer</button></div></form>`;
     document.body.appendChild(d);
     const q=k=>d.querySelector(`[data-k="${k}"]`);let st=defSt;
@@ -5077,8 +5079,9 @@
     if(!f)return;
     if(wide)visBindFlow(o,v,f);
     o.querySelector("[data-close]").onclick=()=>{const was=f.closed;visSet(y=>{const x=mesFlow(y,d);if(x)x.closed=!x.closed});toast(was?"Journée rouverte.":"Journée clôturée.")};
-    o.querySelector("[data-cr]").onclick=async()=>{const ch=await visSheet("Compte rendu du jour "+k,[{k:"copy",l:"Copier pour Confluence"},{k:"pdf",l:"PDF de la journée"},{k:"all",l:"PDF de toute la mise en service"}]);
-      if(ch==="copy"){const h=mesDayHtml(visCur,d,false);const ok=await copyRich(h.html,h.text);toast(ok?"Compte rendu copié : collez-le dans la page Confluence (Ctrl+V).":"Copie impossible sur cet appareil.")}
+    o.querySelector("[data-cr]").onclick=async()=>{const ch=await visSheet("Compte rendu du jour "+k,[{k:"copy",l:"Copier pour Confluence (compte rendu du jour)"},{k:"xl",l:"Copier pour Excel (points Go Live)"},{k:"pdf",l:"PDF de la journée"},{k:"all",l:"PDF de toute la mise en service"}]);
+      if(ch==="xl"){const x=mesExcelCopy(visCur);if(!x.n){toast("Aucun point à copier.");return}const ok=await copyRich(x.html,x.text);toast(ok?`${plural(x.n,"point copié","points copiés")} : sélectionnez la première ligne du tableau Excel (colonne N°) puis Ctrl+V.`:"Copie impossible sur cet appareil.")}
+      else if(ch==="copy"){const h=mesDayHtml(visCur,d,false);const ok=await copyRich(h.html,h.text);toast(ok?"Compte rendu copié : collez-le dans la page Confluence (Ctrl+V).":"Copie impossible sur cet appareil.")}
       else if(ch==="pdf")mesPdf(visCur,[d]);else if(ch==="all")mesPdf(visCur,null)};
     o.querySelectorAll("[data-addit]").forEach(b=>b.onclick=()=>mesItemDialog(b.closest("[data-r]").dataset.r,null));
     o.querySelectorAll("[data-it]").forEach(b=>{const go=()=>mesItemDialog(null,b.dataset.it);b.onclick=e=>{if(e.target.closest("a"))return;go()};b.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go()}}});
@@ -5096,6 +5099,19 @@
       const t=await uiPrompt("Nom de la rubrique","",{ok:"Ajouter"});if(!t||!t.trim())return;
       visSet(y=>{y.items.push({id:uid(),flow:f.id,mk:"row",key:null,title:t.trim().slice(0,120),kind,text:"",pos:Math.max(-1,...mesRows(y,f.id).map(i=>i.pos||0))+1})});
     };
+  }
+  // Points Go Live de toute la mise en service : un point par origine, dans l'ordre d'apparition, avec son dernier état
+  function mesGoLive(v){
+    const order=[], last=new Map();
+    mesDays(v).forEach(d=>{const f=mesFlow(v,d);if(!f)return;mesRows(v,f.id).filter(r=>r.kind==="list").forEach(r=>mesIts(v,r.id).forEach(i=>{const k=i.from||i.id;if(!last.has(k))order.push(k);last.set(k,i)}))});
+    const first=new Map();order.forEach((k,ix)=>first.set(k,ix));
+    return order.slice().sort((a,b)=>{const ca=last.get(a).c, cb=last.get(b).c;return ca&&cb?ca-cb:first.get(a)-first.get(b)}).map(k=>last.get(k));
+  }
+  // copie pour le tableau Excel « Points ouverts Go Live » : N°, Sujet, Commentaire, État, Qui
+  function mesExcelCopy(v){
+    const pts=mesGoLive(v), cell=x=>String(x||"").replace(/[\t\r\n]+/g," ").trim();
+    const rows=pts.map((i,k)=>[k+1,cell(i.t),cell(rtText(i.d||"")),cell(i.st),cell(i.who)]);
+    return {n:rows.length,text:rows.map(r=>r.join("\t")).join("\r\n"),html:`<table>${rows.map(r=>`<tr>${r.map(c=>`<td>${esc(String(c))}</td>`).join("")}</tr>`).join("")}</table>`};
   }
   // copie riche (tableau) : se colle tel quel dans Confluence, Word ou Outlook
   async function copyRich(html,text){

@@ -72,8 +72,8 @@ with sync_playwright() as pw:
     ok(row("Sécurité").count()==0 and row("Formation").count()==1,"rubrique supprimée")
     pg.screenshot(path=OUT+"mes_phone.png",full_page=False)
     # copie pour Confluence
-    pg.evaluate("()=>{window.__clip=null;navigator.clipboard.write=async items=>{const t=await (await items[0].getType('text/html')).text();window.__clip=t}}")
-    R["sheet"]=["Copier pour Confluence"]
+    pg.evaluate("()=>{window.__clip=null;navigator.clipboard.write=async items=>{window.__clip=await (await items[0].getType('text/html')).text();window.__clipt=await (await items[0].getType('text/plain')).text()}}")
+    R["sheet"]=["Copier pour Confluence (compte rendu du jour)"]
     v.locator("[data-cr]").click();pg.wait_for_timeout(500)
     clip=pg.evaluate("window.__clip")or""
     ok("<table" in clip and "Documents de réception" in clip and "(Maxime - À faire)" in clip and "Résolution majeure" in clip,"compte rendu copié en tableau pour Confluence")
@@ -85,6 +85,13 @@ with sync_playwright() as pw:
     ok(row("Formation").count()==1 and row("Process OK").locator(".mesit").count()==0,"jour 2 : rubriques de la veille reprises, éléments « Fait » non repris")
     ok(row("Problèmes majeurs").locator(".mesit",has_text="Déclenchement").count()==1 and row("Points à traiter").locator(".mesit",has_text="Documents").count()==1,"jour 2 : éléments en cours et à faire repris")
     ok(row("Statut de l'installation").locator(".rte").inner_text().strip()=="","jour 2 : textes vides")
+    R["mesitem"]={"t":"Transporteur","d":"Format du téléphone Bpost","who":"Adrien","st":"Annulée"}
+    row("Problèmes majeurs").locator("[data-addit]").click();pg.wait_for_timeout(300)
+    ok(row("Problèmes majeurs").locator(".tag.mes-ann").count()==1,"état « Annulée » disponible")
+    R["sheet"]=["Copier pour Excel (points Go Live)"]
+    v.locator("[data-cr]").click();pg.wait_for_timeout(500)
+    rows=[r.split("\t") for r in (pg.evaluate("window.__clipt") or "").split("\r\n") if r]
+    ok(len(rows)==4 and rows[0][:2]==["1","Déclenchement des réapprovisionnements"] and [r[1] for r in rows].count("Déclenchement des réapprovisionnements")==1 and any(r[1]=="Étiquettes supports" and r[3]=="Fait" for r in rows) and rows[-1][3]=="Annulée","copie Excel : N°, Sujet, Commentaire, État, Qui – sans doublon d'un jour sur l'autre")
     # notes du jour sur téléphone
     v.locator(".mesnotes [data-f]").click();pg.wait_for_timeout(300)
     v.locator(".visin .rte").fill("Point sécurité à 14h");v.locator("[data-add]").click();pg.wait_for_timeout(300)
