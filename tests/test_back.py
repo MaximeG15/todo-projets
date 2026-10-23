@@ -41,12 +41,18 @@ with sync_playwright() as pw:
     pg.locator(".bellbtn.m").click();pg.wait_for_timeout(200)
     ok(pg.locator("#notifpop").is_visible(),"panneau de notifications ouvert")
     back();ok(pg.locator("#notifpop").is_hidden(),"retour : panneau fermé")
-    # à l'écran de départ : message, l'appli ne se ferme pas au premier appui
-    for i in range(8):
-        if pg.evaluate("window.__navState().stack")<=1:break
+    # plusieurs retours d'affilée jusqu'à l'accueil (Ma journée), puis Retour quitte l'appli
+    pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.locator(".phtile",has_text="Points").click();pg.wait_for_timeout(600)
+    pg.evaluate("history.back()");pg.wait_for_timeout(150);pg.evaluate("history.back()");pg.wait_for_timeout(400)
+    ok(mode()=="projects" and pg.url==url,"deux retours d'affilée : écran Projets, l'appli reste ouverte")
+    for i in range(10):
+        st=pg.evaluate("window.__navState()")
+        if st["stack"]<=1 and st["want"]==0:break
         back()
+    ok(pg.locator('.bnav [data-b=today]').get_attribute("aria-current")=="true" and pg.url==url,"retour : arrivée sur Ma journée (accueil)")
     back()
-    ok("Appuyez encore sur Retour" in pg.locator("#toast").inner_text() and pg.url==url,"écran de départ : message « appuyez encore pour quitter »")
+    ok(pg.url!=url,"à l'accueil, Retour quitte l'appli")
+    errs[:]=[e for e in errs if "Access is denied for this document" not in e] # script de test exécuté sur la page vide après la sortie
     b.close()
 print("ERREURS :",errs or "aucune")
 sys.exit(1 if errs else 0)

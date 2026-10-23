@@ -5922,7 +5922,7 @@
   function mmOpen(page){
     let o=$("#mmenu");
     if(!o){o=document.createElement("div");o.id="mmenu";o.className="mmenu";o.setAttribute("role","dialog");o.setAttribute("aria-modal","true");o.setAttribute("aria-label","Menu");document.body.appendChild(o)}
-    mmPage=page||"main";mmRender();document.body.classList.add("mmopen");$("#menubtn").setAttribute("aria-expanded","true");navArm();
+    mmPage=page||"main";mmRender();document.body.classList.add("mmopen");$("#menubtn").setAttribute("aria-expanded","true");navSync();
     const f=o.querySelector("button");if(f)try{f.focus({preventScroll:true})}catch(e){}
   }
   function mmClose(){const o=$("#mmenu");if(o)o.remove();mmPage=null;document.body.classList.remove("mmopen");const b=$("#menubtn");if(b)b.setAttribute("aria-expanded","false")}
@@ -6213,17 +6213,40 @@
   window.__cmdOpen=cmdOpen;
 
   // ---------- Bouton « retour » du téléphone (et du navigateur) : retour en arrière dans l'appli ----------
-  // Une entrée d'historique « garde » est toujours posée : le bouton retour la consomme et l'appli revient à
-  // l'écran précédent (ou ferme la fenêtre, le panneau ou la visite ouverts) au lieu de se fermer.
-  // À l'écran de départ, un premier appui affiche un message ; un second appui quitte l'appli.
-  const nav={stack:[],restoring:false,armed:false,exitAt:0};
+  // Une entrée d'historique par niveau (écran précédent, fenêtre, panneau, visite ouverte…), posée au moment où
+  // l'utilisateur touche l'écran : Chrome sur Android ignore les entrées posées sans action de l'utilisateur.
+  // Chaque appui sur Retour remonte d'un niveau jusqu'à « Ma journée » (accueil) ; à l'accueil, Retour quitte l'appli.
+  const NAV_HOME={view:"all",mode:"list",scope:"today",who:""};
+  const nav={stack:[],restoring:false,depth:0,inPop:false};
   const navSnap=()=>({view,mode:ui.mode,scope:ui.scope,who:ui.who||""});
-  const navKey=x=>[x.view,x.mode,x.scope,x.who].join("|");
-  function navArm(){if(nav.armed)return;try{history.pushState({todoNav:Date.now()},"");nav.armed=true}catch(e){}}
+  const navKey=x=>[x.view,x.mode,x.scope,x.mode==="list"&&x.scope==="today"?"":x.who].join("|");
+  try{history.replaceState({todoNav:0},"")}catch(e){}
   function navRecord(){
     if(nav.restoring||!state||!state.projects)return;
-    const x=navSnap(), top=nav.stack[nav.stack.length-1];
-    if(!top||navKey(top)!==navKey(x)){nav.stack.push(x);if(nav.stack.length>60)nav.stack.shift();if(nav.stack.length>1)navArm()}
+    const x=navSnap();
+    if(!nav.stack.length)nav.stack.push(NAV_HOME);
+    if(navKey(x)===navKey(NAV_HOME)){nav.stack=[NAV_HOME];return} // revenu à l'accueil : Retour quittera l'appli
+    const top=nav.stack[nav.stack.length-1];
+    if(navKey(top)!==navKey(x)){nav.stack.push(x);if(nav.stack.length>60)nav.stack.splice(1,1)}
+  }
+  // niveaux ouverts par-dessus l'écran (le plus récent est fermé en premier par navOverlayBack)
+  function navOverlays(){
+    let n=document.querySelectorAll("dialog[open]").length;
+    if(document.querySelector(".visedit"))n++;if(document.querySelector(".visscan"))n++;
+    const pop=$("#notifpop");if(pop&&!pop.hidden)n++;
+    if($("#mmenu"))n+=mmPage==="acct"?2:1;
+    const side=$("#side");if(side&&side.classList.contains("open"))n++;if(side&&side.classList.contains("srch"))n++;
+    if(visCur)n+=(visScreen==="home"||(visScreen==="prep"&&visCur.status==="prep"))?1:2;
+    if(mtgCur)n++;
+    if(editing||editingPt||editingReq)n++;
+    if(query&&query.trim())n++;
+    return n;
+  }
+  const navWant=()=>Math.max(0,nav.stack.length-1)+navOverlays();
+  // pose les entrées manquantes (appelé après une action de l'utilisateur)
+  function navSync(){
+    if(nav.inPop||nav.restoring||!state||!state.projects)return;
+    try{const w=navWant();while(nav.depth<w){nav.depth++;history.pushState({todoNav:nav.depth},"")}}catch(e){}
   }
   function navOverlayBack(){
     // fenêtres (boîtes de dialogue, choix, visionneuse photo…) : la plus récente d'abord
@@ -6254,16 +6277,19 @@
     return false;
   }
   window.addEventListener("popstate",()=>{
-    nav.armed=false;
-    if(navBack()){navArm();return}
-    // écran de départ : on laisse le prochain appui quitter l'appli
-    nav.exitAt=Date.now();toast("Appuyez encore sur Retour pour quitter l'appli.");
+    if(nav.leaving)return;
+    nav.depth=Math.max(0,nav.depth-1);
+    nav.inPop=true;let done=false;
+    try{done=navBack()}catch(e){}
+    setTimeout(()=>{nav.inPop=false},0);
+    // à l'accueil, rien à fermer : on quitte l'appli (en sautant les entrées restées en trop)
+    if(!done&&nav.depth>0){nav.leaving=true;history.go(-(nav.depth+1))}
   });
-  // toute action dans l'appli repose la garde (après le message « appuyez encore… »)
-  ["click","keydown"].forEach(t=>document.addEventListener(t,()=>{if(!nav.armed&&Date.now()-nav.exitAt>400)navArm()},true));
-  {const r1=render;render=function(){r1();try{navRecord()}catch(e){}}}
+  // après chaque action de l'utilisateur, on pose les entrées des niveaux ouverts (y compris les fenêtres ouvertes un peu après)
+  ["click","keydown","touchend"].forEach(t=>document.addEventListener(t,()=>{setTimeout(navSync,0);setTimeout(navSync,400)},true));
+  {const r1=render;render=function(){r1();try{navRecord();navSync()}catch(e){}}}
+  window.__navState=()=>({stack:nav.stack.length,depth:nav.depth,want:navWant()}); // utilisé par les tests
   {const r2=render;render=function(){r2();try{if(mmPage)mmRender()}catch(e){}}}
-  window.__navState=()=>({stack:nav.stack.length,armed:nav.armed}); // utilisé par les tests
 
   // ---------- Application installable ----------
   if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol)){
