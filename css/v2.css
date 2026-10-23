@@ -999,3 +999,28 @@ main.inproj{background:radial-gradient(900px 320px at 0 0,color-mix(in srgb,var(
 #visview .vish .btn:not(.primary):hover{background:rgba(255,255,255,.16)}
 @media (min-width:900px){.sticky:not(.compact){background:transparent}}
 .mesrow:not(.mr-ok):not(.mr-pb):not(.mr-todo){border-left:1px solid var(--line)}
+/* vue d'ensemble : liseré par type de rubrique et barres en dégradé (planche 54) */
+.ovcard[data-go="list"]::before{background:linear-gradient(90deg,#E39A00,#FFD24A)}
+.ovcard[data-go="points"]::before{background:linear-gradient(90deg,#2C6FB7,#8CB8E8)}
+.ovcard[data-go="requests"]::before{background:linear-gradient(90deg,#1F5C9E,#6FA8DC)}
+.ovcard[data-go="meetings"]::before{background:linear-gradient(90deg,#6B4FBB,#B9A6F0)}
+.ovcard[data-go="visits"]::before{background:linear-gradient(90deg,var(--pc,#D2452F),color-mix(in srgb,var(--pc,#D2452F) 45%,#fff))}
+.ovcard[data-go="points"] .ovn b{color:var(--cli)}
+.ovcard[data-go="meetings"] .ovn b{color:var(--wait)}
+.ovcard[data-go="visits"] .ovn b{color:color-mix(in srgb,var(--pc,#D2452F) 80%,var(--ink))}
+.ovbar,.ovthb{background:var(--line2)}
+.ovbar{height:8px;border-radius:4px}
+.ovbar i.gbok,.ovthb i.gbok{background:linear-gradient(90deg,#2F8A5F,#6CC59A)}
+.ovbar i.gbcli,.ovthb i.gbcli{background:linear-gradient(90deg,#2C6FB7,#8CB8E8)}
+.ovbar i.gboth,.ovthb i.gboth{background:linear-gradient(90deg,#8A99A3,#C3CDD3)}
+.ovbar i,.ovthb i{border-radius:4px}
+.ovthb i + i{margin-left:2px}
+.ovlg i{border-radius:3px}
+/* activité récente et « À traiter » : couleur par type d'action */
+.ovic{background-image:var(--sheen)}
+.ovic.et-task{background-color:var(--oksoft,#E7F5EE);color:var(--okink,#1F6B47)}
+.ovic.et-pt{background-color:var(--clisoft);color:var(--cli)}
+.ovic.et-ans{background-color:var(--signalsoft);color:var(--signalink)}
+.ovic.et-mtg{background-color:var(--waitsoft);color:var(--wait)}
+.ovic.et-vis{background-color:color-mix(in srgb,var(--pc,#D2452F) 14%,var(--panel));color:color-mix(in srgb,var(--pc,#D2452F) 85%,var(--ink))}
+.ovic.new{background:var(--g-pri)}

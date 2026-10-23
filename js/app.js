@@ -5704,8 +5704,8 @@
     const card=(go,k,n,u,d,cls,bar)=>`<button type="button" class="ovcard" data-go="${go}"><span class="ovk">${k}</span><span class="ovn"><b>${n}</b> ${u}</span><span class="ovd${cls?" "+cls:""}">${d}</span>${bar||""}</button>`;
     const doneN=all.length-open.length;
     const cards=[
-      card("list","Tâches",open.length,open.length>1?"ouvertes":"ouverte",[late.length&&`${late.length} en retard`,relance.length&&`${plural(relance.length,"relance")}`].filter(Boolean).join(" · ")||"Rien en retard",late.length?"late":"",`<span class="ovbar"><i style="width:${pct(doneN,all.length)}%;background:var(--ok)"></i></span>`),
-      card("points","Points ouverts",po.length,po.length>1?"ouverts":"ouvert",ans.length?ansTxt(ans.length):`${cli.length} à répondre par le client`,ans.length?"new":"",po.length?`<span class="ovbar"><i style="width:${pct(cli.length,po.length)}%;background:var(--cli)"></i><i style="width:${pct(po.length-cli.length,po.length)}%;background:#8A99A3"></i></span>`:""),
+      card("list","Tâches",open.length,open.length>1?"ouvertes":"ouverte",[late.length&&`${late.length} en retard`,relance.length&&`${plural(relance.length,"relance")}`].filter(Boolean).join(" · ")||"Rien en retard",late.length?"late":"",`<span class="ovbar"><i class="gbok" style="width:${pct(doneN,all.length)}%"></i></span>`),
+      card("points","Points ouverts",po.length,po.length>1?"ouverts":"ouvert",ans.length?ansTxt(ans.length):`${cli.length} à répondre par le client`,ans.length?"new":"",po.length?`<span class="ovbar"><i class="gbcli" style="width:${pct(cli.length,po.length)}%"></i><i class="gboth" style="width:${pct(po.length-cli.length,po.length)}%"></i></span>`:""),
       card("meetings","Réunions",nextM?esc(dlong(nextM.startsAt)):ms.length,nextM?`· ${new Date(nextM.startsAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}`:(ms.length>1?"comptes rendus":"compte rendu"),nextM?esc(nextM.title):drafts.length?`${plural(drafts.length,"brouillon")} à finaliser`:"Aucune réunion prévue",""),
       card("visits","Déplacements",lastV?esc(new Date(visDate(lastV)).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})):"0",lastV?"dernier déplacement":"déplacement",lastV?(toTr?`${plural(toTr,"enregistrement")} à transcrire`:`${plural((lastV.notes||[]).length,"note")} · ${lastV.status==="done"?"terminé":lastV.status==="prep"?"préparé":"en cours"}`):"Aucun déplacement","")
     ].join("");
@@ -5720,20 +5720,20 @@
     // points par thème
     const th={};po.forEach(o=>{const k=o.theme||"Sans thème";(th[k]=th[k]||{c:0,m:0});if(o.owner==="client")th[k].c++;else th[k].m++});
     const thl=Object.entries(th).sort((a,b)=>(b[1].c+b[1].m)-(a[1].c+a[1].m)).slice(0,7), mx=Math.max(1,...thl.map(([,x])=>x.c+x.m));
-    const themes=thl.map(([k,x])=>`<div class="ovth"><span>${esc(k)}</span><span class="ovthb"><i style="width:${100*x.c/mx}%;background:var(--cli)"></i><i style="width:${100*x.m/mx}%;background:#8A99A3"></i></span><b>${x.c+x.m}</b></div>`).join("");
+    const themes=thl.map(([k,x])=>`<div class="ovth"><span>${esc(k)}</span><span class="ovthb"><i class="gbcli" style="width:${100*x.c/mx}%"></i><i class="gboth" style="width:${100*x.m/mx}%"></i></span><b>${x.c+x.m}</b></div>`).join("");
     // activité récente
     const ev=[];
-    all.filter(t=>t.status==="done"&&t.doneAt).forEach(t=>ev.push([t.doneAt,"✓",`Tâche terminée : ${t.title}`]));
-    pts.filter(o=>o.status==="closed"&&o.closedAt).forEach(o=>ev.push([o.closedAt,"✓",`Point levé${ptNumOf(o)?" "+ptNumOf(o):""} : ${o.text.split("\n")[0]}`]));
-    pts.filter(o=>o.ansNew).forEach(o=>ev.push([o.ansNew,"R",`Réponse du client${ptNumOf(o)?" sur le "+ptNumOf(o):""} (Excel)`]));
-    ms.forEach(m=>ev.push([m.startsAt||m.createdAt||0,"C",`Réunion : ${m.title}${m.status==="draft"?" (brouillon)":""}`]));
-    vs.forEach(v=>ev.push([v.endedAt||v.startedAt||v.createdAt||0,"V",`Déplacement${v.status==="done"?" clôturé":v.status==="prep"?" préparé":" en cours"} : ${v.title}`]));
-    const evs=ev.filter(e=>e[0]&&e[0]<=now+864e5).sort((a,b)=>b[0]-a[0]).slice(0,6).map(e=>`<li><span class="ovic sm">${e[1]}</span><span><b>${esc(e[2])}</b><span>${esc(fmtWhen(e[0]))}</span></span></li>`).join("");
+    all.filter(t=>t.status==="done"&&t.doneAt).forEach(t=>ev.push([t.doneAt,"✓",`Tâche terminée : ${t.title}`,"et-task"]));
+    pts.filter(o=>o.status==="closed"&&o.closedAt).forEach(o=>ev.push([o.closedAt,"✓",`Point levé${ptNumOf(o)?" "+ptNumOf(o):""} : ${o.text.split("\n")[0]}`,"et-pt"]));
+    pts.filter(o=>o.ansNew).forEach(o=>ev.push([o.ansNew,"R",`Réponse du client${ptNumOf(o)?" sur le "+ptNumOf(o):""} (Excel)`,"et-ans"]));
+    ms.forEach(m=>ev.push([m.startsAt||m.createdAt||0,"C",`Réunion : ${m.title}${m.status==="draft"?" (brouillon)":""}`,"et-mtg"]));
+    vs.forEach(v=>ev.push([v.endedAt||v.startedAt||v.createdAt||0,"V",`Déplacement${v.status==="done"?" clôturé":v.status==="prep"?" préparé":" en cours"} : ${v.title}`,"et-vis"]));
+    const evs=ev.filter(e=>e[0]&&e[0]<=now+864e5).sort((a,b)=>b[0]-a[0]).slice(0,6).map(e=>`<li><span class="ovic sm ${e[3]||""}">${e[1]}</span><span><b>${esc(e[2])}</b><span>${esc(fmtWhen(e[0]))}</span></span></li>`).join("");
     L.innerHTML=`<section class="ovcards" aria-label="État du projet">${cards}</section>
       <div class="ovgrid">
         <section class="ovbox"><h2>À traiter</h2>${todo||`<p class="hint">Rien d'urgent : aucune tâche en retard, aucune nouvelle réponse du client.</p>`}${rows.length>8?`<button type="button" class="btn ghost" data-go="list">Voir toutes les tâches</button>`:""}</section>
         <div class="ovcol">
-          ${po.length?`<section class="ovbox"><div class="ovh"><h2>Points ouverts par thème</h2><span class="ovlg"><i style="background:var(--cli)"></i>Client <i style="background:#8A99A3"></i>Autres</span></div>${themes}</section>`:""}
+          ${po.length?`<section class="ovbox"><div class="ovh"><h2>Points ouverts par thème</h2><span class="ovlg"><i style="background:linear-gradient(90deg,#2C6FB7,#8CB8E8)"></i>Client <i style="background:linear-gradient(90deg,#8A99A3,#C3CDD3)"></i>Autres</span></div>${themes}</section>`:""}
           <section class="ovbox"><h2>Activité récente</h2>${evs?`<ul class="ovfeed">${evs}</ul>`:`<p class="hint">Pas encore d'activité enregistrée.</p>`}</section>
         </div>
       </div>`;
