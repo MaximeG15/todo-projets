@@ -4733,7 +4733,9 @@
   // ---------- Préparation de la visite (au bureau, sur ordinateur ou téléphone) ----------
   const dtLocal=ms=>{if(!ms)return "";const d=new Date(ms);const z=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`};
   const visPrepOpen={}; // flux dépliés dans la préparation (par défaut : ceux qui ont des éléments)
-  function visStartNow(){visSet(y=>{y.status="open";y.startedAt=Date.now()});visScreen="home";renderVisit();render();toast("Déplacement démarré : bon déplacement !")}
+  // démarrer : le premier jour devient aujourd'hui et la durée prévue est conservée (le dernier jour est décalé d'autant)
+  function visStartNow(){visSet(y=>{y.prep=y.prep||{};const n=y.prep.plannedAt?visNDays(y):(y.prep.days||1);
+    y.status="open";y.startedAt=Date.now();y.prep.endDay=n>1?iso(addDays(new Date(),n-1)):null});visScreen="home";renderVisit();render();toast("Déplacement démarré : bon déplacement !")}
   function visPrepScreen(o,v,p){
     const pr=v.prep||(v.prep={}), live=v.status!=="prep", wide=visWide();
     const parts=pr.participants||[], cand=[], seen=new Set();

@@ -108,6 +108,19 @@ with sync_playwright() as pw:
     ok(len(st["tasks"])==0,"aucune tâche créée dans le projet (pas de doublon)")
     ok(pg.locator("#lists .mtgrow",has_text="Mise en service").count()==1,"liste : mise en service terminée")
     pg.close()
+    # ---------- Mise en service préparée pour plus tard, démarrée aujourd'hui : la durée reste de 5 jours ----------
+    pg=b.new_page(viewport={"width":390,"height":844})
+    pg.on("pageerror",lambda e:errs.append("JS: "+str(e)))
+    on_dialog(pg,handler)
+    pg.add_init_script(INIT);pg.goto(APP);pg.wait_for_timeout(500)
+    pg.locator(".bnav [data-b=menu]").click();pg.locator(".pjt",has_text="Projet Alpha").click();pg.locator(".phtile",has_text="Déplacements").click();pg.wait_for_timeout(300)
+    later=today+datetime.timedelta(days=31)
+    R["visnew"]={"type":"mes","start":later.isoformat()}
+    pg.locator("#lists .btn",has_text="Préparer un déplacement").first.click();pg.wait_for_timeout(500)
+    pg.locator("#visview [data-start]").first.click();pg.wait_for_timeout(500)
+    v=pg.locator("#visview")
+    ok(v.locator(".mesdays [data-day]").count()==5 and "(5 jours)" in v.locator(".vish").inner_text(),"préparée pour plus tard puis démarrée aujourd'hui : toujours 5 jours, à partir d'aujourd'hui")
+    pg.close()
     # ---------- Visite d'analyse : notes séparées par jour ----------
     pg=b.new_page(viewport={"width":390,"height":844})
     pg.on("pageerror",lambda e:errs.append("JS: "+str(e)))
