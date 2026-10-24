@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs>
+<linearGradient id="gInk" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22394A"/><stop offset="1" stop-color="#0B1820"/></linearGradient>
+<linearGradient id="gSig" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFD84F"/><stop offset=".55" stop-color="#F2B705"/><stop offset="1" stop-color="#E08F00"/></linearGradient>
+<linearGradient id="gBlade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#C9D6DE"/></linearGradient>
+<linearGradient id="gSheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<linearGradient id="gR" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E25A3F"/><stop offset="1" stop-color="#9A2516"/></linearGradient>
+<linearGradient id="gG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#46A877"/><stop offset="1" stop-color="#1E5C40"/></linearGradient>
+<linearGradient id="gB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5A9AD2"/><stop offset="1" stop-color="#235A88"/></linearGradient>
+</defs><rect width="120" height="120" rx="28" fill="url(#gInk)"/><rect width="120" height="120" rx="28" fill="url(#gSheen)"/><g stroke="url(#gBlade)" stroke-width="9.5" stroke-linecap="round"><path d="M34 78 41 30"/><path d="M34 78 65 37"/><path d="M34 78 85 53"/></g>
+<rect x="19" y="70" width="84" height="24" rx="12" fill="url(#gSig)"/><rect x="21" y="71.5" width="80" height="9" rx="4.5" fill="#fff" opacity=".28"/><circle cx="33" cy="82" r="4.2" fill="#0F1E28"/></svg>
