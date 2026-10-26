@@ -4353,7 +4353,7 @@
     const end=s0&&r.end&&r.end>s0?r.end:null;
     const v={id:newId(),projectId:p.id,title:(r.title||"Déplacement sur site").slice(0,300),startedAt:prep?null:now,endedAt:null,status:prep?"prep":"open",flows:mes?[]:VIS_FLOWS.map(n=>({id:uid(),name:n})),notes:[],items:[],prep:{participants:defaultParticipants(p.id),type:r.type,days:VIS_TYPES[r.type].days,...(start?{plannedAt:start}:{}),...(end?{endDay:end}:{})},createdAt:now};
     visPersist();
-    if(prep&&!mes){const n=visSeed(v);if(n)toast(`${plural(n,"point ouvert repris","points ouverts repris")} dans « À voir », par flux.`)}
+    if(!mes)v.prep.propV=1;
     visPut(v);visOpen(v);render();
   }
   async function visDelete(v){
@@ -4807,18 +4807,33 @@
   }
   // ---------- Préparation de la visite (au bureau, sur ordinateur ou téléphone) ----------
   const dtLocal=ms=>{if(!ms)return "";const d=new Date(ms);const z=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`};
+  const ptShort=t=>{t=String(t||"");if(rtIs(t))t=rtText(t);t=t.replace(/\s+/g," ").trim();return t.length>180?t.slice(0,177)+"…":t};
+  const visPropMore={}; // propositions dépliées au-delà des 5 premières, par flux
   const visPrepOpen={}; // flux dépliés dans la préparation (par défaut : ceux qui ont des éléments)
   // démarrer : le premier jour devient aujourd'hui et la durée prévue est conservée (le dernier jour est décalé d'autant)
   function visStartNow(){visSet(y=>{y.prep=y.prep||{};const n=y.prep.plannedAt?visNDays(y):(y.prep.days||1);
     y.status="open";y.startedAt=Date.now();y.prep.endDay=n>1?iso(addDays(new Date(),n-1)):null});visScreen="home";renderVisit();render();toast("Déplacement démarré : bon déplacement !")}
   function visPrepScreen(o,v,p){
+    // v106 : les points ouverts ne sont plus repris d'office ; ceux repris automatiquement auparavant sont retirés une fois
+    if(v.status==="prep"&&!isMes(v)&&!(v.prep&&v.prep.propV)){visQuiet(y=>{y.prep=y.prep||{};y.items=(y.items||[]).filter(i=>!(i.kind==="point"&&i.ref));y.prep.propV=1});v=visCur}
     const pr=v.prep||(v.prep={}), live=v.status!=="prep", wide=visWide();
     const parts=pr.participants||[], cand=[], seen=new Set();
     const addC=(name,side,extra)=>{const k=norm(name);if(!name||seen.has(k))return;seen.add(k);cand.push({name,side,...extra})};
     parts.forEach(x=>addC(x.name,x.side));ctList(v.projectId).forEach(c=>addC(c.name,c.side,{role:c.role}));memberEmails(v.projectId).forEach(e=>addC(nameOf(e),"mecalux",{email:e}));
     const on=new Set(parts.map(x=>norm(x.name)));
     const usedPts=new Set((v.items||[]).filter(i=>i.ref).map(i=>i.ref));
-    const freePts=livePts().filter(x=>x.projectId===v.projectId&&x.status!=="closed"&&!usedPts.has(x.id));
+    const freePts=livePts().filter(x=>x.projectId===v.projectId&&x.status!=="closed"&&!usedPts.has(x.id))
+      .sort((a,b)=>((b.owner==="client")-(a.owner==="client"))||((a.createdAt||0)-(b.createdAt||0)));
+    const flowOfPt=x=>{const tk=themeKey(x.theme);return tk?(v.flows||[]).find(f=>!f.off&&themeKey(f.name)===tk):null};
+    const propsOf=fid=>freePts.filter(x=>{const f=flowOfPt(x);return f&&f.id===fid});
+    const noFlow=freePts.filter(x=>!flowOfPt(x)), nProp=freePts.length-noFlow.length, nAdded=(v.items||[]).filter(i=>i.kind==="point"&&i.ref).length;
+    const ageTxt=x=>{if(x.owner!=="client"||!x.createdAt)return x.owner==="mecalux"?"à traiter":"";const d=Math.floor((Date.now()-x.createdAt)/864e5);if(d>3650)return "en attente client";return d<1?"en attente depuis aujourd'hui":`en attente depuis ${d} j`};
+    const ownPill=x=>x.owner==="client"?'<span class="vpown cli">Client</span>':x.owner==="mecalux"?'<span class="vpown">Mecalux</span>':"";
+    const propHtml=x=>`<div class="vprop"><span><small>${esc(ptNumOf(x)||"Point ouvert")}${ownPill(x)}<em>${esc(ageTxt(x))}</em></small>${esc(ptShort(x.text))}</span><button type="button" class="btn vpadd" data-addprop="${esc(x.id)}">${VI.plus}Ajouter</button></div>`;
+    const propBlock=f=>{const ps=propsOf(f.id);if(!ps.length)return "";const more=!!visPropMore[f.id], shown=more?ps:ps.slice(0,5);
+      return `<div class="vprops"><div class="vproph"><span class="vpsp" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"></path></svg></span><b>Points ouverts proposés · ${ps.length}</b>${ps.length>1?`<button type="button" class="vislink" data-addall="${esc(f.id)}">Tout ajouter</button>`:""}</div>
+        <p class="muted">Points non levés du thème « ${esc(f.name)} ». Rien n'est ajouté tant que vous ne cliquez pas.</p>${shown.map(propHtml).join("")}
+        ${ps.length>5?`<button type="button" class="vislink vpmore" data-pmore="${esc(f.id)}">${more?"Réduire":ps.length-5===1?"Voir l'autre":`Voir les ${ps.length-5} autres`}</button>`:""}</div>`};
     const fl=v.flows||[], nOn=fl.filter(f=>!f.off).length, nIt=visItemsOn(v).length;
     const isOpen=f=>!f.off&&(f.id in visPrepOpen?visPrepOpen[f.id]:visItems(v,f.id).length>0);
     const acts=wide?(live?`<button type="button" class="btn primary" data-go>Revenir au déplacement</button>`:`<button type="button" class="btn" data-x>Fermer</button><button type="button" class="btn primary" data-start>${WH_SVG}Démarrer le déplacement</button>`):"";
@@ -4839,19 +4854,20 @@
         </section>
         </div>
         <div class="vpc2">
-          <div class="vishd"><h2>À voir pendant le déplacement</h2><span>${plural(nIt,"élément")} · ${plural(nOn,"flux","flux")}</span></div>
+          <div class="vishd"><h2>À voir pendant le déplacement</h2><span>${plural(nIt,"élément")} · ${plural(nOn,"flux","flux")}${nProp?` · <b class="vpcount">${plural(nProp,"point proposé","points proposés")}</b>`:""}</span></div>
           <div class="visflows">${fl.map((f,k)=>{const it=visItems(v,f.id), op=isOpen(f);return `<div class="visfl${f.off?" off":""}${op?" open":""}" data-f="${esc(f.id)}">
-            <div class="visflh"><input type="checkbox" data-on ${f.off?"":"checked"} aria-label="Flux ${esc(f.name)} couvert pendant le déplacement"><button type="button" class="visflt" data-tog aria-expanded="${op}"${f.off?" disabled":""}><b>${esc(f.name)}</b><span class="muted">${f.off?"non couvert":it.length?plural(it.length,"élément"):"aucun élément"}</span>${f.off?"":VI.chev}</button>
+            <div class="visflh"><input type="checkbox" data-on ${f.off?"":"checked"} aria-label="Flux ${esc(f.name)} couvert pendant le déplacement"><button type="button" class="visflt" data-tog aria-expanded="${op}"${f.off?" disabled":""}><b>${esc(f.name)}</b>${!f.off&&!op&&propsOf(f.id).length?`<span class="vpbadge">${plural(propsOf(f.id).length,"proposé","proposés")}</span>`:""}<span class="muted">${f.off?"non couvert":it.length?plural(it.length,"élément"):"aucun élément"}</span>${f.off?"":VI.chev}</button>
               <button type="button" class="visround sm" data-up ${k?"":"disabled"} aria-label="Monter ${esc(f.name)}">↑</button><button type="button" class="visround sm" data-down ${k<fl.length-1?"":"disabled"} aria-label="Descendre ${esc(f.name)}">↓</button></div>
             ${op?`${it.map(i=>`<div class="visprepi" data-i="${esc(i.id)}"><span>${i.kind==="point"?`<small>${esc(i.label||"Point ouvert")}</small>`:""}${esc(i.text)}</span><button type="button" class="vismore" data-del aria-label="Retirer « ${esc(i.text)} »">✕</button></div>`).join("")}
-              <form class="visprepadd" autocomplete="off"><input type="text" maxlength="300" placeholder="Ajouter un élément à voir…" aria-label="Élément à voir pour ${esc(f.name)}"><button class="btn" type="submit">Ajouter</button></form>`:""}
+              <form class="visprepadd" autocomplete="off"><input type="text" maxlength="300" placeholder="Ajouter un élément à voir…" aria-label="Élément à voir pour ${esc(f.name)}"><button class="btn" type="submit">Ajouter</button></form>${propBlock(f)}`:""}
           </div>`}).join("")}</div>
           <button type="button" class="vislink" data-addf>${VI.plus}Ajouter un flux</button>
         </div>
-        <aside class="vpc3"><section class="viscard"><div class="vissh"><h3>Points ouverts</h3><span class="muted">${freePts.length?`${freePts.length} non repris`:"tous repris"}</span></div>
-          <p class="muted">Les points en attente de réponse du client se reprennent dans le flux du même thème.</p>
-          <button type="button" class="btn" data-seed>Reprendre les points ouverts</button>
-          ${freePts.map(x=>`<div class="vispt"><span><small>${esc([ptNumOf(x),x.theme,x.owner==="client"?"client":x.owner==="mecalux"?"Mecalux":""].filter(Boolean).join(" · "))}</small>${esc(short(x.text))}</span><button type="button" class="btn" data-addpt="${esc(x.id)}">Ajouter</button></div>`).join("")}
+        <aside class="vpc3"><section class="viscard"><div class="vissh"><h3>Points ouverts</h3><span class="muted">${plural(freePts.length+nAdded,"non levé","non levés")}</span></div>
+          <div class="vpkpis"><span class="ok"><b>${nAdded}</b>${nAdded>1?"ajoutés":"ajouté"}</span><span class="pr"><b>${nProp}</b>proposé${nProp>1?"s":""} dans les flux</span><span><b>${noFlow.length}</b>sans flux</span></div>
+          <p class="muted">Chaque flux propose les points de son thème. Les points dont le thème ne correspond à aucun flux restent ici : choisissez le flux où les voir.</p>
+          ${noFlow.length?`<b class="vpsub">Sans flux correspondant</b>`:""}
+          ${noFlow.map(x=>`<div class="vprop vpnf"><span><small>${esc([ptNumOf(x),x.theme].filter(Boolean).join(" · "))}${ownPill(x)}</small>${esc(ptShort(x.text))}</span><span class="vpnfr"><select data-nfsel="${esc(x.id)}" aria-label="Flux où voir ce point"><option value="">Choisir un flux…</option>${(v.flows||[]).filter(f=>!f.off).map(f=>`<option value="${esc(f.id)}">${esc(f.name)}</option>`).join("")}</select><button type="button" class="btn vpadd" data-addpt="${esc(x.id)}">${VI.plus}Ajouter</button></span></div>`).join("")}
         </section></aside>
       </div></main>
       ${wide?"":`<footer class="visf">${live?`<button type="button" class="btn primary visend" data-go>Revenir au déplacement</button>`:`<button type="button" class="btn visend" data-x>Fermer</button><button type="button" class="btn primary visend" data-start>Démarrer le déplacement</button>`}</footer>`}`;
@@ -4874,11 +4890,16 @@
     const pa=o.querySelector("[data-padd]");pa.onsubmit=async e=>{e.preventDefault();const name=pa.querySelector("input").value.trim(),side=pa.querySelector("select").value;if(!name)return;
       if(!ctList(v.projectId).some(c=>norm(c.name)===norm(name)))await ctAdd(v.projectId,{name,side});
       visSet(y=>{y.prep.participants=(y.prep.participants||[]).filter(z=>norm(z.name)!==norm(name));y.prep.participants.push({name,side})})};
-    o.querySelector("[data-seed]").onclick=()=>{let n=0;visSet(y=>{n=visSeed(y)});toast(n?`${plural(n,"point ouvert ajouté","points ouverts ajoutés")} à « À voir ».`:"Aucun nouveau point ouvert à reprendre.")};
+    const ptItem=(x,fid)=>({id:uid(),flow:fid,kind:"point",ref:x.id,text:x.text.split("\n")[0].slice(0,300),label:ptNumOf(x)||"Point ouvert",seen:false});
+    o.querySelectorAll("[data-addprop]").forEach(b=>b.onclick=()=>{const x=livePts().find(z=>z.id===b.dataset.addprop), f=x&&flowOfPt(x);if(!f)return;
+      visPrepOpen[f.id]=true;visSet(y=>{y.items=y.items||[];if(!y.items.some(i=>i.ref===x.id))y.items.push(ptItem(x,f.id))})});
+    o.querySelectorAll("[data-addall]").forEach(b=>b.onclick=()=>{const fid=b.dataset.addall, ps=propsOf(fid);visPrepOpen[fid]=true;
+      visSet(y=>{y.items=y.items||[];ps.forEach(x=>{if(!y.items.some(i=>i.ref===x.id))y.items.push(ptItem(x,fid))})});toast(`${plural(ps.length,"point ouvert ajouté","points ouverts ajoutés")} au flux.`)});
+    o.querySelectorAll("[data-pmore]").forEach(b=>b.onclick=()=>{visPropMore[b.dataset.pmore]=!visPropMore[b.dataset.pmore];renderVisit()});
     o.querySelector("[data-addf]").onclick=async()=>{const n=await uiPrompt("Nom du nouveau flux","",{ok:"Ajouter"});if(n&&n.trim())visSet(y=>y.flows.push({id:uid(),name:n.trim().slice(0,60)}))};
     o.querySelectorAll("[data-addpt]").forEach(b=>b.onclick=async()=>{
       const x=livePts().find(z=>z.id===b.dataset.addpt);if(!x)return;
-      const tk=themeKey(x.theme);let fid=tk&&(visFlows(visCur).find(f=>themeKey(f.name)===tk)||{}).id;
+      const sel=o.querySelector(`[data-nfsel="${CSS.escape(x.id)}"]`);let fid=sel&&sel.value;
       if(!fid)fid=await visPickFlow("Dans quel flux voir ce point ?");if(!fid)return;
       visPrepOpen[fid]=true;
       visSet(y=>{y.items=y.items||[];y.items.push({id:uid(),flow:fid,kind:"point",ref:x.id,text:x.text.split("\n")[0].slice(0,300),label:ptNumOf(x)||"Point ouvert",seen:false})});
