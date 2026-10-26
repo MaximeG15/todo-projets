@@ -34,6 +34,23 @@ with sync_playwright() as pw:
     pg.keyboard.press("Escape");pg.wait_for_timeout(100)
     ok(pg.locator(".dpop").count()==0 and pg.evaluate("document.querySelector('dialog #dlgd').closest('dialog').open"),"Échap ferme le calendrier sans fermer la fenêtre")
     pg.close()
+    # déplacements déjà prévus : bande colorée et légende dans le calendrier des dates de déplacement
+    pg=b.new_page(viewport={"width":1440,"height":900});pg.on("pageerror",lambda e:errs.append("JS3: "+str(e)))
+    pg.add_init_script("localStorage.setItem('todo-projets',%s);localStorage.setItem('todo-mode','local')"%json.dumps(json.dumps(data)))
+    pg.goto(APP);pg.wait_for_timeout(400)
+    pg.locator(".pbtn",has_text="Projet test").click();pg.locator('#ptabs [data-tab="visits"]').click();pg.wait_for_timeout(300)
+    pg.locator("#lists [data-startv], #lists .btn",has_text="Démarrer un déplacement").first.click();pg.wait_for_timeout(300)
+    d=pg.locator("dialog.visnewdlg");d.locator('[data-ty="mes"]').click();d.locator("[data-ok]").click();pg.wait_for_timeout(500)
+    for _ in range(3):
+        if pg.locator("#visview [data-back]").count() and pg.locator("#visview [data-back]").first.is_visible():pg.locator("#visview [data-back]").first.click();pg.wait_for_timeout(400)
+    ok(pg.evaluate("window.__dpTrips().length")==1,"le déplacement créé est connu du calendrier")
+    pg.locator(".pbtn",has_text="Projet test").click();pg.locator('#ptabs [data-tab="visits"]').click();pg.wait_for_timeout(300)
+    pg.locator("#lists [data-startv], #lists .btn",has_text="Démarrer un déplacement").first.click();pg.wait_for_timeout(300)
+    pg.locator("dialog.visnewdlg [data-k='end']").click();pg.wait_for_timeout(200)
+    ok(pg.locator(".dpop .dpd.trip[data-v='%s']"%t.isoformat()).count()==1,"le jour du déplacement existant est coloré")
+    ok(pg.locator(".dpop .dpli").count()==1 and "Mise en service" in pg.locator(".dpop .dpli").inner_text(),"légende : déplacement prévu affiché sous le calendrier")
+    pg.screenshot(path=OUT+"datepick_trips.png")
+    pg.close()
     # téléphone : calendrier natif conservé
     m=b.new_page(viewport={"width":390,"height":844},has_touch=True,is_mobile=True);m.goto(APP);m.wait_for_timeout(300)
     ok(not m.evaluate("document.documentElement.classList.contains('dp-on')"),"téléphone : calendrier natif conservé")

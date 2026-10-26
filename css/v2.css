@@ -1057,3 +1057,17 @@ main.inproj{background:radial-gradient(900px 320px at 0 0,color-mix(in srgb,var(
 .dpop .dpa:hover:not(:disabled){background:var(--soft)}
 .dpop .dpa:disabled{opacity:.4}
 .vism.mes > *,.mesrow{flex-shrink:0} /* v104 : les rubriques ne se tassent plus (zones de texte coupées) */
+/* v105 : déplacements déjà prévus visibles dans le calendrier */
+.dpop .dpg{row-gap:4px;column-gap:0}
+.dpop .dpd{margin:0 1px}
+.dpop .dpd.trip{background:color-mix(in srgb,var(--tc) 20%,transparent);border-radius:0;margin:0;color:var(--ink)}
+.dpop .dpd.trip.ts{border-top-left-radius:9px;border-bottom-left-radius:9px;margin-left:1px}
+.dpop .dpd.trip.te{border-top-right-radius:9px;border-bottom-right-radius:9px;margin-right:1px}
+.dpop .dpd.trip:hover:not(:disabled){background:color-mix(in srgb,var(--tc) 32%,transparent)}
+.dpop .dpd.trip.sel{background:var(--g-pri,#F2B705);border-radius:9px}
+.dpop .dpl{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}
+.dpop .dpli{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.3;color:var(--chipink)}
+.dpop .dpli i{flex:none;width:10px;height:10px;margin-top:3px;border-radius:3px;background:var(--tc)}
+.dpop .dpli span{min-width:0}.dpop .dpli b{color:var(--ink);font-weight:600}
+.dpop .dpli small{display:block;color:var(--faint);font-size:12px}
+.dpop .dpl + .dpf{margin-top:8px}

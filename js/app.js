@@ -4121,6 +4121,9 @@
   const isMes=v=>visKind(v)==="mes";
   const visDays=v=>{const d0=new Date(visStartDay(v)+"T12:00");return Array.from({length:visNDays(v)},(_,j)=>iso(addDays(d0,j)))};
   const dayLbl=(d,long)=>new Date(d+"T12:00").toLocaleDateString("fr-FR",long?{weekday:"long",day:"numeric",month:"long"}:{weekday:"short",day:"numeric",month:"short"});
+  // Pour le calendrier de l'appli : déplacements datés de tous les projets visibles (bande colorée sur les jours concernés)
+  window.__dpTrips=()=>{try{visEnsure();return Object.values(vis.map).map(x=>x.v).filter(v=>!v.deletedAt&&!(v.status==="prep"&&!(v.prep&&v.prep.plannedAt))).map(v=>{const pj=proj(v.projectId);if(!pj||pj.archived)return null;
+    return {id:v.id,s:visStartDay(v),e:visEndDay(v),title:v.title||"Déplacement",pname:pj.name,color:pj.color||"#3E7CB1",st:{prep:"prévu",open:"en cours",done:"terminé"}[v.status]||""}}).filter(Boolean)}catch(e){return []}};
   const visList=pid=>Object.values(vis.map).map(x=>x.v).filter(v=>v.projectId===pid&&!v.deletedAt).sort((a,b)=>((b.status==="prep")-(a.status==="prep"))||(a.status==="prep"?visDate(a)-visDate(b):visDate(b)-visDate(a)));
   const visFlows=v=>(v.flows||[]).filter(f=>!f.off);
   const visItems=(v,fid)=>(v.items||[]).filter(i=>i.flow===fid&&!i.mk);
@@ -4321,7 +4324,7 @@
       d.innerHTML=`<form method="dialog"><h3>Nouveau déplacement</h3>
         <div class="vtypes" role="radiogroup" aria-label="Type de déplacement">${Object.entries(VIS_TYPES).map(([k,t])=>`<button type="button" role="radio" class="vtype${t.soon?" soon":""}" data-ty="${k}" aria-checked="${k===type}"${t.soon?' disabled aria-disabled="true"':""}><span class="vtyi" aria-hidden="true">${k==="mes"?VI.rocket:k==="dry"?VI.flask:WH_SVG}</span><span class="vtyt"><b>${esc(t.l)}${t.soon?` <em>Bientôt disponible</em>`:""}</b><span>${esc(t.d)}</span>${t.soon?"":`<small>${plural(t.days,"jour")} par défaut</small>`}</span></button>`).join("")}</div>
         <label class="uifld"><span>Intitulé</span><input type="text" data-k="title" maxlength="300"></label>
-        <div class="visgrid"><label class="uifld"><span>Premier jour</span><input type="date" data-k="start"${prep?"":" disabled"}></label><label class="uifld"><span>Dernier jour</span><input type="date" data-k="end"></label></div>
+        <div class="visgrid"><label class="uifld"><span>Premier jour</span><input type="date" data-k="start" data-dptrips${prep?"":" disabled"}></label><label class="uifld"><span>Dernier jour</span><input type="date" data-k="end" data-dptrips></label></div>
         <p class="muted vnhint"></p>
         <div class="uibtns"><button type="button" class="btn ghost" data-x>Annuler</button><button type="button" class="btn primary" data-ok>${prep?"Préparer":"Démarrer"}</button></div></form>`;
       document.body.appendChild(d);
@@ -4824,7 +4827,7 @@
         <div class="vpc1">
         <section class="viscard"><h3>Informations</h3>
           <div class="visgrid"><label class="uifld"><span>Début (date et heure)</span><input type="datetime-local" data-k="plannedAt" value="${dtLocal(pr.plannedAt)}"></label>
-          <label class="uifld"><span>Dernier jour <small class="muted">si plusieurs jours</small></span><input type="date" data-k="endDay" value="${esc(pr.endDay&&pr.plannedAt&&pr.endDay>iso(new Date(pr.plannedAt))?pr.endDay:"")}" min="${pr.plannedAt?iso(new Date(pr.plannedAt)):""}"></label></div>
+          <label class="uifld"><span>Dernier jour <small class="muted">si plusieurs jours</small></span><input type="date" data-k="endDay" data-dptrips="${esc(v.id)}" value="${esc(pr.endDay&&pr.plannedAt&&pr.endDay>iso(new Date(pr.plannedAt))?pr.endDay:"")}" min="${pr.plannedAt?iso(new Date(pr.plannedAt)):""}"></label></div>
           <p class="visdur muted" data-dur${pr.plannedAt&&visNDays(v)>1?"":" hidden"}>${pr.plannedAt?esc(cap(visRangeTxt(v,true))):""}</p>
           <label class="uifld"><span>Lieu</span><input type="text" data-k="location" maxlength="300" placeholder="Site, adresse" value="${esc(pr.location||"")}"></label>
           <label class="uifld"><span>Objectif du déplacement</span><textarea rows="2" data-k="goal" maxlength="2000" placeholder="Ex. : analyser les flux de réception et d'expédition">${esc(pr.goal||"")}</textarea></label>
@@ -6510,12 +6513,18 @@
   const set=v=>{const el=inp;close();el.value=v;el.dispatchEvent(new Event("input",{bubbles:true}));el.dispatchEvent(new Event("change",{bubbles:true}));el.focus()};
   const draw=()=>{
     const sel=inp.value,today=isoD(new Date()),mn=inp.min||"",mx=inp.max||"";
+    const trips=inp.hasAttribute("data-dptrips")&&window.__dpTrips?window.__dpTrips().filter(t=>t.id!==inp.getAttribute("data-dptrips")):[];
     const y=cur.getFullYear(),m=cur.getMonth(),first=new Date(y,m,1),off=(first.getDay()+6)%7,n=new Date(y,m+1,0).getDate();
     let cells="";for(let i=0;i<off;i++)cells+="<span></span>";
     for(let d=1;d<=n;d++){const v=`${y}-${p2(m+1)}-${p2(d)}`,dis=(mn&&v<mn)||(mx&&v>mx);
-      cells+=`<button type="button" class="dpd${v===sel?" sel":""}${v===today?" tod":""}" data-v="${v}"${dis?" disabled":""}${v===sel?' aria-pressed="true"':""}${v===today?' aria-current="date"':""}>${d}</button>`}
+      const tr=trips.filter(t=>t.s<=v&&v<=t.e),t0=tr[0],dow=(off+d-1)%7;
+      const tc=t0?` trip${(t0.s===v||dow===0||d===1)?" ts":""}${(t0.e===v||dow===6||d===n)?" te":""}`:"";
+      cells+=`<button type="button" class="dpd${v===sel?" sel":""}${v===today?" tod":""}${tc}" data-v="${v}"${t0?` style="--tc:${t0.color}" title="${tr.map(t=>`${t.title} · ${t.pname}`.replace(/"/g,"&quot;")).join("\n")}"`:""}${dis?" disabled":""}${v===sel?' aria-pressed="true"':""}${v===today?' aria-current="date"':""}>${d}</button>`}
+    const m0=`${y}-${p2(m+1)}-01`,m1=`${y}-${p2(m+1)}-${p2(n)}`,inM=trips.filter(t=>t.s<=m1&&t.e>=m0).sort((a,b)=>a.s<b.s?-1:1);
+    const MA=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."],sh=x=>{const q=parse(x);return `${q.getDate()} ${MA[q.getMonth()]}`};
+    const leg=inM.length?`<div class="dpl">${inM.map(t=>`<div class="dpli" style="--tc:${t.color}"><i></i><span><b>${t.title.replace(/</g,"&lt;")}</b> · ${t.pname.replace(/</g,"&lt;")}<small>${t.s===t.e?sh(t.s):`${sh(t.s)} – ${sh(t.e)}`}${t.st?` · ${t.st}`:""}</small></span></div>`).join("")}</div>`:"";
     pop.innerHTML=`<div class="dph"><button type="button" class="dpn" data-m="-1" aria-label="Mois précédent">‹</button><b>${MO[m]} ${y}</b><button type="button" class="dpn" data-m="1" aria-label="Mois suivant">›</button></div>
-      <div class="dpw"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div><div class="dpg">${cells}</div>
+      <div class="dpw"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div><div class="dpg">${cells}</div>${leg}
       <div class="dpf">${inp.required?"<span></span>":'<button type="button" class="dpa" data-x="clear">Effacer</button>'}<button type="button" class="dpa" data-x="today"${(mn&&today<mn)||(mx&&today>mx)?" disabled":""}>Aujourd'hui</button></div>`};
   const open=el=>{close();inp=el;cur=parse(el.value)||parse(el.min&&el.min>isoD(new Date())?el.min:"")||new Date();cur=new Date(cur.getFullYear(),cur.getMonth(),1);
     pop=document.createElement("div");pop.className="dpop";pop.setAttribute("role","dialog");pop.setAttribute("aria-label","Choisir une date");
