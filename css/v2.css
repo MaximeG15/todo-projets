@@ -1037,3 +1037,22 @@ main.inproj{background:radial-gradient(900px 320px at 0 0,color-mix(in srgb,var(
   #plist .pbtn[aria-current="true"]:hover{background:color-mix(in srgb,var(--pc) 22%,transparent)}
   #plist li.pdrag .pbtn:hover{background:var(--panel)}
 }
+/* v103 : calendrier de l'appli (PC), à la place du calendrier natif */
+.dp-on input[type="date"]::-webkit-calendar-picker-indicator{opacity:0;pointer-events:none}
+.dp-on input[type="date"]{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2351626D' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M3 10h18M8 3v4M16 3v4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;cursor:pointer}
+.dpop{position:fixed;inset:auto;margin:0;z-index:2000;width:272px;box-sizing:border-box;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);box-shadow:0 14px 34px -10px rgba(15,30,40,.35),0 2px 6px rgba(15,30,40,.08);font-size:14px}
+.dpop .dph{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.dpop .dph b{font-weight:700;text-transform:capitalize}
+.dpop .dpn{width:32px;height:32px;border:0;border-radius:9px;background:transparent;color:var(--ink);font-size:20px;line-height:1;cursor:pointer}
+.dpop .dpn:hover{background:var(--soft)}
+.dpop .dpw,.dpop .dpg{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.dpop .dpw span{font-size:11.5px;font-weight:700;color:var(--faint);padding:2px 0 4px}
+.dpop .dpd{height:34px;border:0;border-radius:9px;background:transparent;color:var(--ink);font:inherit;font-variant-numeric:tabular-nums;cursor:pointer}
+.dpop .dpd:hover:not(:disabled){background:var(--soft)}
+.dpop .dpd.tod{box-shadow:inset 0 0 0 1.5px var(--faint);font-weight:700}
+.dpop .dpd.sel{background:var(--g-pri,#F2B705);color:#0F1E28;font-weight:700;box-shadow:none}
+.dpop .dpd:disabled{opacity:.3;cursor:default}
+.dpop .dpf{display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+.dpop .dpa{border:0;background:transparent;color:var(--chipink);font:inherit;font-weight:600;padding:6px 8px;border-radius:8px;cursor:pointer}
+.dpop .dpa:hover:not(:disabled){background:var(--soft)}
+.dpop .dpa:disabled{opacity:.4}

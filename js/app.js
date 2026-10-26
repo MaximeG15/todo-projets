@@ -6491,3 +6491,48 @@
     else{render();showGate("choice")}
   }
 })();
+
+// Calendrier de l'appli (PC) : remplace le calendrier natif des champs date, qui garde le même
+// numéro de jour en surbrillance quand on change de mois. Le champ reste un input date (saisie clavier conservée).
+(()=>{
+  const fine=()=>{try{return matchMedia("(hover:hover) and (pointer:fine)").matches}catch(e){return false}};
+  if(fine())document.documentElement.classList.add("dp-on");
+  const MO=["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+  const p2=n=>String(n).padStart(2,"0"),isoD=d=>`${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
+  const parse=s=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||"");return m?new Date(+m[1],m[2]-1,+m[3]):null};
+  let pop=null,inp=null,cur=null;
+  const close=()=>{if(!pop)return;try{pop.hidePopover&&pop.matches(":popover-open")&&pop.hidePopover()}catch(e){}pop.remove();pop=null;inp=null;document.removeEventListener("pointerdown",outside,true);window.removeEventListener("resize",close);document.removeEventListener("scroll",onScroll,true)};
+  const outside=e=>{if(pop&&!pop.contains(e.target)&&e.target!==inp)close()};
+  const onScroll=e=>{if(pop&&!pop.contains(e.target))place()};
+  const place=()=>{if(!pop||!inp)return;const r=inp.getBoundingClientRect(),h=pop.offsetHeight,w=pop.offsetWidth;
+    let top=r.bottom+6;if(top+h>innerHeight-8)top=r.top-h-6>8?r.top-h-6:innerHeight-h-8;
+    pop.style.top=Math.max(8,top)+"px";pop.style.left=Math.max(8,Math.min(r.left,innerWidth-w-8))+"px"};
+  const set=v=>{const el=inp;close();el.value=v;el.dispatchEvent(new Event("input",{bubbles:true}));el.dispatchEvent(new Event("change",{bubbles:true}));el.focus()};
+  const draw=()=>{
+    const sel=inp.value,today=isoD(new Date()),mn=inp.min||"",mx=inp.max||"";
+    const y=cur.getFullYear(),m=cur.getMonth(),first=new Date(y,m,1),off=(first.getDay()+6)%7,n=new Date(y,m+1,0).getDate();
+    let cells="";for(let i=0;i<off;i++)cells+="<span></span>";
+    for(let d=1;d<=n;d++){const v=`${y}-${p2(m+1)}-${p2(d)}`,dis=(mn&&v<mn)||(mx&&v>mx);
+      cells+=`<button type="button" class="dpd${v===sel?" sel":""}${v===today?" tod":""}" data-v="${v}"${dis?" disabled":""}${v===sel?' aria-pressed="true"':""}${v===today?' aria-current="date"':""}>${d}</button>`}
+    pop.innerHTML=`<div class="dph"><button type="button" class="dpn" data-m="-1" aria-label="Mois précédent">‹</button><b>${MO[m]} ${y}</b><button type="button" class="dpn" data-m="1" aria-label="Mois suivant">›</button></div>
+      <div class="dpw"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div><div class="dpg">${cells}</div>
+      <div class="dpf">${inp.required?"<span></span>":'<button type="button" class="dpa" data-x="clear">Effacer</button>'}<button type="button" class="dpa" data-x="today"${(mn&&today<mn)||(mx&&today>mx)?" disabled":""}>Aujourd'hui</button></div>`};
+  const open=el=>{close();inp=el;cur=parse(el.value)||parse(el.min&&el.min>isoD(new Date())?el.min:"")||new Date();cur=new Date(cur.getFullYear(),cur.getMonth(),1);
+    pop=document.createElement("div");pop.className="dpop";pop.setAttribute("role","dialog");pop.setAttribute("aria-label","Choisir une date");
+    const host=el.closest("dialog[open]")||document.body;
+    host.appendChild(pop);if(pop.showPopover){pop.setAttribute("popover","manual");try{pop.showPopover()}catch(e){}}
+    draw();place();
+    pop.addEventListener("pointerdown",e=>e.preventDefault());
+    pop.addEventListener("click",e=>{const b=e.target.closest("button");if(!b||b.disabled)return;
+      if(b.dataset.m){cur=new Date(cur.getFullYear(),cur.getMonth()+ +b.dataset.m,1);draw();place()}
+      else if(b.dataset.v)set(b.dataset.v);
+      else if(b.dataset.x==="today")set(isoD(new Date()));
+      else if(b.dataset.x==="clear")set("")});
+    setTimeout(()=>{document.addEventListener("pointerdown",outside,true);window.addEventListener("resize",close);document.addEventListener("scroll",onScroll,true)},0)};
+  document.addEventListener("click",e=>{const el=e.target;if(!(el instanceof HTMLInputElement)||el.type!=="date"||el.disabled||el.readOnly||!fine())return;
+    e.preventDefault();if(pop&&inp===el){close();return}open(el)},true);
+  document.addEventListener("keydown",e=>{if(!pop)return;if(e.key==="Escape"){e.stopPropagation();e.preventDefault();const el=inp;close();el&&el.focus()}
+    else if(e.key==="Tab")close()},true);
+  document.addEventListener("keydown",e=>{const el=e.target;if(el instanceof HTMLInputElement&&el.type==="date"&&fine()&&!el.disabled&&(e.key===" "&&e.altKey||e.key==="ArrowDown"&&e.altKey)){e.preventDefault();open(el)}});
+  window.__datePick={open,close};
+})();
