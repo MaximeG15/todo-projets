@@ -1056,3 +1056,4 @@ main.inproj{background:radial-gradient(900px 320px at 0 0,color-mix(in srgb,var(
 .dpop .dpa{border:0;background:transparent;color:var(--chipink);font:inherit;font-weight:600;padding:6px 8px;border-radius:8px;cursor:pointer}
 .dpop .dpa:hover:not(:disabled){background:var(--soft)}
 .dpop .dpa:disabled{opacity:.4}
+.vism.mes > *,.mesrow{flex-shrink:0} /* v104 : les rubriques ne se tassent plus (zones de texte coupées) */
