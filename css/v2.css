@@ -1030,3 +1030,10 @@ main.inproj{background:radial-gradient(900px 320px at 0 0,color-mix(in srgb,var(
 :root[data-theme="dark"]{--fam:#4FC4C0;--famsoft:#12383A;--famink:#9BE3DF}
 .tag.fam,:root:not([data-theme="light"]) .tag.fam{background-color:var(--famsoft);color:var(--famink);background-image:var(--sheen)}
 .group.g-family h2::before{content:none;display:none}
+/* v102 : survol d'un projet dans la barre de gauche, surbrillance à la couleur du projet */
+@media (hover:hover){
+  #plist .pbtn{transition:background-color .15s ease,box-shadow .15s ease}
+  #plist .pbtn:hover{background:color-mix(in srgb,var(--pc) 15%,transparent);box-shadow:inset 3px 0 0 var(--pc)}
+  #plist .pbtn[aria-current="true"]:hover{background:color-mix(in srgb,var(--pc) 22%,transparent)}
+  #plist li.pdrag .pbtn:hover{background:var(--panel)}
+}
