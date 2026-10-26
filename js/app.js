@@ -3435,7 +3435,7 @@
     // notification Windows si l'appli n'est pas au premier plan (autorisation donnée une fois)
     if(notifOk()&&Notification.permission==="granted"&&(document.hidden||!document.hasFocus())){
       try{
-        const x=fresh[0], nt=new Notification(`${p.name} : ${ansTxt(n)}`,{body:n>1?fresh.slice(0,3).map(o=>"• "+short(o.text)).join("\n")+(n>3?`\n… et ${n-3} autre(s)`:""):`${short(x.text)}\nRéponse : ${short(x.answer)}`,tag:"ans-"+p.id,icon:"icons/icon-192-v6.png"});
+        const x=fresh[0], nt=new Notification(`${p.name} : ${ansTxt(n)}`,{body:n>1?fresh.slice(0,3).map(o=>"• "+short(o.text)).join("\n")+(n>3?`\n… et ${n-3} autre(s)`:""):`${short(x.text)}\nRéponse : ${short(x.answer)}`,tag:"ans-"+p.id,icon:"icons/icon-192-v7.png"});
         nt.onclick=()=>{try{window.focus()}catch(e){}ansShow(p.id);nt.close()};
       }catch(e){}
     }
