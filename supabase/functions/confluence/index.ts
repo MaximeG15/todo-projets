@@ -5,7 +5,7 @@
 // - Le lien d'une page à un déplacement est signé (HMAC) : personne ne peut écrire avec le jeton d'un autre
 //   sur une page que cette personne n'a pas liée elle-même.
 // - Seuls les sites *.atlassian.net sont acceptés. Seuls les blocs « To do projets » de la page sont modifiés.
-import { mergeDays } from "./blocks.js";
+import { mergeDays, photoIds, photoName } from "./blocks.js";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -79,6 +79,30 @@ async function probe(site: string, email: string, token: string): Promise<Cred> 
   if (r.ok) return g;
   return await atlErr(r, "test");
 }
+// pièces jointes déjà présentes sur la page (noms de fichiers)
+async function attachmentNames(c: Cred, pid: string) {
+  const names = new Set<string>();
+  let path: string | null = `/api/v2/pages/${pid}/attachments?limit=250`;
+  for (let i = 0; path && i < 20; i++) {
+    const r = await atl(c, path);
+    if (!r.ok) return { ok: false, status: r.status, names };
+    const j = await r.json();
+    for (const a of j.results || []) names.add(String(a.title || ""));
+    const next = j._links && j._links.next ? String(j._links.next) : "";
+    path = next ? next.replace(/^\/wiki/, "") : null;
+  }
+  return { ok: true, status: 200, names };
+}
+async function uploadPhoto(c: Cred, pid: string, name: string, bytes: Uint8Array) {
+  const form = new FormData();
+  form.append("file", new Blob([bytes], { type: "image/jpeg" }), name);
+  form.append("minorEdit", "true");
+  const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 30000);
+  try {
+    return await fetch(apiBase(c) + `/rest/api/content/${pid}/child/attachment`, { method: "PUT", body: form, signal: ctrl.signal, headers: { Authorization: "Basic " + btoa(`${c.email}:${c.token}`), "X-Atlassian-Token": "no-check", Accept: "application/json" } });
+  } catch { return null; } finally { clearTimeout(t); }
+}
+const MAX_PHOTOS = 6; // photos envoyées par appel (le reste au suivant)
 function pageIdFrom(url: string, site: string) {
   let u: URL;
   try { u = new URL(String(url).trim()); } catch { throw new Fail(400, "bad_url", "Collez le lien complet de la page (https://…)."); }
@@ -156,15 +180,39 @@ Deno.serve(async (req) => {
       const rows = cr.ok ? await cr.json() : [];
       if (!rows.length) throw new Fail(404, "no_cred", "La personne qui a lié la page n'a plus de connexion Confluence (ou n'a plus accès au projet).");
       const c: Cred = { ...rows[0], token: await open(rows[0].token_enc) };
+      // photos : pièces jointes de la page (téléchargées du stockage de l'appli avec les droits de l'appelant)
+      const ids = photoIds(days), have = new Set<string>();
+      let morePhotos = 0, missing = 0, warn = "";
+      if (ids.length) {
+        const att = await attachmentNames(c, pid);
+        if (!att.ok) warn = att.status === 401 || att.status === 403 ? "photos_scope" : "photos";
+        else {
+          att.names.forEach((n) => have.add(n));
+          const todo = ids.filter((id) => !have.has(photoName(id)));
+          for (const id of todo.slice(0, MAX_PHOTOS)) {
+            const d = await fetch(`${base}/storage/v1/object/authenticated/visit-photos/${encodeURIComponent(v.project_id)}/${encodeURIComponent(v.id)}/${encodeURIComponent(id)}.jpg`, { headers: { Authorization: auth, apikey: key } });
+            if (!d.ok) { missing++; continue; }
+            const bytes = new Uint8Array(await d.arrayBuffer());
+            if (bytes.byteLength > 15 * 1024 * 1024) { missing++; continue; }
+            const u = await uploadPhoto(c, pid, photoName(id), bytes);
+            if (u && u.ok) have.add(photoName(id));
+            else if (u && (u.status === 401 || u.status === 403)) { warn = "photos_scope"; break; }
+            else missing++;
+          }
+          morePhotos = Math.max(0, todo.length - MAX_PHOTOS);
+        }
+      }
+      const hasPhoto = (id: string) => have.has(photoName(id));
+      const extra = { morePhotos, missingPhotos: missing, warn };
       for (let attempt = 0; attempt < 3; attempt++) {
         const g = await atl(c, `/api/v2/pages/${pid}?body-format=storage`);
         if (!g.ok) await atlErr(g, "lecture de la page");
         const pg = await g.json();
         const cur = pg.body && pg.body.storage ? pg.body.storage.value || "" : "";
-        const next = mergeDays(cur, v.id, days);
-        if (next === cur) return json(200, { ok: true, pushed: days.map((d: { key: string }) => d.key), unchanged: true });
-        const p = await atl(c, `/api/v2/pages/${pid}`, { method: "PUT", body: JSON.stringify({ id: pid, status: "current", title: pg.title, body: { representation: "storage", value: next }, version: { number: pg.version.number + 1, message: "To do projets – compte rendu de mise en service" } }) });
-        if (p.ok) return json(200, { ok: true, pushed: days.map((d: { key: string }) => d.key), version: pg.version.number + 1 });
+        const next = mergeDays(cur, v.id, days, hasPhoto);
+        if (next === cur) return json(200, { ok: true, pushed: days.map((d: { key: string }) => d.key), unchanged: true, ...extra });
+        const p = await atl(c, `/api/v2/pages/${pid}`, { method: "PUT", body: JSON.stringify({ id: pid, status: "current", title: pg.title, body: { representation: "storage", value: next }, version: { number: pg.version.number + 1, message: "To do projets – compte rendu de déplacement" } }) });
+        if (p.ok) return json(200, { ok: true, pushed: days.map((d: { key: string }) => d.key), version: pg.version.number + 1, ...extra });
         if (p.status === 409) continue; // page enregistrée entre-temps : on relit et on réessaie
         await atlErr(p, "écriture de la page");
       }

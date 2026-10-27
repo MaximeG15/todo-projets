@@ -116,6 +116,36 @@ with sync_playwright() as pw:
     ok(len(pushes(p2))>n and pv.locator(".confchip").count()==1,"démarrage : premier envoi automatique, témoin dans l'en-tête")
     p2.screenshot(path=OUT+"confluence_prep.png")
     p2.close()
+    # --- visite d'analyse fonctionnelle : lien dès la préparation, un bloc par journée découpé par flux
+    p3=b.new_page(viewport={"width":1440,"height":900});p3.on("pageerror",lambda e:errs.append("JSa: "+str(e)))
+    p3.route("**/supabase.js",lambda r:r.fulfill(body="",content_type="text/javascript"))
+    p3.add_init_script(path=FAKE);p3.add_init_script(FN);p3.add_init_script("localStorage.setItem('todo-mode','cloud');window.__confDelay=300;window.__db.user_confluence=[{user_id:'u1',site:'easywmsfrance.atlassian.net',email:'alice@exemple.test',token_enc:'x',expires_on:'2027-10-01'}]")
+    on_dialog(p3,handler)
+    p3.goto(APP);p3.wait_for_timeout(1200)
+    p3.locator(".pbtn",has_text="Projet Alpha").click();p3.locator('#ptabs [data-tab="visits"]').click();p3.wait_for_timeout(300)
+    R["visnew"]={"type":"af"}
+    p3.locator("#lists [data-prep]").click();p3.wait_for_timeout(600)
+    av=p3.locator("#visview")
+    ok(av.locator(".vpc3 .confprep [data-conflink]").is_visible(),"préparation de visite d'AF : encadré Confluence en haut de la colonne de droite")
+    p3.evaluate("window.__testDialog=null")
+    av.locator(".vpc3 [data-conflink]").click();p3.wait_for_timeout(300)
+    p3.locator("dialog.conflink [data-k=url]").fill("https://easywmsfrance.atlassian.net/wiki/spaces/PROJ/pages/4242");p3.locator("dialog.conflink [data-ok]").click();p3.wait_for_timeout(1000)
+    av.locator("[data-start]").first.click();p3.wait_for_timeout(800)
+    ok(av.locator(".confchip").count()==1,"visite démarrée : témoin Confluence dans l'en-tête")
+    av.locator(".visdl .vistile",has_text="Réception").click();p3.wait_for_timeout(300)
+    av.locator('button[data-t="question"]').click();av.locator(".visin .rte").fill("Quelles informations remonter à Sage à la clôture d'une réception ?");av.locator("[data-add]").click();p3.wait_for_timeout(300)
+    av.locator('button[data-t="note"]').click();av.locator(".visin .rte").fill("Réception aveugle sur les retours.");av.locator("[data-add]").click();p3.wait_for_timeout(1500)
+    ps=pushes(p3)
+    d0=ps[-1]["days"][0] if ps and ps[-1]["days"] else {"parts":[]}
+    parts=d0.get("parts",[])
+    flux=[x.get("flux") for x in parts if x.get("flux")]
+    notes=[n for x in parts if x.get("notes") for n in x["notes"]]
+    heads=[x.get("h") for x in parts if x.get("h")]
+    ok(len(ps)>=1 and d0.get("title","").startswith("Visite d'analyse fonctionnelle – J1") and flux==["Réception"],"envoi : bloc de la journée, découpé par flux")
+    ok("Informations" in heads and "Synthèse du jour" in heads and "Questions client du jour" in heads,"bloc : informations, synthèse, questions client du jour")
+    ok(any(n["tag"]=="Question client" and "fin de visite" in n["after"] for n in notes) and any(n["tag"]=="Note" for n in notes),"notes avec leur type et leur suite")
+    p3.screenshot(path=OUT+"confluence_af.png")
+    p3.close()
     # --- téléphone : témoin sous l'en-tête
     m=b.new_page(viewport={"width":390,"height":844});m.on("pageerror",lambda e:errs.append("JSm: "+str(e)))
     m.route("**/supabase.js",lambda r:r.fulfill(body="",content_type="text/javascript"))

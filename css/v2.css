@@ -1149,3 +1149,6 @@ main.inproj{background:radial-gradient(900px 320px at 0 0,color-mix(in srgb,var(
 .confprep > .btn{align-self:flex-start}
 .confprepb{display:flex;gap:8px;flex-wrap:wrap}
 @media (min-width:900px){.mesprep .visprepg{grid-template-columns:400px minmax(0,560px)}}
+/* v110 : témoin Confluence dans l'en-tête d'une visite d'AF (téléphone : libellé raccourci) */
+@media (max-width:899px){.vish .visrow .confchip{max-width:44vw;padding:0 10px}}
+.vpc3 .confprep{margin-bottom:0}

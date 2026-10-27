@@ -10,9 +10,45 @@ const lines = (s) => esc(String(s ?? "").trim()).replace(/\r?\n/g, "<br />");
 const anchor = (name) => `<ac:structured-macro ac:name="anchor" ac:schema-version="1"><ac:parameter ac:name="">${name}</ac:parameter></ac:structured-macro>`;
 export const anchorName = (vid, day) => `tdp-${vid}-${day}`;
 
+// étiquette native de Confluence (macro « statut »)
+const STATUS_COLOURS = { Grey: 1, Red: 1, Yellow: 1, Green: 1, Blue: 1, Purple: 1 };
+const status = (title, colour) => `<ac:structured-macro ac:name="status" ac:schema-version="1"><ac:parameter ac:name="colour">${STATUS_COLOURS[colour] ? colour : "Grey"}</ac:parameter><ac:parameter ac:name="title">${esc(title)}</ac:parameter></ac:structured-macro>`;
+export const photoName = (id) => `tdp-${id}.jpg`;
+const PHOTO_ID = /^[A-Za-z0-9_-]{1,64}$/;
+// identifiants des photos citées dans les journées
+export function photoIds(days) {
+  const out = [];
+  for (const d of days || []) for (const p of d.parts || []) for (const n of p.notes || []) for (const ph of n.photos || []) if (PHOTO_ID.test(String(ph.id)) && !out.includes(ph.id)) out.push(ph.id);
+  return out;
+}
+// rendu générique (visite d'analyse fonctionnelle) : titres, tableaux, notes avec étiquettes et photos, listes
+function partsXhtml(parts, hasPhoto) {
+  const cellHtml = (c) => (c && typeof c === "object" && c.status) ? status(c.status, c.colour) : lines(c);
+  const table = (head, rows) => `<table><tbody>${head && head.length ? `<tr>${head.map((h) => `<th><p>${esc(h)}</p></th>`).join("")}</tr>` : ""}${(rows || []).map((r) => `<tr>${r.map((c) => `<td><p>${cellHtml(c)}</p></td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  return (parts || []).map((p) => {
+    if (p.h) return `<h3>${esc(p.h)}</h3>`;
+    if (p.flux) return `<h3>${esc(p.flux)}</h3>` + (p.sub ? `<p><em>${esc(p.sub)}</em></p>` : "");
+    if (p.kv) return `<table><tbody>${p.kv.map(([k, v]) => `<tr><th><p>${esc(k)}</p></th><td><p>${lines(v)}</p></td></tr>`).join("")}</tbody></table>`;
+    if (p.table) return table(p.table.head, p.table.rows);
+    if (p.ul) return p.ul.length ? `<ul>${p.ul.map((x) => `<li>${lines(x)}</li>`).join("")}</ul>` : "";
+    if (p.notes) return p.notes.length ? `<ul>${p.notes.map((n) => {
+      const phs = (n.photos || []).filter((ph) => PHOTO_ID.test(String(ph.id)) && hasPhoto(ph.id));
+      return `<li>${n.tag ? status(n.tag, n.colour) + " " : ""}${n.time ? `<em>${esc(n.time)}</em> ` : ""}${lines(n.text)}${n.after ? ` <em>(${esc(n.after)})</em>` : ""}` +
+        phs.map((ph) => `<p><ac:image ac:width="320"><ri:attachment ri:filename="${photoName(ph.id)}" /></ac:image></p>${ph.caption ? `<p><em>${esc(ph.caption)}</em></p>` : ""}`).join("") + `</li>`;
+    }).join("")}</ul>` : "";
+    if (p.p) return `<p>${lines(p.p)}</p>`;
+    return "";
+  }).join("");
+}
+
 // day : { key:"2026-10-27", title, stamp, rows:[{title, kind:"list", items:[{t,d,who,st}]} | {title, kind:"text", text}] }
-export function dayXhtml(vid, day) {
+//       ou { key, title, stamp, parts:[…] } (visite d'analyse fonctionnelle)
+export function dayXhtml(vid, day, hasPhoto = () => false) {
   const name = anchorName(vid, day.key);
+  if (Array.isArray(day.parts)) {
+    return `<p>${anchor(name)}</p><h2>${esc(day.title)}</h2>` + (day.stamp ? `<p><em>${esc(day.stamp)}</em></p>` : "") +
+      partsXhtml(day.parts, hasPhoto) + `<p>${anchor(name + "-fin")}</p>`;
+  }
   const li = (i) => `<li><strong>${esc(i.t)}</strong>${i.d ? " : " + lines(i.d) : ""}${i.who || i.st ? ` (${esc([i.who, i.st].filter(Boolean).join(" - "))})` : ""}</li>`;
   const cell = (r) => r.kind === "list" ? ((r.items || []).length ? `<ul>${r.items.map(li).join("")}</ul>` : "") : (String(r.text || "").trim() ? `<p>${lines(r.text)}</p>` : "");
   const rows = (day.rows || []).map((r) => `<tr><th><p>${esc(r.title)}</p></th><td>${cell(r)}</td></tr>`).join("");
@@ -51,10 +87,10 @@ export function listDays(body, vid) {
 }
 
 // remplace ou insère chaque journée ; renvoie le nouveau corps de page
-export function mergeDays(body, vid, days) {
+export function mergeDays(body, vid, days, hasPhoto = () => false) {
   body = String(body || "");
   for (const day of [...days].sort((a, b) => a.key.localeCompare(b.key))) {
-    const html = dayXhtml(vid, day);
+    const html = dayXhtml(vid, day, hasPhoto);
     const pos = findBlock(body, anchorName(vid, day.key));
     if (pos) { body = body.slice(0, pos[0]) + html + body.slice(pos[1]); continue; }
     const present = listDays(body, vid);

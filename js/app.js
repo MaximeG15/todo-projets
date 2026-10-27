@@ -4398,6 +4398,8 @@
     o.className="visv"+(isMes(v)?" mes":"");o.setAttribute("aria-label",v.title);
     if(visScreen==="flow"&&!visFlows(v).some(f=>f.id===visFlowId))visScreen="home";
     if(visScreen==="prep")visPrepScreen(o,v,p);else if(visScreen==="flow")visFlowScreen(o,v,p);else if(visScreen==="end")visEndScreen(o,v,p);else visHomeScreen(o,v,p);
+    o.querySelectorAll(".confchip[data-conf]").forEach(b=>b.onclick=()=>confInfo(visCur));
+    if(v.prep&&v.prep.conf&&v.status!=="prep"&&!conf.opened[v.id]){conf.opened[v.id]=1;if(!conf.timers[v.id])confSchedule(v,2500)}
     o.classList.remove("recording");if(visRec&&visScreen!=="prep"&&visScreen!=="end")recPanel(o);
     visStatus();
   }
@@ -4501,12 +4503,12 @@
       </footer>`;
   }
   const visQuickBar=()=>`<footer class="visf vqf"><button type="button" class="visqb" data-qgal aria-label="Importer des photos de la galerie (le flux est choisi ensuite)">${GAL_SVG}<span>Galerie</span></button><button type="button" class="visfab" data-quick aria-label="Photo rapide (le flux est choisi ensuite)">${CAM_SVG}</button>${recOk()?`<button type="button" class="visqb rec" data-qrec aria-label="Enregistrer la conversation (le flux est choisi ensuite)">${MIC_SVG}<span>Enregistrer</span></button>`:`<span class="visqb" aria-hidden="true"></span>`}</footer>`;
-  const visHomeActs=v=>`<button type="button" class="btn visendh" data-end>${v.status==="done"?"Bilan":"Terminer"}</button>${visMoreBtn("data-vm","Actions sur le déplacement")}`;
+  const visHomeActs=v=>confChip(v)+`<button type="button" class="btn visendh" data-end>${v.status==="done"?"Bilan":"Terminer"}</button>${visMoreBtn("data-vm","Actions sur le déplacement")}`;
   // liaisons communes à l'accueil, au flux et à la vue ordinateur
   function visBindCommon(o,v){
     o.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{visScreen="flow";visFlowId=b.dataset.f;renderVisit()});
     const vm=o.querySelector("[data-vm]");if(vm)vm.onclick=async()=>{
-      const ch=await visSheet(v.title,[...(isMes(v)?[{k:"conf",l:v.prep&&v.prep.conf?"Page Confluence liée":"Lier une page Confluence"}]:[]),...(v.status==="done"?[{k:"reopen",l:"Reprendre le déplacement"}]:[{k:"finish",l:"Clôturer le déplacement"}]),{k:"gal",l:"Importer des photos de la galerie"},{k:"prep",l:"Revoir la préparation"},{k:"ren",l:"Renommer le déplacement"},{k:"pdf",l:"Exporter le compte rendu (PDF)"},{k:"del",l:"Supprimer le déplacement",danger:true}]);
+      const ch=await visSheet(v.title,[...(visKind(v)!=="dry"?[{k:"conf",l:v.prep&&v.prep.conf?"Page Confluence liée":"Lier une page Confluence"}]:[]),...(v.status==="done"?[{k:"reopen",l:"Reprendre le déplacement"}]:[{k:"finish",l:"Clôturer le déplacement"}]),{k:"gal",l:"Importer des photos de la galerie"},{k:"prep",l:"Revoir la préparation"},{k:"ren",l:"Renommer le déplacement"},{k:"pdf",l:"Exporter le compte rendu (PDF)"},{k:"del",l:"Supprimer le déplacement",danger:true}]);
       if(ch==="conf"){if(visCur.prep&&visCur.prep.conf)confInfo(visCur);else confLinkDlg(visCur)}
       else if(ch==="finish")visFinish(visCur);
       else if(ch==="reopen")visSet(x=>{x.status="open";x.endedAt=null});
@@ -4817,6 +4819,14 @@
   // démarrer : le premier jour devient aujourd'hui et la durée prévue est conservée (le dernier jour est décalé d'autant)
   function visStartNow(){visSet(y=>{y.prep=y.prep||{};const n=y.prep.plannedAt?visNDays(y):(y.prep.days||1);
     y.status="open";y.startedAt=Date.now();y.prep.endDay=n>1?iso(addDays(new Date(),n-1)):null});visScreen="home";renderVisit();render();toast("Déplacement démarré : bon déplacement !")}
+  // encadré « Compte rendu dans Confluence » de la préparation
+  function confPrepCard(v){const pr=v.prep||{};return `<section class="viscard confprep"><h3>${CONF_SVG}Compte rendu dans Confluence</h3>
+          ${pr.conf?`<a class="confpage" href="${esc(pr.conf.url||"#")}" target="_blank" rel="noopener"><b>${esc(pr.conf.title||"Page Confluence")}</b><span>${esc(pr.conf.site||"")} · ouvrir dans Confluence</span></a>
+            <p class="muted">Le compte rendu de chaque journée s'écrira en direct dans cette page dès le démarrage ${isMes(v)?"de la mise en service":"de la visite"} : un bloc par journée, le plus récent en haut. Le reste de la page n'est pas modifié.</p>
+            <div class="confprepb"><button type="button" class="btn" data-conflink>Changer de page</button><button type="button" class="btn ghost" data-confunlink>Délier</button></div>`
+          :`<p class="muted">Liez la page Confluence partagée des comptes rendus : chaque journée y sera écrite en direct dès le démarrage ${isMes(v)?"de la mise en service":"de la visite"}, sans toucher au reste de la page.</p>
+            <button type="button" class="btn primary" data-conflink>Lier une page Confluence</button>${MODE==="cloud"?"":`<p class="muted">Nécessite le mode en ligne (compte).</p>`}`}
+        </section>`}
   function visPrepScreen(o,v,p){
     // v106 : les points ouverts ne sont plus repris d'office ; ceux repris automatiquement auparavant sont retirés une fois
     if(v.status==="prep"&&!isMes(v)&&!(v.prep&&v.prep.propV)){visQuiet(y=>{y.prep=y.prep||{};y.items=(y.items||[]).filter(i=>!(i.kind==="point"&&i.ref));y.prep.propV=1});v=visCur}
@@ -4857,13 +4867,7 @@
           <form class="mtgadd" data-padd autocomplete="off"><input type="text" placeholder="Nom ou fonction" aria-label="Nom ou fonction" maxlength="120"><select aria-label="Côté">${Object.entries(SIDE).map(([k,l])=>`<option value="${k}">${l}</option>`).join("")}</select><button class="btn" type="submit">Ajouter</button></form>
         </section>
         </div>
-        ${isMes(v)?`<div class="vpcconf"><section class="viscard confprep"><h3>${CONF_SVG}Compte rendu dans Confluence</h3>
-          ${pr.conf?`<a class="confpage" href="${esc(pr.conf.url||"#")}" target="_blank" rel="noopener"><b>${esc(pr.conf.title||"Page Confluence")}</b><span>${esc(pr.conf.site||"")} · ouvrir dans Confluence</span></a>
-            <p class="muted">Le compte rendu de chaque journée s'écrira en direct dans cette page dès le démarrage de la mise en service : un bloc par journée, le plus récent en haut. Le reste de la page n'est pas modifié.</p>
-            <div class="confprepb"><button type="button" class="btn" data-conflink>Changer de page</button><button type="button" class="btn ghost" data-confunlink>Délier</button></div>`
-          :`<p class="muted">Liez la page Confluence partagée des comptes rendus : chaque journée y sera écrite en direct dès le démarrage de la mise en service, sans toucher au reste de la page.</p>
-            <button type="button" class="btn primary" data-conflink>Lier une page Confluence</button>${MODE==="cloud"?"":`<p class="muted">Nécessite le mode en ligne (compte).</p>`}`}
-        </section></div>`:""}
+        ${isMes(v)?`<div class="vpcconf">${confPrepCard(v)}</div>`:""}
         <div class="vpc2">
           <div class="vishd"><h2>À voir pendant le déplacement</h2><span>${plural(nIt,"élément")} · ${plural(nOn,"flux","flux")}${nProp?` · <b class="vpcount">${plural(nProp,"point proposé","points proposés")}</b>`:""}</span></div>
           <div class="visflows">${fl.map((f,k)=>{const it=visItems(v,f.id), op=isOpen(f);return `<div class="visfl${f.off?" off":""}${op?" open":""}" data-f="${esc(f.id)}">
@@ -4874,7 +4878,7 @@
           </div>`}).join("")}</div>
           <button type="button" class="vislink" data-addf>${VI.plus}Ajouter un flux</button>
         </div>
-        <aside class="vpc3"><section class="viscard"><div class="vissh"><h3>Points ouverts</h3><span class="muted">${plural(freePts.length+nAdded,"non levé","non levés")}</span></div>
+        <aside class="vpc3">${confPrepCard(v)}<section class="viscard"><div class="vissh"><h3>Points ouverts</h3><span class="muted">${plural(freePts.length+nAdded,"non levé","non levés")}</span></div>
           <div class="vpkpis"><span class="ok"><b>${nAdded}</b>${nAdded>1?"ajoutés":"ajouté"}</span><span class="pr"><b>${nProp}</b>proposé${nProp>1?"s":""} dans les flux</span><span><b>${noFlow.length}</b>sans flux</span></div>
           <p class="muted">Chaque flux propose les points de son thème. Les points dont le thème ne correspond à aucun flux restent ici : choisissez le flux où les voir.</p>
           ${noFlow.length?`<b class="vpsub">Sans flux correspondant · ${noFlow.length}</b>`:""}
@@ -5337,7 +5341,7 @@
     </div><div class="confr"><b>Comment créer le jeton ?</b><ol>
       <li><b>Ouvrez la page Jetons API d'Atlassian</b><span>Compte Atlassian, rubrique Sécurité, puis « Créer un jeton API avec des portées ».</span></li>
       <li><b>Nommez-le et fixez sa durée</b><span>Par exemple « To do projets ». Durée maximale : 365 jours. Reportez la date d'expiration ici.</span></li>
-      <li><b>Choisissez Confluence et les portées</b><span>Cochez read:page:confluence et write:page:confluence : le jeton ne peut que lire et modifier des pages.</span></li>
+      <li><b>Choisissez Confluence et les portées</b><span>Cochez read:page:confluence et write:page:confluence (pages), plus read:attachment:confluence et write:attachment:confluence (photos des visites).</span></li>
       <li><b>Copiez le jeton ici</b><span>Il ne s'affiche qu'une fois chez Atlassian. Collez-le dans « Jeton API », puis Enregistrer : la connexion est testée.</span></li></ol>
       <a class="btn" href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">Ouvrir la page Jetons API</a></div></div></form>`;
     document.body.appendChild(d);
@@ -5372,7 +5376,40 @@
   const confHash=s=>{let h=5381;for(let i=0;i<s.length;i++)h=(Math.imul(h,33)^s.charCodeAt(i))>>>0;return h.toString(36)};
   const confSent=vid=>{try{return JSON.parse(localStorage.getItem("tdp-conf:"+vid)||"{}")}catch(e){return {}}};
   const confSaveSent=(vid,o)=>{try{localStorage.setItem("tdp-conf:"+vid,JSON.stringify(o))}catch(e){}};
+  // visite d'analyse fonctionnelle : un bloc par journée de notes, découpé par flux (notes, réponses, photos)
+  function confAfDays(v){
+    const p=proj(v.projectId)||{name:""}, pr=v.prep||{}, c=pr.conf||{}, its=v.items||[], dayOf=n=>iso(new Date(n.at));
+    const ns=(v.notes||[]).filter(n=>n.text||(n.photos||[]).length||n.audio).slice().sort((a,b)=>a.at-b.at);
+    const days=[...new Set(ns.map(dayOf))].filter(d=>!c.from||d>=c.from).sort(), plan=visDays(v), last=days[days.length-1];
+    const fname=id=>((v.flows||[]).find(f=>f.id===id)||{}).name||"";
+    const TAG={note:["Note","Grey"],question:["Question client","Blue"],action:["Action","Yellow"]};
+    const convTxt=n=>{if(!n.conv)return n.type==="question"?"deviendra un point ouvert en fin de visite":n.type==="action"?"deviendra une tâche en fin de visite":"";
+      if(n.conv.kind==="point"){const x=livePts().find(o=>o.id===n.conv.id);return x?`point ouvert ${ptNumOf(x)||"créé"}`:"point ouvert créé"}
+      const t=state.tasks.find(x=>x.id===n.conv.id);return t?["tâche",t.who?nameOf(t.who):"",t.due?new Date(t.due+"T12:00").toLocaleDateString("fr-FR"):""].filter(Boolean).join(" · "):"tâche créée"};
+    const txt=n=>{const t=rtText(n.text||"").trim();return t||(n.audio?`Enregistrement audio (${mmss(n.audio.dur||0)})${n.tr&&n.tr.text?" – "+n.tr.text:""}`:(n.photos||[]).length?"Photo":"")};
+    return days.map((d,di)=>{
+      const dn=ns.filter(n=>dayOf(n)===d), k=plan.indexOf(d)>=0?plan.indexOf(d)+1:di+1, parts=[];
+      if(di===0){const ppl=pr.participants||[];
+        parts.push({h:"Informations"},{kv:[["Dates",cap(visRangeTxt(v,true))],["Lieu",pr.location||""],["Objectif",rtText(pr.goal||"")],["Participants",ppl.map(x=>x.name+(SIDE[x.side]?` (${SIDE[x.side]})`:"")).join(", ")]].filter(r=>String(r[1]).trim())})}
+      const fl=visFlows(v).filter(f=>dn.some(n=>n.flow===f.id)), q=dn.filter(n=>n.type==="question"), a=dn.filter(n=>n.type==="action");
+      const ph=dn.reduce((x,n)=>x+(n.photos||[]).length,0), seen=its.filter(i=>dn.some(n=>n.item===i.id));
+      parts.push({h:"Synthèse du jour"},{table:{head:["Flux","Notes","Éléments vus","Questions client","Actions","Photos"],rows:[[fl.map(f=>f.name).join(", ")||"–",String(dn.length),String(seen.length),String(q.length),String(a.length),String(ph)]]}});
+      fl.forEach(f=>{const fn=dn.filter(n=>n.flow===f.id), ans=its.filter(i=>i.flow===f.id&&fn.some(n=>n.item===i.id));
+        parts.push({flux:f.name,sub:[plural(fn.length,"note"),ans.length?plural(ans.length,"élément vu","éléments vus"):""].filter(Boolean).join(" · ")});
+        if(ans.length)parts.push({table:{head:["Élément à voir","Réponse / constat"],rows:ans.map(i=>[(i.kind==="point"?(i.label||"Point ouvert")+" · ":"")+i.text,fn.filter(n=>n.item===i.id).map(txt).filter(Boolean).join(" / ")])}});
+        const list=fn.filter(n=>!n.item||(n.photos||[]).length);
+        if(list.length)parts.push({notes:list.map(n=>{const [tag,colour]=n.audio&&n.type==="note"?["Enregistrement","Purple"]:(TAG[n.type]||TAG.note);
+          const it=n.item&&its.find(i=>i.id===n.item);
+          return {tag,colour,time:hm(n.at),text:(it?`Réponse à « ${it.text} » : `:"")+txt(n),after:convTxt(n),photos:(n.photos||[]).map(x=>({id:x.id,caption:x.caption||""}))}})});
+      });
+      if(q.length)parts.push({h:"Questions client du jour"},{table:{head:["Question","Flux","Suite"],rows:q.map(n=>[rtText(n.text||""),fname(n.flow),convTxt(n)])}});
+      if(a.length)parts.push({h:"Actions du jour"},{table:{head:["Action","Flux","Suite"],rows:a.map(n=>[rtText(n.text||""),fname(n.flow),convTxt(n)])}});
+      if(d===last){const left=its.filter(i=>!i.seen&&!(v.notes||[]).some(n=>n.item===i.id)&&!(v.flows||[]).find(f=>f.id===i.flow&&f.off));
+        if(left.length)parts.push({h:"À reprendre lors d'une prochaine visite"},{ul:left.map(i=>`${fname(i.flow)} · ${(i.kind==="point"?(i.label||"Point ouvert")+" – ":"")}${i.text}`)})}
+      return {key:d,title:`${VIS_TYPES.af.l} – J${k} · ${dayLbl(d,true)} · ${p.name}`,closed:v.status==="done"&&d===last,endTxt:"visite terminée",parts}});
+  }
   function confDays(v){
+    if(!isMes(v))return confAfDays(v);
     const p=proj(v.projectId)||{name:""}, c=v.prep.conf, ds=mesDays(v);
     return ds.filter(d=>mesFlow(v,d)&&(!c.from||d>=c.from)).map(d=>{const f=mesFlow(v,d), k=ds.indexOf(d)+1;
       const rows=mesRows(v,f.id).map(r=>r.kind==="list"?{title:r.title,kind:"list",items:mesIts(v,r.id).map(i=>({t:i.t||"",d:rtText(i.d||""),who:i.who||"",st:i.st||""}))}:{title:r.title,kind:"text",text:rtText(r.text||"")});
@@ -5383,7 +5420,7 @@
   function confPaint(vid){document.querySelectorAll(".confchip[data-conf]").forEach(b=>{if(b.dataset.conf!==vid)return;const s=conf.st[vid]||{};b.className="confchip "+(s.st||"idle");b.querySelector("span").textContent=confLabel(vid);b.title=s.st==="err"&&s.msg?s.msg:"Page Confluence liée : cliquez pour le détail"})}
   const confChip=v=>v&&v.prep&&v.prep.conf?`<button type="button" class="confchip ${(conf.st[v.id]||{}).st||"idle"}" data-conf="${esc(v.id)}"><i aria-hidden="true"></i><span>${esc(confLabel(v.id))}</span></button>`:"";
   function confSchedule(v,delay){
-    if(MODE!=="cloud"||!v||!isMes(v)||!v.prep||!v.prep.conf||v.deletedAt||v.status==="prep")return;
+    if(MODE!=="cloud"||!v||!v.prep||!v.prep.conf||v.deletedAt||v.status==="prep")return;
     clearTimeout(conf.timers[v.id]);
     const s=conf.st[v.id]||(conf.st[v.id]={});if(s.st!=="sending")s.st=navigator.onLine===false?"offline":"pending";confPaint(v.id);
     conf.timers[v.id]=setTimeout(()=>confPush(v.id),delay==null?confDelay():delay);
@@ -5399,12 +5436,17 @@
     const todo=all.filter(d=>force||fresh||sent[d.key]!==hashOf(d));
     if(!todo.length){s.st="ok";s.at=s.at||Date.now();s.msg="";s.code="";confPaint(vid);return}
     const now=new Date(), me=cloud.email?nameOf(cloud.email):"";
-    const stamp=d=>`To do projets · mis à jour le ${now.toLocaleDateString("fr-FR")} à ${hm(now)}${me?" par "+me:""}${d.closed?" · journée clôturée":""}`;
+    const stamp=d=>`To do projets · mis à jour le ${now.toLocaleDateString("fr-FR")} à ${hm(now)}${me?" par "+me:""}${d.closed?" · "+(d.endTxt||"journée clôturée"):""}`;
     s.st="sending";s.again=false;confPaint(vid);
     try{
-      await confCall({action:"push",visitId:vid,pageId:c.pageId,by:c.by,sig:c.sig,days:todo.map(d=>({...d,stamp:stamp(d)}))});
-      const s2=fresh?{}:confSent(vid);s2._k=key;todo.forEach(d=>{s2[d.key]=hashOf(d);s2["at:"+d.key]=Date.now()});confSaveSent(vid,s2);
+      const r=await confCall({action:"push",visitId:vid,pageId:c.pageId,by:c.by,sig:c.sig,days:todo.map(d=>({...d,stamp:stamp(d)}))});
+      const more=(r.morePhotos||0)>0, miss=(r.missingPhotos||0)>0;
+      // photos restant à envoyer (lot suivant) ou pas encore disponibles : la journée sera renvoyée
+      const s2=fresh?{}:confSent(vid);s2._k=key;todo.forEach(d=>{if(!more&&!miss)s2[d.key]=hashOf(d);s2["at:"+d.key]=Date.now()});confSaveSent(vid,s2);
       s.st="ok";s.at=Date.now();s.msg="";s.code="";
+      s.warn=r.warn==="photos_scope"?"Photos non envoyées : ajoutez au jeton les portées read:attachment:confluence et write:attachment:confluence.":r.warn==="photos"?"Photos non envoyées pour le moment (Confluence n'a pas répondu).":"";
+      s.tries=(more||miss)?(s.tries||0)+1:0;
+      if((more||miss)&&s.tries<30){clearTimeout(conf.timers[vid]);conf.timers[vid]=setTimeout(()=>confPush(vid),more?1500:60000)}
     }catch(e){
       s.st=navigator.onLine===false?"offline":"err";s.msg=e.message;s.code=e.code||"";
       if(!e.code||["rate","conflict","timeout","upstream","error"].includes(e.code)){clearTimeout(conf.timers[vid]);conf.timers[vid]=setTimeout(()=>confPush(vid),60000)}
@@ -5417,7 +5459,7 @@
     if(MODE!=="cloud"||!cloud.user){uiAlert("La liaison à Confluence nécessite le mode en ligne (compte).");return}
     await confLoadMe();
     if(!conf.me){if(await uiConfirm("Pour lier une page, connectez d'abord Confluence à votre compte avec un jeton API (une seule fois).",{ok:"Connecter Confluence"}))openConfCfg();return}
-    const today=iso(new Date()), past=mesDays(v).filter(x=>mesFlow(v,x)&&x<today);
+    const today=iso(new Date()), past=isMes(v)?mesDays(v).filter(x=>mesFlow(v,x)&&x<today):[...new Set((v.notes||[]).map(n=>iso(new Date(n.at))))].filter(x=>x<today);
     const d=document.createElement("dialog");d.className="uidlg vissheet conflink";d.setAttribute("aria-label","Lier une page Confluence");
     d.innerHTML=`<form method="dialog" autocomplete="off"><h3>${CONF_SVG}Lier une page Confluence</h3>
       <p class="muted">Collez le lien de la page partagée des comptes rendus. L'appli y ajoute un bloc par journée, le plus récent en haut, et ne touche pas au reste de la page.</p>
@@ -5445,14 +5487,14 @@
     setTimeout(()=>q("url").focus(),30);
   }
   function confInfo(v){
-    const c=v.prep.conf, s=conf.st[v.id]||{}, sent=confSent(v.id), ds=mesDays(v), mine=cloud.user&&c.by===cloud.user.id;
+    const c=v.prep.conf, s=conf.st[v.id]||{}, sent=confSent(v.id), ds=isMes(v)?mesDays(v):visDays(v), mine=cloud.user&&c.by===cloud.user.id;
     const when=at=>iso(new Date(at))===iso(new Date())?"à "+hm(at):"le "+new Date(at).toLocaleDateString("fr-FR")+" à "+hm(at);
     const d=document.createElement("dialog");d.className="uidlg vissheet confinfo";d.setAttribute("aria-label","Page Confluence liée");
     d.innerHTML=`<form method="dialog"><h3>${CONF_SVG}Page Confluence liée</h3>
       <a class="confpage" href="${esc(c.url||"#")}" target="_blank" rel="noopener"><b>${esc(c.title||"Page Confluence")}</b><span>${esc(c.site||"")} · ouvrir dans Confluence</span></a>
-      <p class="confstate ${esc(s.st||"idle")}"><i aria-hidden="true"></i><span>${esc(confLabel(v.id))}${s.st==="err"&&s.msg?`<small>${esc(s.msg)}</small>`:""}</span></p>
-      <ul class="confdays">${ds.filter(x=>mesFlow(v,x)).map(x=>{const at=sent["at:"+x], k=ds.indexOf(x)+1;return `<li class="${at?"ok":""}">J${k} · ${esc(dayLbl(x))} · ${c.from&&x<c.from?"non envoyée (antérieure au lien)":at?"envoyée "+when(at):"pas encore envoyée depuis cet appareil"}</li>`}).join("")||"<li>Aucune journée commencée.</li>"}</ul>
-      <p class="muted">Envoi 10 secondes après chaque modification et à la clôture de la journée. Seuls les blocs « To do projets » de la page sont modifiés.${mine?"":` Les envois utilisent la connexion Confluence de ${esc(c.byName||"la personne qui a lié la page")}.`}</p>
+      <p class="confstate ${esc(s.st||"idle")}"><i aria-hidden="true"></i><span>${esc(confLabel(v.id))}${s.st==="err"&&s.msg?`<small>${esc(s.msg)}</small>`:s.warn?`<small>${esc(s.warn)}</small>`:""}</span></p>
+      <ul class="confdays">${(isMes(v)?ds.filter(x=>mesFlow(v,x)):[...new Set((v.notes||[]).map(n=>iso(new Date(n.at))))].sort()).map(x=>{const at=sent["at:"+x], k=(isMes(v)?ds:visDays(v)).indexOf(x)+1||"";return `<li class="${at?"ok":""}">J${k} · ${esc(dayLbl(x))} · ${c.from&&x<c.from?"non envoyée (antérieure au lien)":at?"envoyée "+when(at):"pas encore envoyée depuis cet appareil"}</li>`}).join("")||"<li>Aucune journée commencée.</li>"}</ul>
+      <p class="muted">Envoi 10 secondes après chaque modification${isMes(v)?" et à la clôture de la journée":""}, un bloc par journée, la plus récente en haut. Seuls les blocs « To do projets » de la page sont modifiés.${mine?"":` Les envois utilisent la connexion Confluence de ${esc(c.byName||"la personne qui a lié la page")}.`}</p>
       <div class="uibtns"><button type="button" class="btn danger" data-unlink>Délier la page</button><span class="sp"></span><button type="button" class="btn ghost" data-x>Fermer</button>${s.code==="auth"&&mine?`<button type="button" class="btn" data-cfg>Renouveler le jeton</button>`:""}<button type="button" class="btn primary" data-now>Envoyer maintenant</button></div></form>`;
     document.body.appendChild(d);
     const close=()=>{try{d.close()}catch(e){}d.remove()};
