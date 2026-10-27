@@ -1103,3 +1103,40 @@ main.inproj{background:radial-gradient(900px 320px at 0 0,color-mix(in srgb,var(
 .vpnflist:focus-visible{outline:2px solid var(--steel);outline-offset:2px}
 .vpnflist .vprop{flex:none}
 @media (max-width:899px){.vpnflist{max-height:420px}}
+/* v108 : Confluence en direct (mise en service) */
+.confic{flex:none;border-radius:6px}
+.confchip{height:32px;padding:0 12px;border-radius:16px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#E6ECEF;font:inherit;font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;cursor:pointer;max-width:100%;min-width:0}
+.confchip span{overflow:hidden;text-overflow:ellipsis}
+.confchip i{width:8px;height:8px;border-radius:50%;background:#9AABB5;flex:none}
+.confchip.ok{background:rgba(127,214,168,.16);border-color:rgba(127,214,168,.3);color:#BFEBD3}.confchip.ok i{background:#7FD6A8}
+.confchip.pending i,.confchip.sending i{background:#8CB8E8;animation:confpulse 1.2s ease-in-out infinite}
+.confchip.offline{background:rgba(242,183,5,.16);border-color:rgba(242,183,5,.3);color:#FFE08A}.confchip.offline i{background:#F2B705}
+.confchip.err{background:rgba(240,138,110,.18);border-color:rgba(240,138,110,.35);color:#FFD2C6}.confchip.err i{background:#F08A6E}
+@keyframes confpulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.confchip i{animation:none!important}}
+.confrow{display:flex;padding:2px 0 8px;min-width:0}
+.confdlg{max-width:min(940px,calc(100vw - 24px))}
+.confdlg .confg{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0}
+.confdlg .confl{display:flex;flex-direction:column;gap:12px;padding-right:22px;min-width:0}
+.confdlg .confr{display:flex;flex-direction:column;gap:12px;margin:-4px -4px -4px 0;padding:18px;border-radius:16px;background:var(--soft);border:1px solid var(--line);min-width:0}
+.confdlg .confr ol{margin:0;padding:0;list-style:none;counter-reset:cs;display:flex;flex-direction:column;gap:12px}
+.confdlg .confr li{counter-increment:cs;display:grid;grid-template-columns:26px 1fr;column-gap:10px;font-size:14px;line-height:1.4}
+.confdlg .confr li::before{content:counter(cs);grid-row:span 2;width:26px;height:26px;border-radius:50%;background:#FFF1C2;color:#7A5400;font-weight:700;font-size:13.5px;display:grid;place-items:center}
+.confdlg .confr li span{color:var(--muted)}
+.confdlg .confr .btn{align-self:flex-start;margin-top:auto;text-decoration:none}
+.confdlg h3,.conflink h3,.confinfo h3{display:flex;align-items:center;gap:10px}
+.confok{margin:0;padding:10px 12px;border-radius:12px;background:#E7F5EE;color:#1F6B47;font-size:14px;font-weight:600}
+.conferr{margin:0;min-height:1em;font-size:14px;color:var(--late)}.conferr.ok{color:var(--muted)}
+.confsec{font-size:13px}
+.confcb{display:flex;align-items:center;gap:10px;font-size:14.5px}
+.confpage{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:12px;background:var(--chip);color:var(--ink);text-decoration:none;border:1px solid var(--line)}
+.confpage span{font-size:12.5px;color:var(--muted)}.confpage:hover{border-color:var(--field)}
+.confstate{margin:0;display:flex;gap:10px;align-items:flex-start;font-size:14.5px;font-weight:600}
+.confstate i{width:9px;height:9px;border-radius:50%;background:#9AABB5;flex:none;margin-top:6px}
+.confstate.ok i{background:#2F8A5F}.confstate.err i{background:#C93C3C}.confstate.offline i{background:#F2B705}.confstate.pending i,.confstate.sending i{background:#2C6FB7}
+.confstate small{display:block;font-weight:500;color:var(--late);margin-top:2px}
+.confdays{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--chipink)}
+.confdays li::before{content:"•";display:inline-block;width:16px;color:var(--faint)}.confdays li.ok::before{content:"✓";color:#2F8A5F;font-weight:700}
+@media (max-width:899px){.confdlg .confg{grid-template-columns:1fr;gap:16px}.confdlg .confl{padding-right:0}.confdlg .confr{margin:0}}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .confok{background:#163326;color:#7FD6A8}}
+:root[data-theme="dark"] .confok{background:#163326;color:#7FD6A8}

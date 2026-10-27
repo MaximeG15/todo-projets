@@ -527,6 +527,7 @@
     await cloud.fetch();
     purgeTrash();
     cloud.subscribe();
+    setTimeout(confRemind,4000);
   }
   async function login(e){
     e.preventDefault();
@@ -627,12 +628,13 @@
       <button class="btn" type="button" data-a="exp" title="Télécharge une copie complète de vos données (projets, tâches, familles, points ouverts, demandes, commentaires) sur votre ordinateur">Sauvegarder une copie (.json)</button>
       <button class="btn ghost" type="button" data-a="name">Modifier mon nom</button>
       <button class="btn ghost" type="button" data-a="pwd">Changer le mot de passe</button>
+      <button class="btn ghost" type="button" data-a="conf">Connecter Confluence</button>
       <button class="btn ghost" type="button" data-a="out">Se déconnecter</button>
       <button class="btn ghost" type="button" data-a="loc">Passer en mode local</button>
       <input type="file" accept=".json,application/json" hidden>`;
     const f=a.querySelector("input[type=file]");
     f.onchange=e=>{if(e.target.files[0])importToCloud(e.target.files[0]);e.target.value=""};
-    a.querySelectorAll("button").forEach(b=>b.onclick=()=>({imp:()=>f.click(),exp:exportData,name:()=>openProfile(false),pwd:changePassword,out:logout,loc:toLocal})[b.dataset.a]());
+    a.querySelectorAll("button").forEach(b=>b.onclick=()=>({imp:()=>f.click(),exp:exportData,name:()=>openProfile(false),pwd:changePassword,conf:openConfCfg,out:logout,loc:toLocal})[b.dataset.a]());
   }
   // ---------- Données et confidentialité (RGPD) : information, export, suppression du compte ----------
   function openPrivacy(){
@@ -643,7 +645,7 @@
       <h4>Données enregistrées</h4>
       <p>Ce que vous saisissez : projets, tâches, points ouverts, demandes client, comptes rendus de réunion et contacts de projet. Pour chaque utilisateur en ligne : prénom, nom et adresse e-mail. Le lien de votre calendrier Outlook, si vous l'ajoutez, n'est visible que de vous.</p>
       <h4>Où sont-elles stockées ?</h4>
-      <p>${cl?"Mode en ligne : base de données Supabase hébergée dans l'Union européenne (Irlande).":"Mode local : uniquement dans ce navigateur, ou dans le fichier que vous avez choisi sur votre ordinateur."} Le code de l'appli est servi par GitHub Pages et ne contient aucune donnée. L'appli ne fait appel à aucun autre service tiers : polices et bibliothèques sont hébergées avec elle. Avec le lien Excel, le fichier reste sur votre ordinateur ; seuls les points lus sont enregistrés.</p>
+      <p>${cl?"Mode en ligne : base de données Supabase hébergée dans l'Union européenne (Irlande).":"Mode local : uniquement dans ce navigateur, ou dans le fichier que vous avez choisi sur votre ordinateur."} Le code de l'appli est servi par GitHub Pages et ne contient aucune donnée. Polices et bibliothèques sont hébergées avec l'appli. Seul service tiers, et seulement si vous le connectez : Confluence (Atlassian), qui reçoit les comptes rendus des mises en service liées à une page ; votre jeton API y est chiffré sur le serveur de l'appli et n'est visible de personne. Avec le lien Excel, le fichier reste sur votre ordinateur ; seuls les points lus sont enregistrés.</p>
       <h4>Qui y a accès ?</h4>
       <p>Un projet n'est visible que de son propriétaire et des personnes avec qui il le partage.</p>
       <h4>Durées de conservation</h4>
@@ -4220,6 +4222,7 @@
     const rec={id:v.id,acct:visAcct(),v:JSON.parse(JSON.stringify(v)),dirty:MODE==="cloud"};
     vis.map[v.id]=rec;idbPut("visits",rec).then(()=>visCount()).then(()=>{if(visCur)visStatus()});
     clearTimeout(vis.t);vis.t=setTimeout(visFlush,1500);
+    if(v.prep&&v.prep.conf)confSchedule(v);
   }
   async function visFlush(){
     if(MODE!=="cloud"||!cloud.user||vis.flushing)return;
@@ -4503,8 +4506,9 @@
   function visBindCommon(o,v){
     o.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{visScreen="flow";visFlowId=b.dataset.f;renderVisit()});
     const vm=o.querySelector("[data-vm]");if(vm)vm.onclick=async()=>{
-      const ch=await visSheet(v.title,[...(v.status==="done"?[{k:"reopen",l:"Reprendre le déplacement"}]:[{k:"finish",l:"Clôturer le déplacement"}]),{k:"gal",l:"Importer des photos de la galerie"},{k:"prep",l:"Revoir la préparation"},{k:"ren",l:"Renommer le déplacement"},{k:"pdf",l:"Exporter le compte rendu (PDF)"},{k:"del",l:"Supprimer le déplacement",danger:true}]);
-      if(ch==="finish")visFinish(visCur);
+      const ch=await visSheet(v.title,[...(isMes(v)?[{k:"conf",l:v.prep&&v.prep.conf?"Page Confluence liée":"Lier une page Confluence"}]:[]),...(v.status==="done"?[{k:"reopen",l:"Reprendre le déplacement"}]:[{k:"finish",l:"Clôturer le déplacement"}]),{k:"gal",l:"Importer des photos de la galerie"},{k:"prep",l:"Revoir la préparation"},{k:"ren",l:"Renommer le déplacement"},{k:"pdf",l:"Exporter le compte rendu (PDF)"},{k:"del",l:"Supprimer le déplacement",danger:true}]);
+      if(ch==="conf"){if(visCur.prep&&visCur.prep.conf)confInfo(visCur);else confLinkDlg(visCur)}
+      else if(ch==="finish")visFinish(visCur);
       else if(ch==="reopen")visSet(x=>{x.status="open";x.endedAt=null});
       else if(ch==="gal")visQuick("gallery");
       else if(ch==="prep"){visScreen="prep";renderVisit()}
@@ -5203,16 +5207,18 @@
         <button type="button" class="vislink mesaddrow" data-addrow>${VI.plus}Ajouter une rubrique</button>`;
       notes=`<section class="viscard mesnotes"><div class="vissh"><h3>Notes, photos et vocaux du jour</h3><span class="muted">${ns.length}</span></div>${wide?"":ns.slice(-4).map(n=>visNoteHtml(n)).join("")}${wide?"":`<button type="button" class="btn" data-f="${esc(f.id)}">${ns.length>4?`Voir les ${ns.length} notes et ajouter`:"Ajouter une note, une photo ou un vocal"}</button>`}</section>`;
     }
-    const acts=`<button type="button" class="btn visendh" data-mesend>${v.status==="done"?"Reprendre":"Terminer"}</button>${visMoreBtn("data-vm","Actions sur le déplacement")}`;
+    const acts=(wide?confChip(v):"")+`<button type="button" class="btn visendh" data-mesend>${v.status==="done"?"Reprendre":"Terminer"}</button>${visMoreBtn("data-vm","Actions sur le déplacement")}`;
     if(wide){
       const ns=f?visNotes(v,f.id):[];
       o.innerHTML=visHead("Quitter le déplacement",p.name,v.title,visSub(v,p),acts)+`<div class="visdesk mesdesk"><aside class="visdl"><div class="vishd"><h2>Journées</h2></div>${chips}</aside>
         <section class="visdc"><main class="vism mes">${body}</main></section>
         <aside class="visdr mesr">${f?`<div class="vissh"><h3>Notes, photos et vocaux du jour</h3><span class="muted">${ns.length}</span></div><div class="vism notes">${ns.length?ns.map(n=>visNoteHtml(n)).join(""):`<p class="visempty">Aucune note ce jour. Écrivez, prenez une photo ou enregistrez ci-dessous.</p>`}</div>${visComposer(null)}`:""}</aside></div>`;
     }else{
-      o.innerHTML=visHead("Quitter le déplacement","Projet",`${VIS_TYPES.mes.l} · Jour ${k}`,visSub(v,p),acts,chips)+`<main class="vism mes">${body}${notes}</main>${f?visQuickBar():""}`;
+      o.innerHTML=visHead("Quitter le déplacement","Projet",`${VIS_TYPES.mes.l} · Jour ${k}`,visSub(v,p),acts,(confChip(v)?`<div class="confrow">${confChip(v)}</div>`:"")+chips)+`<main class="vism mes">${body}${notes}</main>${f?visQuickBar():""}`;
     }
     o.querySelector("[data-back]").onclick=visClose;
+    o.querySelectorAll(".confchip[data-conf]").forEach(b=>b.onclick=()=>confInfo(visCur));
+    if(v.prep&&v.prep.conf&&!conf.opened[v.id]){conf.opened[v.id]=1;confSchedule(v,2500)}
     const sel=o.querySelector('.mesdays [aria-selected="true"]');if(sel&&!wide)sel.scrollIntoView({block:"nearest",inline:"center"});
     o.querySelectorAll("[data-day]").forEach(b=>b.onclick=()=>{visMesDay=b.dataset.day;renderVisit()});
     o.querySelector("[data-addday]").onclick=()=>{const nd=iso(addDays(new Date(visEndDay(v)+"T12:00"),1));visMesDay=nd;visSet(y=>{y.prep=y.prep||{};if(!y.prep.plannedAt&&!y.startedAt)y.prep.plannedAt=new Date(visStartDay(y)+"T09:00").getTime();y.prep.endDay=nd})};
@@ -5221,7 +5227,7 @@
     visBindCommon(o,v);
     if(!f)return;
     if(wide)visBindFlow(o,v,f);
-    o.querySelector("[data-close]").onclick=()=>{const was=f.closed;visSet(y=>{const x=mesFlow(y,d);if(x)x.closed=!x.closed});toast(was?"Journée rouverte.":"Journée clôturée.")};
+    o.querySelector("[data-close]").onclick=()=>{const was=f.closed;visSet(y=>{const x=mesFlow(y,d);if(x)x.closed=!x.closed});toast(was?"Journée rouverte.":"Journée clôturée.");if(visCur.prep&&visCur.prep.conf)setTimeout(()=>confPush(visCur.id),50)};
     o.querySelector("[data-cr]").onclick=async()=>{const ch=await visSheet("Compte rendu du jour "+k,[{k:"copy",l:"Copier pour Confluence (compte rendu du jour)"},{k:"xl",l:"Copier pour Excel (points Go Live)"},{k:"pdf",l:"PDF de la journée"},{k:"all",l:"PDF de toute la mise en service"}]);
       if(ch==="xl"){const x=mesExcelCopy(visCur);if(!x.n){toast("Aucun point à copier.");return}const ok=await copyRich(x.html,x.text);toast(ok?`${plural(x.n,"point copié","points copiés")} : sélectionnez la première ligne du tableau Excel (colonne N°) puis Ctrl+V.`:"Copie impossible sur cet appareil.")}
       else if(ch==="copy"){const h=mesDayHtml(visCur,d,false);const ok=await copyRich(h.html,h.text);toast(ok?"Compte rendu copié : collez-le dans la page Confluence (Ctrl+V).":"Copie impossible sur cet appareil.")}
@@ -5280,6 +5286,173 @@
     const css=`body{font-family:Arial,sans-serif;color:#16232B;margin:0;font-size:10.5pt}h1{font-size:18pt;margin:0}.sub{color:#51646F;margin:4px 0 14px}h2{font-size:13pt;color:#1D4E78;border-bottom:1px solid #C7D1D8;padding-bottom:3px;margin:16px 0 8px}h3{font-size:11pt;margin:12px 0 6px}ul{margin:0;padding-left:18px}li{margin:2px 0}table{break-inside:auto}tr{break-inside:avoid}p{margin:3px 0}.n{margin:0 0 8px;break-inside:avoid}.h{font-size:9pt;color:#51646F}.tr{font-style:italic;color:#3A4B55}.ph{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}figure{margin:0;width:48%}figure img{width:100%;border-radius:4px}figcaption{font-size:9pt;color:#51646F}.day+.day{break-before:page}.vh{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.vh img{max-height:52px;max-width:160px;object-fit:contain}@page{margin:14mm}`;
     const html=`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(v.title)}</title><style>${css}</style></head><body><div class="vh"><h1>${esc(v.title)}</h1>${pLogo(p)?`<img src="${p.logo}" alt="">`:""}</div><p class="sub">${esc(p.name)} · ${esc(only&&only.length===1?mesDayName(v,only[0]):visRangeTxt(v,true))}</p>${sec}</body></html>`;
     printHtml(html,`mise-en-service-${(p.name||"projet").replace(/[^\wÀ-ÿ-]+/g,"-")}-${only&&only.length===1?only[0]:iso(new Date(visDate(v)))}`);
+  }
+  // ---------- Confluence : compte rendu de mise en service écrit en direct dans une page partagée ----------
+  // Connexion par jeton API (chiffré par le relais serveur « confluence »), page liée au déplacement (lien signé),
+  // envoi 10 s après chaque modification et à la clôture de la journée : un bloc par journée, le plus récent en haut.
+  const conf={me:undefined,st:{},timers:{},opened:{}};
+  const CONF_SVG=`<svg class="confic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="#1868DB"></rect><path d="M5.5 15.5c4-5.2 8-5.2 13 0M5.5 8.5c5 5.2 9 5.2 13 0" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"></path></svg>`;
+  const confDelay=()=>window.__confDelay||10000;
+  async function confCall(body){
+    const {data,error}=await cloudClient().functions.invoke("confluence",{method:"POST",body});
+    if(error){const j=await fnError(error);const e=new Error(j.message||"Confluence indisponible pour le moment.");e.code=j.code||"";throw e}
+    return data||{};
+  }
+  async function confLoadMe(){
+    if(MODE!=="cloud"||!cloud.user){conf.me=null;return null}
+    try{const {data}=await cloudClient().from("user_confluence").select("site,email,expires_on,updated_at").eq("user_id",cloud.user.id);conf.me=data&&data[0]||null}catch(e){conf.me=null}
+    return conf.me;
+  }
+  const confDaysLeft=me=>me&&me.expires_on?Math.round((new Date(me.expires_on+"T12:00")-new Date(iso(new Date())+"T12:00"))/864e5):null;
+  async function confRemind(){
+    await confLoadMe();const n=confDaysLeft(conf.me);if(n===null||n>15)return;
+    const k="tdp-conf-remind:"+iso(new Date());try{if(localStorage.getItem(k))return;localStorage.setItem(k,"1")}catch(e){}
+    toast(n<0?"Votre jeton Confluence a expiré : renouvelez-le pour reprendre les envois.":`Votre jeton Confluence expire ${n===0?"aujourd'hui":n===1?"demain":`dans ${n} jours`} : pensez à le renouveler.`,()=>openConfCfg(),"Renouveler");
+  }
+  async function openConfCfg(){
+    if(MODE!=="cloud"||!cloud.user){uiAlert("La connexion à Confluence nécessite le mode en ligne (compte).");return}
+    await confLoadMe();
+    const me=conf.me, exp=me&&me.expires_on||iso(addDays(new Date(),365)), fd=s=>new Date(s+"T12:00").toLocaleDateString("fr-FR");
+    const d=document.createElement("dialog");d.className="uidlg confdlg";d.setAttribute("aria-label","Connecter Confluence");
+    d.innerHTML=`<form method="dialog" autocomplete="off"><div class="confg"><div class="confl">
+      <h3>${CONF_SVG}Connecter Confluence</h3>
+      <p class="muted">Les comptes rendus de mise en service s'écrivent en direct dans la page Confluence que vous liez au déplacement.</p>
+      ${me?`<p class="confok">Connecté à ${esc(me.site)} (${esc(me.email)})${me.expires_on?` · jeton valable jusqu'au ${fd(me.expires_on)}`:""}</p>`:""}
+      <label class="uifld"><span>Site Atlassian</span><input type="text" data-k="site" spellcheck="false" value="${esc(me?me.site:"easywmsfrance.atlassian.net")}"></label>
+      <label class="uifld"><span>E-mail du compte Atlassian</span><input type="email" data-k="email" value="${esc(me?me.email:(cloud.email||""))}"></label>
+      <label class="uifld"><span>Jeton API${me?` <small class="muted">laisser vide pour garder le jeton actuel</small>`:""}</span><input type="password" data-k="token" autocomplete="new-password" placeholder="${me?"••••••••••••••••":"Collez ici le jeton créé chez Atlassian"}"></label>
+      <label class="uifld"><span>Date d'expiration du jeton</span><input type="date" data-k="exp" value="${esc(exp)}"></label>
+      <p class="conferr" data-err role="alert"></p>
+      <p class="muted confsec">Le jeton est chiffré sur le serveur de l'appli : il n'est jamais réaffiché ni partagé avec vos collègues. Un rappel s'affiche 15 jours avant son expiration.</p>
+      <div class="uibtns">${me?`<button type="button" class="btn danger" data-rm>Déconnecter</button><span class="sp"></span>`:""}<button type="button" class="btn ghost" data-x>Annuler</button>${me?`<button type="button" class="btn" data-test>Tester</button>`:""}<button type="button" class="btn primary" data-ok>Enregistrer</button></div>
+    </div><div class="confr"><b>Comment créer le jeton ?</b><ol>
+      <li><b>Ouvrez la page Jetons API d'Atlassian</b><span>Compte Atlassian, rubrique Sécurité, puis « Créer un jeton API avec des portées ».</span></li>
+      <li><b>Nommez-le et fixez sa durée</b><span>Par exemple « To do projets ». Durée maximale : 365 jours. Reportez la date d'expiration ici.</span></li>
+      <li><b>Choisissez Confluence et les portées</b><span>Cochez read:page:confluence et write:page:confluence : le jeton ne peut que lire et modifier des pages.</span></li>
+      <li><b>Copiez le jeton ici</b><span>Il ne s'affiche qu'une fois chez Atlassian. Collez-le dans « Jeton API », puis Enregistrer : la connexion est testée.</span></li></ol>
+      <a class="btn" href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">Ouvrir la page Jetons API</a></div></div></form>`;
+    document.body.appendChild(d);
+    const q=k=>d.querySelector(`[data-k="${k}"]`), err=d.querySelector("[data-err]");
+    const close=()=>{try{d.close()}catch(e){}d.remove()};
+    const msg=(t,ok)=>{err.textContent=t;err.classList.toggle("ok",!!ok)};
+    const busy=b=>d.querySelectorAll("button").forEach(x=>x.disabled=b);
+    d.addEventListener("cancel",e=>{e.preventDefault();close()});d.querySelector("[data-x]").onclick=close;
+    d.querySelector("form").onsubmit=e=>e.preventDefault();
+    d.querySelector("[data-ok]").onclick=async()=>{
+      const site=q("site").value.trim(), email=q("email").value.trim(), token=q("token").value.trim(), ex=q("exp").value||null;
+      if(!site||!email){msg("Indiquez le site et l'e-mail du compte Atlassian.");return}
+      busy(true);msg("Vérification de la connexion…",true);
+      try{
+        if(!token){
+          if(!me){busy(false);msg("Collez le jeton API créé chez Atlassian.");q("token").focus();return}
+          if(site.toLowerCase().replace(/^https?:\/\//,"").replace(/\/.*$/,"")!==me.site||email!==me.email){busy(false);msg("Pour changer de site ou d'e-mail, collez aussi le jeton.");q("token").focus();return}
+          const {error}=await cloudClient().from("user_confluence").update({expires_on:ex,updated_at:Date.now()}).eq("user_id",cloud.user.id);if(error)throw error;
+        }else await confCall({action:"save",site,email,token,expiresOn:ex});
+        await confLoadMe();close();toast("Confluence connecté : vous pouvez lier une page à une mise en service.");
+        Object.keys(conf.st).forEach(id=>{if(conf.st[id].code==="auth"||conf.st[id].code==="no_cred")confPush(id)});
+      }catch(e){busy(false);msg(e.message||"Connexion impossible.")}
+    };
+    const t=d.querySelector("[data-test]");if(t)t.onclick=async()=>{busy(true);msg("Test en cours…",true);try{await confCall({action:"test"});msg("Connexion réussie : écriture des pages autorisée.",true)}catch(e){msg(e.message)}busy(false)};
+    const rm=d.querySelector("[data-rm]");if(rm)rm.onclick=async()=>{
+      close();if(!await uiConfirm("Déconnecter Confluence ? Le jeton est effacé du serveur. Les pages déjà liées ne recevront plus les comptes rendus (les blocs déjà écrits restent dans Confluence).",{ok:"Déconnecter",danger:true}))return;
+      await cloudClient().from("user_confluence").delete().eq("user_id",cloud.user.id);conf.me=null;toast("Confluence déconnecté.")};
+    if(d.showModal)d.showModal();else d.setAttribute("open","");
+    setTimeout(()=>(me?q("token"):q("token")).focus(),30);
+  }
+  // ---- envoi ----
+  const confHash=s=>{let h=5381;for(let i=0;i<s.length;i++)h=(Math.imul(h,33)^s.charCodeAt(i))>>>0;return h.toString(36)};
+  const confSent=vid=>{try{return JSON.parse(localStorage.getItem("tdp-conf:"+vid)||"{}")}catch(e){return {}}};
+  const confSaveSent=(vid,o)=>{try{localStorage.setItem("tdp-conf:"+vid,JSON.stringify(o))}catch(e){}};
+  function confDays(v){
+    const p=proj(v.projectId)||{name:""}, c=v.prep.conf, ds=mesDays(v);
+    return ds.filter(d=>mesFlow(v,d)&&(!c.from||d>=c.from)).map(d=>{const f=mesFlow(v,d), k=ds.indexOf(d)+1;
+      const rows=mesRows(v,f.id).map(r=>r.kind==="list"?{title:r.title,kind:"list",items:mesIts(v,r.id).map(i=>({t:i.t||"",d:rtText(i.d||""),who:i.who||"",st:i.st||""}))}:{title:r.title,kind:"text",text:rtText(r.text||"")});
+      return {key:d,title:`J${k} · ${dayLbl(d,true)} · ${p.name}`,closed:!!f.closed,rows}});
+  }
+  function confLabel(vid){const s=conf.st[vid]||{};
+    return s.st==="sending"?"Confluence · envoi…":s.st==="pending"?"Confluence · envoi dans un instant":s.st==="offline"?"Confluence · hors ligne, envoi au retour du réseau":s.st==="err"?"Confluence · "+(s.code==="auth"?"jeton refusé ou expiré":s.code==="no_cred"?"connexion absente":"envoi en échec"):s.at?"Confluence · à jour "+hm(s.at):"Confluence · page liée"}
+  function confPaint(vid){document.querySelectorAll(".confchip[data-conf]").forEach(b=>{if(b.dataset.conf!==vid)return;const s=conf.st[vid]||{};b.className="confchip "+(s.st||"idle");b.querySelector("span").textContent=confLabel(vid);b.title=s.st==="err"&&s.msg?s.msg:"Page Confluence liée : cliquez pour le détail"})}
+  const confChip=v=>v&&v.prep&&v.prep.conf?`<button type="button" class="confchip ${(conf.st[v.id]||{}).st||"idle"}" data-conf="${esc(v.id)}"><i aria-hidden="true"></i><span>${esc(confLabel(v.id))}</span></button>`:"";
+  function confSchedule(v,delay){
+    if(MODE!=="cloud"||!v||!isMes(v)||!v.prep||!v.prep.conf||v.deletedAt||v.status==="prep")return;
+    clearTimeout(conf.timers[v.id]);
+    const s=conf.st[v.id]||(conf.st[v.id]={});if(s.st!=="sending")s.st=navigator.onLine===false?"offline":"pending";confPaint(v.id);
+    conf.timers[v.id]=setTimeout(()=>confPush(v.id),delay==null?confDelay():delay);
+  }
+  async function confPush(vid,force){
+    clearTimeout(conf.timers[vid]);
+    const rec=vis.map[vid], v=rec&&rec.v;if(!v||!v.prep||!v.prep.conf||MODE!=="cloud")return;
+    const s=conf.st[vid]||(conf.st[vid]={});
+    if(s.st==="sending"){s.again=true;return}
+    if(navigator.onLine===false){s.st="offline";confPaint(vid);return}
+    const c=v.prep.conf, key=c.pageId+"|"+c.sig, sent=confSent(vid);
+    const all=confDays(v), hashOf=d=>confHash(JSON.stringify(d)), fresh=sent._k!==key;
+    const todo=all.filter(d=>force||fresh||sent[d.key]!==hashOf(d));
+    if(!todo.length){s.st="ok";s.at=s.at||Date.now();s.msg="";s.code="";confPaint(vid);return}
+    const now=new Date(), me=cloud.email?nameOf(cloud.email):"";
+    const stamp=d=>`To do projets · mis à jour le ${now.toLocaleDateString("fr-FR")} à ${hm(now)}${me?" par "+me:""}${d.closed?" · journée clôturée":""}`;
+    s.st="sending";s.again=false;confPaint(vid);
+    try{
+      await confCall({action:"push",visitId:vid,pageId:c.pageId,by:c.by,sig:c.sig,days:todo.map(d=>({...d,stamp:stamp(d)}))});
+      const s2=fresh?{}:confSent(vid);s2._k=key;todo.forEach(d=>{s2[d.key]=hashOf(d);s2["at:"+d.key]=Date.now()});confSaveSent(vid,s2);
+      s.st="ok";s.at=Date.now();s.msg="";s.code="";
+    }catch(e){
+      s.st=navigator.onLine===false?"offline":"err";s.msg=e.message;s.code=e.code||"";
+      if(!e.code||["rate","conflict","timeout","upstream","error"].includes(e.code)){clearTimeout(conf.timers[vid]);conf.timers[vid]=setTimeout(()=>confPush(vid),60000)}
+    }
+    confPaint(vid);
+    if(s.again){const r2=vis.map[vid];if(r2)confSchedule(r2.v,1500)}
+  }
+  window.addEventListener("online",()=>Object.keys(conf.st).forEach(id=>{if(["offline","pending","err"].includes(conf.st[id].st))confPush(id)}));
+  async function confLinkDlg(v){
+    if(MODE!=="cloud"||!cloud.user){uiAlert("La liaison à Confluence nécessite le mode en ligne (compte).");return}
+    await confLoadMe();
+    if(!conf.me){if(await uiConfirm("Pour lier une page, connectez d'abord Confluence à votre compte avec un jeton API (une seule fois).",{ok:"Connecter Confluence"}))openConfCfg();return}
+    const today=iso(new Date()), past=mesDays(v).filter(x=>mesFlow(v,x)&&x<today);
+    const d=document.createElement("dialog");d.className="uidlg vissheet conflink";d.setAttribute("aria-label","Lier une page Confluence");
+    d.innerHTML=`<form method="dialog" autocomplete="off"><h3>${CONF_SVG}Lier une page Confluence</h3>
+      <p class="muted">Collez le lien de la page partagée des comptes rendus. L'appli y ajoute un bloc par journée, le plus récent en haut, et ne touche pas au reste de la page.</p>
+      <label class="uifld"><span>Lien de la page</span><input type="url" data-k="url" placeholder="https://${esc(conf.me.site)}/wiki/spaces/…/pages/…"></label>
+      ${past.length?`<label class="confcb"><input type="checkbox" data-k="past" checked> Envoyer aussi ${past.length>1?`les ${past.length} journées déjà saisies`:"la journée déjà saisie"}</label>`:""}
+      <p class="conferr" data-err role="alert"></p>
+      <div class="uibtns"><button type="button" class="btn ghost" data-x>Annuler</button><button type="button" class="btn primary" data-ok>Lier la page</button></div></form>`;
+    document.body.appendChild(d);
+    const q=k=>d.querySelector(`[data-k="${k}"]`), err=d.querySelector("[data-err]"), close=()=>{try{d.close()}catch(e){}d.remove()};
+    d.addEventListener("cancel",e=>{e.preventDefault();close()});d.querySelector("[data-x]").onclick=close;d.querySelector("form").onsubmit=e=>{e.preventDefault();d.querySelector("[data-ok]").click()};
+    d.querySelector("[data-ok]").onclick=async()=>{
+      const url=q("url").value.trim();if(!url){q("url").focus();return}
+      d.querySelectorAll("button").forEach(b=>b.disabled=true);err.textContent="Recherche de la page…";err.classList.add("ok");
+      try{
+        await visFlush();
+        const r=await confCall({action:"link",visitId:v.id,url});
+        const from=past.length&&q("past")&&!q("past").checked?today:null;
+        confSaveSent(v.id,{});conf.st[v.id]={};
+        visSet(y=>{y.prep=y.prep||{};y.prep.conf={pageId:r.pageId,title:r.title||"",url:r.url||url,site:r.site,by:r.by,byName:nameOf(cloud.email),sig:r.sig,at:Date.now(),...(from?{from}:{})}});
+        close();toast(`Page « ${r.title||"Confluence"} » liée : le compte rendu s'y écrit en direct.`);
+        setTimeout(()=>confPush(v.id),300);
+      }catch(e){d.querySelectorAll("button").forEach(b=>b.disabled=false);err.classList.remove("ok");err.textContent=e.message||"Liaison impossible."}
+    };
+    if(d.showModal)d.showModal();else d.setAttribute("open","");
+    setTimeout(()=>q("url").focus(),30);
+  }
+  function confInfo(v){
+    const c=v.prep.conf, s=conf.st[v.id]||{}, sent=confSent(v.id), ds=mesDays(v), mine=cloud.user&&c.by===cloud.user.id;
+    const when=at=>iso(new Date(at))===iso(new Date())?"à "+hm(at):"le "+new Date(at).toLocaleDateString("fr-FR")+" à "+hm(at);
+    const d=document.createElement("dialog");d.className="uidlg vissheet confinfo";d.setAttribute("aria-label","Page Confluence liée");
+    d.innerHTML=`<form method="dialog"><h3>${CONF_SVG}Page Confluence liée</h3>
+      <a class="confpage" href="${esc(c.url||"#")}" target="_blank" rel="noopener"><b>${esc(c.title||"Page Confluence")}</b><span>${esc(c.site||"")} · ouvrir dans Confluence</span></a>
+      <p class="confstate ${esc(s.st||"idle")}"><i aria-hidden="true"></i><span>${esc(confLabel(v.id))}${s.st==="err"&&s.msg?`<small>${esc(s.msg)}</small>`:""}</span></p>
+      <ul class="confdays">${ds.filter(x=>mesFlow(v,x)).map(x=>{const at=sent["at:"+x], k=ds.indexOf(x)+1;return `<li class="${at?"ok":""}">J${k} · ${esc(dayLbl(x))} · ${c.from&&x<c.from?"non envoyée (antérieure au lien)":at?"envoyée "+when(at):"pas encore envoyée depuis cet appareil"}</li>`}).join("")||"<li>Aucune journée commencée.</li>"}</ul>
+      <p class="muted">Envoi 10 secondes après chaque modification et à la clôture de la journée. Seuls les blocs « To do projets » de la page sont modifiés.${mine?"":` Les envois utilisent la connexion Confluence de ${esc(c.byName||"la personne qui a lié la page")}.`}</p>
+      <div class="uibtns"><button type="button" class="btn danger" data-unlink>Délier la page</button><span class="sp"></span><button type="button" class="btn ghost" data-x>Fermer</button>${s.code==="auth"&&mine?`<button type="button" class="btn" data-cfg>Renouveler le jeton</button>`:""}<button type="button" class="btn primary" data-now>Envoyer maintenant</button></div></form>`;
+    document.body.appendChild(d);
+    const close=()=>{try{d.close()}catch(e){}d.remove()};
+    d.addEventListener("cancel",e=>{e.preventDefault();close()});d.querySelector("[data-x]").onclick=close;d.querySelector("form").onsubmit=e=>e.preventDefault();
+    d.querySelector("[data-now]").onclick=()=>{close();confPush(v.id,true)};
+    const cf=d.querySelector("[data-cfg]");if(cf)cf.onclick=()=>{close();openConfCfg()};
+    d.querySelector("[data-unlink]").onclick=async()=>{close();if(!await uiConfirm("Délier la page Confluence ? Les envois s'arrêtent ; les blocs déjà écrits restent dans la page.",{ok:"Délier",danger:true}))return;
+      clearTimeout(conf.timers[v.id]);delete conf.st[v.id];confSaveSent(v.id,{});visSet(y=>{if(y.prep)delete y.prep.conf});toast("Page Confluence déliée.")};
+    if(d.showModal)d.showModal();else d.setAttribute("open","");
   }
   // ---------- Onglet Visites d'un projet ----------
   function visEnsure(){if(vis.loaded&&vis.acct!==visAcct()){vis.loaded=false;vis.map={};vis.urls={}}if(!vis.loaded)visLoad()}
@@ -6089,6 +6262,7 @@
       const vis=id=>{const e=$(id);return e&&!e.hidden};
       let groups;
       if(w.cl)groups=mmGroup("Profil",[mmRow("a:name","user","Modifier mon nom"),mmRow("a:pwd","key","Changer le mot de passe")])
+        +mmGroup("Connexions",[mmRow("a:conf","link","Confluence",{sub:"Comptes rendus de mise en service en direct"})])
         +mmGroup("Copie de secours",[mmRow("a:exp","save","Sauvegarder une copie",{sub:"Fichier .json de toutes vos données",chev:false}),mmRow("a:imp","restore","Restaurer ou importer",{sub:"Depuis un fichier .json",chev:false})])
         +mmGroup("",[mmRow("a:loc","device","Passer en mode local",{sub:"Sans compte, sur ce téléphone"}),mmRow("a:out","out","Se déconnecter",{danger:true,c:"late",chev:false})]);
       else groups=mmGroup("Fichier de données",[...(vis("#fnew")?[mmRow("#fnew","file","Créer un fichier",{chev:false})]:[]),...(vis("#fopen")?[mmRow("#fopen","file","Ouvrir un fichier",{chev:false})]:[]),...(vis("#frelink")?[mmRow("#frelink","link",$("#frelink").textContent.trim()||"Relier le fichier",{chev:false})]:[]),...(vis("#funlink")?[mmRow("#funlink","x","Délier le fichier",{chev:false})]:[])])
@@ -6110,7 +6284,7 @@
       const k=b.dataset.mm;
       if(k==="p:acct"){mmPage="acct";mmRender();o.scrollTop=0;return}
       if(k.startsWith("v:")){const v=vbtn(k.slice(2));mmClose();if(v)v.click();return}
-      if(k.startsWith("a:")){const t=$(`#acc [data-a="${k.slice(2)}"]`);if(k==="a:out"||k==="a:loc")mmClose();if(t)t.click();return}
+      if(k.startsWith("a:")){const t=$(`#acc [data-a="${k.slice(2)}"]`);if(k==="a:out"||k==="a:loc"||k==="a:conf")mmClose();if(t)t.click();return}
       const t=$(k);if(t){if(k==="#tocloud"||k==="#privacybtn")mmClose();t.click()}
     });
   }

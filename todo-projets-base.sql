@@ -624,3 +624,37 @@ on conflict (id) do nothing;
 create policy "visit audio acces projet" on storage.objects for all to authenticated
   using (bucket_id = 'visit-audio' and public.can_access((storage.foldername(name))[1]))
   with check (bucket_id = 'visit-audio' and public.can_access((storage.foldername(name))[1]));
+
+-- ===== Confluence en direct (v108) : connexion par utilisateur, jeton chiffré par le relais « confluence » =====
+create table if not exists public.user_confluence (
+  user_id uuid primary key default auth.uid() references auth.users(id) on delete cascade,
+  site text not null,
+  email text not null,
+  token_enc text not null,
+  mode text not null default 'site',
+  cloud_id text,
+  expires_on date,
+  updated_at bigint
+);
+alter table public.user_confluence enable row level security;
+drop policy if exists user_confluence_own on public.user_confluence;
+create policy user_confluence_own on public.user_confluence for all to authenticated
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+grant select, insert, update, delete on public.user_confluence to authenticated;
+revoke all on public.user_confluence from anon;
+-- connexion (chiffrée) de la personne qui a lié la page, si l'appelant et elle ont accès au projet du déplacement
+create or replace function public.confluence_cred(vid text, uid uuid)
+returns table(site text, email text, token_enc text, mode text, cloud_id text)
+language sql stable security definer set search_path = public as $$
+  select c.site, c.email, c.token_enc, c.mode, c.cloud_id
+  from public.user_confluence c
+  join public.visits v on v.id = vid and v.deleted_at is null
+  join public.projects p on p.id = v.project_id
+  where c.user_id = uid
+    and public.can_access(v.project_id)
+    and (p.owner = uid or exists (
+      select 1 from public.project_members m join auth.users u on lower(u.email) = lower(m.email)
+      where m.project_id = p.id and u.id = uid))
+$$;
+revoke all on function public.confluence_cred(text, uuid) from public, anon;
+grant execute on function public.confluence_cred(text, uuid) to authenticated;
