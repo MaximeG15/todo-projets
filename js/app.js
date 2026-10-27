@@ -2883,7 +2883,7 @@
   function storedThemes(pid){return MODE==="cloud"?(cloud.ptThemes[pid]||[]):((proj(pid)||{}).pointThemes||[])}
   // ordre des thèmes : celui des flux d'un entrepôt (réception, rangement… expédition), puis les autres par ordre alphabétique
   const THEME_ORDER=[/generalit|general|projet|planning|gouvernance/,/master ?data|donnees|article|referentiel|parametr/,/interface|erp|sage|edi\b|echange/,/reception|arrivage|dechargement|approvisionnement fournisseur/,/controle|qualite|\bqc\b|litige/,
-    /rangement|stockage|emplacement|putaway|adressage/,/reappro/,/preparation|picking|prepa|commande client|ordre de sortie/,/emballage|colisage|conditionnement|packing|etiquetage colis/,/expedition|chargement|transport|quai|livraison/,
+    /rangement|stockage|emplacement|putaway|adressage/,/reappro/,/preparation|picking|prepa|commande client|ordre de sortie/,/emballage|colisage|conditionnement|packing|etiquetage colis/,/expedition|chargement|transport|quai|livraison/,/document|impression|edition/,
     /retour|sav/,/\bstock\b|gestion de stock|variation|mouvement|blocage/,/inventaire/,/atelier|kitting|production|assemblage/,/materiel|scanner|terminal|imprimante|infra|reseau|wifi|convoyeur|automatisme/,/utilisateur|formation|droit|profil/];
   const themeRank=t=>{const n=String(t||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");if(!n)return 999;const i=THEME_ORDER.findIndex(r=>r.test(n));return i<0?100:i};
   const themeCmp=(a,b)=>(themeRank(a)-themeRank(b))||String(a||"").localeCompare(String(b||""),"fr",{sensitivity:"base"});
@@ -3104,7 +3104,7 @@
     const setF=f=>{ui.ptFilter[p.id]=f;saveUi();render()};
     const allOpen=all.filter(x=>x.status!=="closed");
     const cnt=k=>allOpen.filter(x=>(x.theme||"")===k&&(!fl.erp||x.erp==="oui")).length;
-    const keys=[...known].sort((a,b)=>a===""?1:b===""?-1:a.localeCompare(b,"fr",{sensitivity:"base"}));
+    const keys=[...known].sort((a,b)=>a===""?1:b===""?-1:themeCmp(a,b));
     const bar=document.createElement("div");bar.className="chips";bar.setAttribute("role","group");bar.setAttribute("aria-label","Filtrer les points ouverts");
     bar.innerHTML=`<span class="chipslbl">Filtrer :</span><button type="button" class="chip" data-all aria-pressed="${!fl.themes.length}">Tous les thèmes</button>${keys.map(k=>`<button type="button" class="chip" data-t="${esc(k)}" aria-pressed="${fl.themes.includes(k)}">${k?esc(k):"Sans thème"}<span>${cnt(k)}</span></button>`).join("")}<span class="chipsep" aria-hidden="true"></span><button type="button" class="chip chip-erp" data-erp aria-pressed="${!!fl.erp}">Sujets ERP uniquement</button>${fl.themes.length||fl.erp?`<button type="button" class="pflink" data-reset>Effacer les filtres</button>`:""}`;
     bar.querySelector("[data-all]").onclick=()=>setF({...fl,themes:[]});
