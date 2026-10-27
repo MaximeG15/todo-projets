@@ -2881,11 +2881,17 @@
   const livePts=()=>(state.points||[]).filter(x=>!x.deletedAt);
   // Thèmes : ceux créés manuellement + ceux déjà utilisés par des points
   function storedThemes(pid){return MODE==="cloud"?(cloud.ptThemes[pid]||[]):((proj(pid)||{}).pointThemes||[])}
+  // ordre des thèmes : celui des flux d'un entrepôt (réception, rangement… expédition), puis les autres par ordre alphabétique
+  const THEME_ORDER=[/generalit|general|projet|planning|gouvernance/,/master ?data|donnees|article|referentiel|parametr/,/interface|erp|sage|edi\b|echange/,/reception|arrivage|dechargement|approvisionnement fournisseur/,/controle|qualite|\bqc\b|litige/,
+    /rangement|stockage|emplacement|putaway|adressage/,/reappro/,/preparation|picking|prepa|commande client|ordre de sortie/,/emballage|colisage|conditionnement|packing|etiquetage colis/,/expedition|chargement|transport|quai|livraison/,
+    /retour|sav/,/\bstock\b|gestion de stock|variation|mouvement|blocage/,/inventaire/,/atelier|kitting|production|assemblage/,/materiel|scanner|terminal|imprimante|infra|reseau|wifi|convoyeur|automatisme/,/utilisateur|formation|droit|profil/];
+  const themeRank=t=>{const n=String(t||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");if(!n)return 999;const i=THEME_ORDER.findIndex(r=>r.test(n));return i<0?100:i};
+  const themeCmp=(a,b)=>(themeRank(a)-themeRank(b))||String(a||"").localeCompare(String(b||""),"fr",{sensitivity:"base"});
   const ptThemes=pid=>{
     const m=new Map();
     storedThemes(pid).forEach(t=>m.set(t.name.toLowerCase(),t.name));
     livePts().forEach(x=>{if(x.projectId===pid&&x.theme&&!m.has(x.theme.toLowerCase()))m.set(x.theme.toLowerCase(),x.theme)});
-    return [...m.values()].sort((a,b)=>a.localeCompare(b,"fr",{sensitivity:"base"}));
+    return [...m.values()].sort(themeCmp);
   };
   async function addTheme(pid,name){
     name=String(name||"").trim().slice(0,80);if(!name)return null;
@@ -3132,7 +3138,7 @@
     const fold=new Set(ui.ptFold[p.id]||[]);
     const setFold=f=>{ui.ptFold[p.id]=[...f];saveUi();render()};
     const tableView=ui.ptView==="table"&&!selMode;
-    const sorted=[...groups.keys()].sort((a,b)=>a===""?1:b===""?-1:a.localeCompare(b,"fr",{sensitivity:"base"}));
+    const sorted=[...groups.keys()].sort((a,b)=>a===""?1:b===""?-1:themeCmp(a,b));
     if(sorted.length>1){
       const fb=document.createElement("div");fb.className="foldbar";
       fb.innerHTML=`<button type="button" class="pflink" data-f="close">Tout replier</button><button type="button" class="pflink" data-f="open">Tout déplier</button>`;
@@ -3172,7 +3178,7 @@
     return ps.map(p=>{
       const all=livePts().filter(x=>x.projectId===p.id).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
       const num=new Map(all.map((x,i)=>[x.id,i+1]));
-      const rows=all.filter(x=>x.status!=="closed"||o.closed).sort((a,b)=>((a.theme||"￿").localeCompare(b.theme||"￿","fr",{sensitivity:"base"}))||((a.status==="closed")-(b.status==="closed"))||(num.get(a.id)-num.get(b.id)));
+      const rows=all.filter(x=>x.status!=="closed"||o.closed).sort((a,b)=>(a.theme?b.theme?themeCmp(a.theme,b.theme):-1:b.theme?1:0)||((a.status==="closed")-(b.status==="closed"))||(num.get(a.id)-num.get(b.id)));
       return {p,rows:rows.map(x=>({x,n:ptLabel(x,num.get(x.id)),theme:x.theme||"Sans thème",owner:ownerTxt(x),st:x.status==="closed"?"Levé":"Ouvert"}))};
     });
   }
