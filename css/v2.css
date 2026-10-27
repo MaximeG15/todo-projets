@@ -1140,3 +1140,12 @@ main.inproj{background:radial-gradient(900px 320px at 0 0,color-mix(in srgb,var(
 @media (max-width:899px){.confdlg .confg{grid-template-columns:1fr;gap:16px}.confdlg .confl{padding-right:0}.confdlg .confr{margin:0}}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .confok{background:#163326;color:#7FD6A8}}
 :root[data-theme="dark"] .confok{background:#163326;color:#7FD6A8}
+/* v109 : lier la page Confluence dès la préparation d'une mise en service */
+.vpcconf{display:none}
+.mesprep .vpcconf{display:flex;flex-direction:column;gap:12px;min-width:0}
+.confprep{display:flex;flex-direction:column;gap:12px}
+.confprep h3{display:flex;align-items:center;gap:10px;margin:0}
+.confprep p{margin:0}
+.confprep > .btn{align-self:flex-start}
+.confprepb{display:flex;gap:8px;flex-wrap:wrap}
+@media (min-width:900px){.mesprep .visprepg{grid-template-columns:400px minmax(0,560px)}}

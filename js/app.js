@@ -4857,6 +4857,13 @@
           <form class="mtgadd" data-padd autocomplete="off"><input type="text" placeholder="Nom ou fonction" aria-label="Nom ou fonction" maxlength="120"><select aria-label="Côté">${Object.entries(SIDE).map(([k,l])=>`<option value="${k}">${l}</option>`).join("")}</select><button class="btn" type="submit">Ajouter</button></form>
         </section>
         </div>
+        ${isMes(v)?`<div class="vpcconf"><section class="viscard confprep"><h3>${CONF_SVG}Compte rendu dans Confluence</h3>
+          ${pr.conf?`<a class="confpage" href="${esc(pr.conf.url||"#")}" target="_blank" rel="noopener"><b>${esc(pr.conf.title||"Page Confluence")}</b><span>${esc(pr.conf.site||"")} · ouvrir dans Confluence</span></a>
+            <p class="muted">Le compte rendu de chaque journée s'écrira en direct dans cette page dès le démarrage de la mise en service : un bloc par journée, le plus récent en haut. Le reste de la page n'est pas modifié.</p>
+            <div class="confprepb"><button type="button" class="btn" data-conflink>Changer de page</button><button type="button" class="btn ghost" data-confunlink>Délier</button></div>`
+          :`<p class="muted">Liez la page Confluence partagée des comptes rendus : chaque journée y sera écrite en direct dès le démarrage de la mise en service, sans toucher au reste de la page.</p>
+            <button type="button" class="btn primary" data-conflink>Lier une page Confluence</button>${MODE==="cloud"?"":`<p class="muted">Nécessite le mode en ligne (compte).</p>`}`}
+        </section></div>`:""}
         <div class="vpc2">
           <div class="vishd"><h2>À voir pendant le déplacement</h2><span>${plural(nIt,"élément")} · ${plural(nOn,"flux","flux")}${nProp?` · <b class="vpcount">${plural(nProp,"point proposé","points proposés")}</b>`:""}</span></div>
           <div class="visflows">${fl.map((f,k)=>{const it=visItems(v,f.id), op=isOpen(f);return `<div class="visfl${f.off?" off":""}${op?" open":""}" data-f="${esc(f.id)}">
@@ -4880,6 +4887,8 @@
     const x=o.querySelector("[data-x]");if(x)x.onclick=back;
     const g=o.querySelector("[data-go]");if(g)g.onclick=back;
     const st=o.querySelector("[data-start]");if(st)st.onclick=visStartNow;
+    const cl=o.querySelector("[data-conflink]");if(cl)cl.onclick=()=>confLinkDlg(visCur);
+    const cu=o.querySelector("[data-confunlink]");if(cu)cu.onclick=async()=>{if(!await uiConfirm("Délier la page Confluence de cette mise en service ?",{ok:"Délier",danger:true}))return;clearTimeout(conf.timers[visCur.id]);delete conf.st[visCur.id];confSaveSent(visCur.id,{});visSet(y=>{if(y.prep)delete y.prep.conf});toast("Page Confluence déliée.")};
     o.querySelector("[data-pm]").onclick=async()=>{const ch=await visSheet(v.title,[{k:"ren",l:"Renommer le déplacement"},{k:"del",l:"Supprimer le déplacement",danger:true}]);
       if(ch==="ren"){const t=await uiPrompt("Intitulé du déplacement",v.title,{ok:"Renommer"});if(t&&t.trim())visSet(y=>{y.title=t.trim().slice(0,300)})}else if(ch==="del")visDelete(visCur)};
     o.querySelectorAll("[data-k]").forEach(el=>el.onchange=()=>{const k=el.dataset.k;
@@ -5218,7 +5227,7 @@
     }
     o.querySelector("[data-back]").onclick=visClose;
     o.querySelectorAll(".confchip[data-conf]").forEach(b=>b.onclick=()=>confInfo(visCur));
-    if(v.prep&&v.prep.conf&&!conf.opened[v.id]){conf.opened[v.id]=1;confSchedule(v,2500)}
+    if(v.prep&&v.prep.conf&&!conf.opened[v.id]){conf.opened[v.id]=1;if(!conf.timers[v.id])confSchedule(v,2500)}
     const sel=o.querySelector('.mesdays [aria-selected="true"]');if(sel&&!wide)sel.scrollIntoView({block:"nearest",inline:"center"});
     o.querySelectorAll("[data-day]").forEach(b=>b.onclick=()=>{visMesDay=b.dataset.day;renderVisit()});
     o.querySelector("[data-addday]").onclick=()=>{const nd=iso(addDays(new Date(visEndDay(v)+"T12:00"),1));visMesDay=nd;visSet(y=>{y.prep=y.prep||{};if(!y.prep.plannedAt&&!y.startedAt)y.prep.plannedAt=new Date(visStartDay(y)+"T09:00").getTime();y.prep.endDay=nd})};
@@ -5380,7 +5389,7 @@
     conf.timers[v.id]=setTimeout(()=>confPush(v.id),delay==null?confDelay():delay);
   }
   async function confPush(vid,force){
-    clearTimeout(conf.timers[vid]);
+    clearTimeout(conf.timers[vid]);conf.timers[vid]=null;
     const rec=vis.map[vid], v=rec&&rec.v;if(!v||!v.prep||!v.prep.conf||MODE!=="cloud")return;
     const s=conf.st[vid]||(conf.st[vid]={});
     if(s.st==="sending"){s.again=true;return}
